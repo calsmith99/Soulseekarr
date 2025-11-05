@@ -132,6 +132,49 @@ class DatabaseManager:
         
         conn.commit()
         logger.info(f"Database tables created/verified successfully (schema version: {max(1, current_version)})")
+        
+        # Clean up any executions that were running when container stopped
+        self.cleanup_orphaned_executions(conn)
+    
+    def cleanup_orphaned_executions(self, conn: sqlite3.Connection):
+        """Mark any running executions as stopped (for container restarts)."""
+        cursor = conn.cursor()
+        
+        # Find executions that are still marked as running
+        cursor.execute("SELECT id, script_name FROM script_executions WHERE status = 'running'")
+        orphaned_executions = cursor.fetchall()
+        
+        if orphaned_executions:
+            logger.info(f"Found {len(orphaned_executions)} orphaned running executions from previous session")
+            
+            # Mark them as stopped
+            current_time = datetime.now()
+            for execution in orphaned_executions:
+                execution_id = execution['id']
+                script_name = execution['script_name']
+                
+                # Calculate duration from start time
+                cursor.execute("SELECT start_time FROM script_executions WHERE id = ?", (execution_id,))
+                start_time_str = cursor.fetchone()['start_time']
+                start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                duration = (current_time - start_time).total_seconds()
+                
+                cursor.execute("""
+                    UPDATE script_executions 
+                    SET status = 'stopped', 
+                        end_time = ?, 
+                        duration_seconds = ?,
+                        error_message = 'Execution interrupted by container restart',
+                        updated_at = ?
+                    WHERE id = ?
+                """, (current_time, duration, current_time, execution_id))
+                
+                logger.info(f"Marked orphaned execution as stopped: {script_name} (ID: {execution_id})")
+            
+            conn.commit()
+            logger.info(f"Cleaned up {len(orphaned_executions)} orphaned executions")
+        else:
+            logger.debug("No orphaned executions found")
     
     def start_execution(self, script_id: str, script_name: str, dry_run: bool = False, pid: int = None) -> int:
         """Record the start of a script execution."""
@@ -177,6 +220,42 @@ class DatabaseManager:
             
             conn.commit()
             logger.info(f"Finished execution tracking for ID {execution_id} with status {status}")
+    
+    def stop_execution(self, execution_id: int, reason: str = "Manually stopped"):
+        """Stop a running execution (useful for manual intervention)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if execution is running
+            cursor.execute("SELECT start_time, status FROM script_executions WHERE id = ?", (execution_id,))
+            row = cursor.fetchone()
+            if not row:
+                logger.warning(f"Execution ID {execution_id} not found")
+                return False
+            
+            if row['status'] != 'running':
+                logger.warning(f"Execution ID {execution_id} is not running (status: {row['status']})")
+                return False
+            
+            # Calculate duration
+            start_time = datetime.fromisoformat(row['start_time'])
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            
+            # Update execution
+            cursor.execute("""
+                UPDATE script_executions 
+                SET status = 'stopped', 
+                    end_time = ?, 
+                    duration_seconds = ?,
+                    error_message = ?,
+                    updated_at = ?
+                WHERE id = ?
+            """, (end_time, duration, reason, end_time, execution_id))
+            
+            conn.commit()
+            logger.info(f"Stopped execution ID {execution_id}: {reason}")
+            return True
     
     def add_log_line(self, execution_id: int, content: str, log_level: str = 'info'):
         """Add a log line for a script execution."""

@@ -1307,6 +1307,28 @@ def get_execution_stats_api():
         logger.error(f"Error getting execution stats: {e}")
         return jsonify({'error': 'Failed to get execution stats'}), 500
 
+@app.route('/api/execution/<int:execution_id>/stop', methods=['POST'])
+def stop_execution_api(execution_id):
+    """Stop a running execution."""
+    try:
+        data = request.get_json() or {}
+        reason = data.get('reason', 'Manually stopped via web interface')
+        
+        success = db.stop_execution(execution_id, reason)
+        if success:
+            return jsonify({
+                'success': True,
+                'message': f'Execution {execution_id} stopped successfully'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Failed to stop execution {execution_id} (not running or not found)'
+            }), 400
+    except Exception as e:
+        logger.error(f"Error stopping execution {execution_id}: {e}")
+        return jsonify({'error': 'Failed to stop execution'}), 500
+
 @app.route('/logs')
 def list_logs():
     """List available log files."""

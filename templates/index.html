@@ -234,6 +234,12 @@
             font-size: 12px;
         }
 
+        .btn-xs {
+            padding: 2px 6px;
+            font-size: 11px;
+            line-height: 1.2;
+        }
+
         /* Status badges */
         .status-badge {
             display: inline-flex;
@@ -872,6 +878,28 @@
                 }
             }
 
+            async stopExecution(executionId) {
+                try {
+                    const response = await fetch(`/api/execution/${executionId}/stop`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ reason: 'Manually stopped via web interface' })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showNotification(`Execution stopped successfully`, 'warning');
+                        this.loadExecutionQueue(); // Refresh the queue
+                    } else {
+                        this.showNotification(data.message || 'Failed to stop execution', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error stopping execution:', error);
+                    this.showNotification('Error stopping execution', 'error');
+                }
+            }
+
             async updateScriptStatus(scriptId) {
                 try {
                     const response = await fetch(`/status/${scriptId}`);
@@ -962,7 +990,10 @@
                                 </div>
                             </div>
                             <div class="queue-item-actions">
-                                <span style="font-size: 12px; color: var(--text-muted);">Click to view logs</span>
+                                ${isRunning ? 
+                                    `<button class="btn btn-danger btn-xs stop-execution-btn" data-execution-id="${item.execution_id}" onclick="event.stopPropagation(); window.soulSeekarrApp.stopExecution(${item.execution_id})">Stop</button>` :
+                                    `<span style="font-size: 12px; color: var(--text-muted);">Click to view logs</span>`
+                                }
                             </div>
                         </div>
                     `;
