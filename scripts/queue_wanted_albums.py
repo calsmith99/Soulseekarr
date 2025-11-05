@@ -1,0 +1,1115 @@
+#!/usr/bin/env python3
+"""
+Queue Wanted Albums - Enhanced Python Version with Comprehensive Cleanup
+
+Connects to Lidarr API to find wanted/monitored albums and queues them in slskd.
+Features comprehensive cleanup, caching, better file selection, detailed logging, 
+and progress tracking with duplicate detection.
+
+Name: Queue Wanted Albums
+Author: SoulSeekarr
+Version: 2.0
+Section: commands
+Tags: lidarr, slskd, downloads, automation
+Supports dry run: true
+
+Cleanup features:
+- Remove all completed downloads (remotely via API)
+- Cancel ongoing downloads at startup  
+- Clear stuck/queued downloads remotely
+- Clear incomplete downloads folder
+- Clear completed downloads folder
+- Check for already completed downloads to avoid duplicates
+- Handle stuck/errored downloads
+"""
+
+import os
+import sys
+import json
+import time
+import signal
+import logging
+import requests
+import shutil
+from datetime import datetime
+from urllib.parse import urlparse
+from pathlib import Path
+import argparse
+
+# Enable detailed HTTP logging
+import http.client as http_client
+http_client.HTTPConnection.debuglevel = 1
+
+# Configure requests logging
+logging.getLogger("requests.packages.urllib3").setLevel(logging.DEBUG)
+logging.getLogger("urllib3.connectionpool").setLevel(logging.DEBUG)
+
+# Global variables for graceful shutdown
+ALBUMS_CHECKED = 0
+ALBUMS_SKIPPED_EXISTING = 0
+ALBUMS_SKIPPED_UNMONITORED = 0
+ALBUMS_QUEUED = 0
+ALBUMS_FAILED = 0
+interrupted = False
+
+def log_download_request(method, url, data=None, response=None):
+    """Simple logging for download requests"""
+    if response is None:
+        return  # Skip request logging
+    else:
+        # Only log the result - accept both 200 OK and 201 Created
+        if response.status_code in [200, 201]:
+            logging.info(f"   ✅ Download queued successfully")
+        else:
+            logging.warning(f"   ⚠️  Download failed: HTTP {response.status_code}")
+
+def log_raw_request_response(method, url, headers=None, data=None, response=None):
+    """Minimal logging for debugging"""
+    if response and response.status_code != 200:
+        logging.debug(f"❌ {method} {url} → {response.status_code}")
+
+def setup_logging():
+    """Set up logging with timestamps"""
+    # Create logs directory
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create log file with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(log_dir, f"queue_wanted_albums_{timestamp}.log")
+    
+    # Configure logging with detailed format for debugging
+    logging.basicConfig(
+        level=logging.DEBUG,  # Changed to DEBUG for maximum detail
+        format='%(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    
+    # Log the start
+    logging.info("🚀 STARTING QUEUE WANTED ALBUMS WITH FULL DEBUG LOGGING")
+    logging.info(f"📝 Log file: {log_file}")
+    logging.info("=" * 80)
+    
+    return log_file
+
+def signal_handler(signum, frame):
+    """Handle graceful shutdown on SIGINT/SIGTERM"""
+    global interrupted
+    interrupted = True
+    logging.info("")
+    logging.info("🛑 Script interrupted by user")
+    print_summary(interrupted=True)
+    sys.exit(130)
+
+def print_summary(interrupted=False):
+    """Print processing summary"""
+    logging.info("==================================================")
+    if interrupted:
+        logging.info("📊 Summary before interruption:")
+    else:
+        logging.info("📊 Want List Processing Summary:")
+    logging.info(f"   📋 Albums checked: {ALBUMS_CHECKED}")
+    logging.info(f"   ✅ Skipped (already have tracks): {ALBUMS_SKIPPED_EXISTING}")
+    logging.info(f"   ⏭️  Skipped (not monitored): {ALBUMS_SKIPPED_UNMONITORED}")
+    logging.info(f"   📥 Queued for download: {ALBUMS_QUEUED}")
+    logging.info(f"   ❌ Failed to queue: {ALBUMS_FAILED}")
+    logging.info("")
+
+def check_environment():
+    """Check required environment variables"""
+    required_vars = {
+        'LIDARR_URL': 'Lidarr server URL',
+        'LIDARR_API_KEY': 'Lidarr API key',
+        'SLSKD_URL': 'slskd server URL', 
+        'SLSKD_API_KEY': 'slskd API key'
+    }
+    
+    missing_vars = []
+    for var, desc in required_vars.items():
+        if not os.getenv(var):
+            missing_vars.append(f"{var} ({desc})")
+    
+    if missing_vars:
+        logging.error("✗ Missing required environment variables:")
+        for var in missing_vars:
+            logging.error(f"   - {var}")
+        return False
+    
+    logging.info("🔧 Using environment variables from Portainer stack")
+    logging.info(f"   📍 Lidarr: {os.getenv('LIDARR_URL')}")
+    logging.info(f"   📍 slskd: {os.getenv('SLSKD_URL')}")
+    
+    return True
+
+def check_existing_tracks(album_id, artist_name, album_title):
+    """Check if we already have tracks from an album in Lidarr or completed downloads"""
+    if not album_id:
+        return False
+    
+    # First check if files are already in completed downloads
+    if check_completed_downloads(artist_name, album_title):
+        logging.info("   ✅ Album found in completed downloads - skipping")
+        return True
+    
+    try:
+        # Get album info to check expected track count
+        url = f"{os.getenv('LIDARR_URL')}/api/v1/album/{album_id}"
+        params = {'apikey': os.getenv('LIDARR_API_KEY')}
+        
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code != 200:
+            logging.warning("   ⚠️  Could not get album info")
+            return False
+        
+        album_info = response.json()
+        expected_tracks = album_info.get('statistics', {}).get('trackCount', 0)
+        
+        # Get track files for this specific album
+        url = f"{os.getenv('LIDARR_URL')}/api/v1/trackFile"
+        params = {'albumId': album_id, 'apikey': os.getenv('LIDARR_API_KEY')}
+        
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code != 200:
+            logging.warning("   ⚠️  Could not check existing tracks")
+            return False
+        
+        track_files = response.json()
+        existing_tracks = len(track_files)
+        
+        if existing_tracks == 0:
+            logging.info("   📭 No existing tracks found in Lidarr")
+            return False
+        else:
+            logging.info(f"   📀 Found {existing_tracks} existing tracks in Lidarr (expected: {expected_tracks})")
+            
+            # Show some details about existing tracks
+            for i, track in enumerate(track_files[:3]):
+                file_path = track.get('path', '')
+                file_name = os.path.basename(file_path)
+                logging.info(f"      • {file_name}")
+            
+            if existing_tracks > 3:
+                remaining = existing_tracks - 3
+                logging.info(f"      ... and {remaining} more tracks")
+            
+            # Check if we have all expected tracks
+            if existing_tracks >= expected_tracks and expected_tracks > 0:
+                logging.info(f"   ✅ Album appears complete in Lidarr ({existing_tracks}/{expected_tracks} tracks)")
+                return True
+            else:
+                logging.info(f"   ⚠️  Album incomplete in Lidarr ({existing_tracks}/{expected_tracks} tracks) - will search for missing tracks")
+                return False
+                
+    except requests.RequestException as e:
+        logging.error(f"   ❌ Error checking tracks: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"   ❌ Unexpected error checking tracks: {e}")
+        return False
+
+def get_wanted_albums():
+    """Get wanted albums from Lidarr"""
+    global ALBUMS_CHECKED, ALBUMS_SKIPPED_EXISTING, ALBUMS_SKIPPED_UNMONITORED, ALBUMS_QUEUED, ALBUMS_FAILED
+    
+    logging.info("🔍 Fetching wanted albums from Lidarr...")
+    
+    try:
+        # Get all albums that are monitored and not downloaded
+        url = f"{os.getenv('LIDARR_URL')}/api/v1/wanted/missing"
+        params = {
+            'apikey': os.getenv('LIDARR_API_KEY'),
+            'page': 1,
+            'pageSize': 1000,
+            'sortKey': 'releaseDate',
+            'sortDirection': 'descending'
+        }
+        
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code != 200:
+            logging.error("✗ Failed to fetch wanted albums from Lidarr API")
+            return False
+        
+        wanted_data = response.json()
+        total_records = wanted_data.get('totalRecords', 0)
+        
+        if total_records == 0:
+            logging.info("ℹ️  No wanted albums found in Lidarr")
+            return True
+        
+        logging.info(f"📋 Found {total_records} wanted albums in Lidarr")
+        logging.info("")
+        
+        albums = wanted_data.get('records', [])
+        
+        for i, album in enumerate(albums, 1):
+            if interrupted:
+                break
+                
+            album_id = album.get('id')
+            album_title = album.get('title', 'Unknown Album')
+            artist_info = album.get('artist', {})
+            artist_name = artist_info.get('artistName', 'Unknown Artist')
+            release_date = album.get('releaseDate', 'Unknown')[:10]  # Just the date part
+            monitored = album.get('monitored', False)
+            
+            if not album_id:
+                continue
+            
+            ALBUMS_CHECKED += 1
+            
+            logging.info(f"\n📋 Processing album {i}/{total_records}")
+            logging.info(f"🎵 Album: {album_title}")
+            logging.info(f"   🎤 Artist: {artist_name}")
+            logging.info(f"   📅 Release Date: {release_date}")
+            logging.info(f"   👁️  Monitored: {monitored}")
+            
+            if monitored:
+                # Check if we already have tracks from this album
+                if check_existing_tracks(album_id, artist_name, album_title):
+                    logging.info("   ✅ Album already has tracks - skipping download")
+                    ALBUMS_SKIPPED_EXISTING += 1
+                else:
+                    # Queue album for download via slskd
+                    if queue_album_in_slskd(album_id, artist_name, album_title):
+                        ALBUMS_QUEUED += 1
+                    else:
+                        ALBUMS_FAILED += 1
+            else:
+                logging.info("   ⏭️  Skipping (not monitored)")
+                ALBUMS_SKIPPED_UNMONITORED += 1
+            
+            # Add a small delay between albums to be nice to slskd
+            if monitored and not interrupted:
+                logging.info("   ⏳ Waiting 2 seconds before next album...")
+                time.sleep(2)
+        
+        return True
+        
+    except requests.RequestException as e:
+        logging.error(f"✗ Network error fetching wanted albums: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"✗ Unexpected error fetching wanted albums: {e}")
+        return False
+
+def queue_album_in_slskd(album_id, artist_name, album_title, dry_run=False):
+    """Queue album for download in slskd"""
+    search_query = f"{artist_name} {album_title}"
+    
+    if dry_run:
+        logging.info(f"   [DRY RUN] Would search slskd for: \"{search_query}\"")
+        return True
+    
+    logging.info(f"   🔍 Searching slskd for: \"{search_query}\"")
+    
+    try:
+        # Search slskd for the album
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/searches"
+        headers = {
+            'Content-Type': 'application/json',
+            'X-API-Key': os.getenv('SLSKD_API_KEY')
+        }
+        data = {
+            'searchText': search_query,
+            'timeout': 30000
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=35)
+        if response.status_code != 200:
+            logging.error("   ✗ Failed to search slskd")
+            return False
+        
+        search_response = response.json()
+        search_id = search_response.get('id')
+        
+        if not search_id:
+            logging.error("   ✗ Failed to get search ID from slskd")
+            return False
+        
+        logging.info(f"   ✓ Search initiated (ID: {search_id})")
+        
+        # Wait for search to complete and get responses
+        logging.info("   ⏳ Waiting for search to complete...")
+        max_attempts = 8
+        
+        for attempt in range(1, max_attempts + 1):
+            if interrupted:
+                return False
+                
+            time.sleep(5)
+            
+            # Get search status
+            url = f"{os.getenv('SLSKD_URL')}/api/v0/searches/{search_id}"
+            headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+            
+            response = requests.get(url, headers=headers, timeout=30)
+            if response.status_code != 200:
+                logging.warning(f"   ⚠️  Could not fetch search status (attempt {attempt})")
+                continue
+            
+            status_data = response.json()
+            file_count = status_data.get('fileCount', 0)
+            response_count = status_data.get('responseCount', 0)
+            is_complete = status_data.get('isComplete', False)
+            search_state = status_data.get('state', 'unknown')
+            
+            logging.info(f"   📊 Attempt {attempt}: Files={file_count}, Responses={response_count}, Complete={is_complete}, State={search_state}")
+            
+            if is_complete:
+                logging.info("   ✅ Search completed, fetching detailed responses...")
+                break
+        
+        # Check final results
+        if file_count == 0:
+            logging.info("   ℹ️  No files found for this album")
+            return True
+        
+        # Get detailed responses
+        logging.info(f"   📋 Found {response_count} user(s) with {file_count} files, fetching file details...")
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/searches/{search_id}/responses"
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            logging.error("   ❌ Failed to get detailed search responses")
+            return False
+        
+        results = response.json()
+        
+        # Find the best album matches (try multiple users)
+        candidates = find_best_matches(results, max_candidates=3)
+        
+        if not candidates:
+            logging.info("   ℹ️  No suitable album matches found")
+            return True
+        
+        logging.info(f"   🎯 Found {len(candidates)} potential sources")
+        
+        # Try each candidate until one succeeds
+        for i, (username, filename, filesize) in enumerate(candidates):
+            logging.info(f"   🎯 Trying source {i+1}/{len(candidates)}:")
+            logging.info(f"      👤 User: {username}")
+            logging.info(f"      📁 Directory: {get_directory_path(filename)}")
+            
+            if filesize:
+                try:
+                    size_mb = int(filesize) // (1024 * 1024)
+                    logging.info(f"      💾 Size: {size_mb} MB")
+                except:
+                    logging.info(f"      💾 Size: {filesize} bytes")
+            
+            # Try to download from this user
+            success = attempt_download_from_user(username, filename, results)
+            
+            if success:
+                logging.info(f"   ✅ Successfully queued from {username}")
+                return True
+            else:
+                logging.info(f"   ⚠️  Failed to download from {username}")
+                if i < len(candidates) - 1:
+                    logging.info("   🔄 Trying next source...")
+        
+        logging.error("   ❌ Failed to queue download from any source")
+        return False
+        
+    except requests.RequestException as e:
+        logging.error(f"   ❌ Network error queuing album: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"   ❌ Unexpected error queuing album: {e}")
+        return False
+
+def attempt_download_from_user(username, filename, results):
+    """Attempt to download an album from a specific user"""
+    directory = get_directory_path(filename)
+    
+    # Get all files from this user for this album directory
+    # Use the search results we already have instead of making another API call
+    user_files = []
+    audio_extensions = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aiff', '.ape', '.wv']
+    
+    for user_response in results:
+        if user_response.get('username') == username:
+            # Get all files from this user's response
+            for file_info in user_response.get('files', []):
+                user_filename = file_info.get('filename', '')
+                user_filesize = file_info.get('size', 0)
+                
+                # Check if it's likely part of the same album directory
+                user_dir = get_directory_path(user_filename)
+                if user_dir == directory:
+                    # Only include audio files - skip images, NFO, LRC, etc.
+                    if any(user_filename.lower().endswith(ext) for ext in audio_extensions):
+                        user_files.append({
+                            "filename": user_filename,
+                            "size": user_filesize
+                        })
+                    else:
+                        # Log what we're skipping for transparency
+                        file_ext = os.path.splitext(user_filename)[1].lower()
+                        logging.debug(f"      ⏭️  Skipping non-audio file: {os.path.basename(user_filename)} ({file_ext})")
+            
+            break  # Found the user, no need to continue
+    
+    if not user_files:
+        logging.warning("   ⚠️  No audio files found for this album")
+        return False
+    
+    total_files_found = len([f for user_resp in results if user_resp.get('username') == username 
+                            for f in user_resp.get('files', []) 
+                            if get_directory_path(f.get('filename', '')) == directory])
+    audio_files_count = len(user_files)
+    
+    if total_files_found > audio_files_count:
+        skipped_count = total_files_found - audio_files_count
+        logging.info(f"   📋 Found {audio_files_count} audio files for download ({skipped_count} non-audio files skipped)")
+    else:
+        logging.info(f"   📋 Found {audio_files_count} audio files for download")
+    
+    # Use the actual endpoint discovered from UI network tab
+    enqueue_url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{username}"
+    enqueue_headers = {
+        'Content-Type': 'application/json',
+        'X-API-Key': os.getenv('SLSKD_API_KEY')
+    }
+    
+    # Payload is just the files array, not wrapped in an object
+    enqueue_data = user_files
+    
+    # Debug: show what we're sending
+    logging.info(f"   🔧 Sending {len(enqueue_data)} files to {enqueue_url}")
+    logging.info(f"   🔧 Sample payload: {enqueue_data[0] if enqueue_data else 'No files'}")
+    
+    try:
+        log_download_request("POST", enqueue_url, enqueue_data)
+        enqueue_response = requests.post(enqueue_url, headers=enqueue_headers, json=enqueue_data, timeout=30)
+        log_download_request("POST", enqueue_url, enqueue_data, enqueue_response)
+        
+        if enqueue_response.status_code in [200, 201]:  # Accept both 200 OK and 201 Created
+            logging.info("   ✅ Album queued for download!")
+            return True
+        else:
+            logging.error(f"   ⚠️  Failed to queue download (HTTP {enqueue_response.status_code})")
+            # Show server response for debugging
+            try:
+                error_detail = enqueue_response.text[:200] if enqueue_response.text else "No response body"
+                logging.error(f"   🔧 Server response: {error_detail}")
+            except:
+                logging.error("   🔧 Could not read server response")
+            
+            # Try alternative: individual file downloads
+            logging.info("   🔄 Trying individual file downloads...")
+            success_count = 0
+            
+            for file_info in user_files:
+                single_file_data = [file_info]  # Just the file in an array
+                
+                single_url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{username}"
+                log_download_request("POST", single_url, single_file_data)
+                single_response = requests.post(single_url, headers=enqueue_headers, json=single_file_data, timeout=30)
+                log_download_request("POST", single_url, single_file_data, single_response)
+                
+                if single_response.status_code in [200, 201]:  # Accept both 200 OK and 201 Created
+                    success_count += 1
+                    logging.info(f"   ✅ File queued: {file_info['filename']}")
+                else:
+                    logging.warning(f"   ⚠️  Failed to queue file: {file_info['filename']} (HTTP {single_response.status_code})")
+            
+            if success_count > 0:
+                logging.info(f"   ✅ Successfully queued {success_count}/{len(user_files)} files")
+                return True
+            else:
+                logging.error("   ❌ Failed to queue any files")
+                return False
+                
+    except requests.RequestException as e:
+        logging.error(f"   ❌ Network error queuing album: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"   ❌ Unexpected error queuing album: {e}")
+        return False
+
+def cleanup_downloads():
+    """Clean up any ongoing downloads, incomplete files, and completed downloads"""
+    logging.info("🧹 Starting comprehensive download cleanup...")
+    
+    # Step 1: Remove all completed downloads (remotely)
+    remove_completed_downloads()
+    
+    # Step 2: Cancel all ongoing downloads and clear stuck queued downloads
+    cancel_ongoing_downloads()
+    
+    # Step 3: Clear incomplete downloads folder
+    clear_incomplete_downloads()
+    
+    # Step 4: Clear completed downloads folder
+    clear_completed_downloads()
+    
+    logging.info("✅ Download cleanup completed")
+    logging.info("")
+
+def remove_completed_downloads():
+    """Remove all completed downloads remotely via slskd API"""
+    logging.info("   🗑️  Removing completed downloads...")
+    
+    try:
+        # Get current downloads including completed ones
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads"
+        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            logging.warning("   ⚠️  Could not fetch current downloads")
+            return False
+        
+        downloads_data = response.json()
+        total_removed = 0
+        
+        if isinstance(downloads_data, list):
+            for user_group in downloads_data:
+                username = user_group.get('username', '')
+                directories = user_group.get('directories', [])
+                
+                for directory in directories:
+                    files = directory.get('files', [])
+                    for file_transfer in files:
+                        transfer_id = file_transfer.get('id')
+                        filename = file_transfer.get('filename', '')
+                        state = file_transfer.get('state', '')
+                        
+                        # Remove completed downloads and stuck queued downloads
+                        if state in ['Completed', 'Succeeded'] or (state == 'Queued' and should_clear_stuck_queued(file_transfer)):
+                            if remove_download(transfer_id, filename, state):
+                                total_removed += 1
+        
+        if total_removed > 0:
+            logging.info(f"   ✅ Removed {total_removed} completed/stuck downloads")
+        else:
+            logging.info("   ℹ️  No completed downloads to remove")
+        
+        return True
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error removing completed downloads: {e}")
+        return False
+
+def should_clear_stuck_queued(file_transfer):
+    """Check if a queued download should be considered stuck and removed"""
+    # For now, consider any queued download as potentially stuck
+    # You could add time-based logic here if needed
+    return True
+
+def remove_download(transfer_id, filename, state):
+    """Remove a specific download by transfer ID"""
+    try:
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{transfer_id}"
+        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        
+        response = requests.delete(url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            logging.info(f"      🗑️  Removed ({state}): {os.path.basename(filename)}")
+            return True
+        else:
+            logging.warning(f"      ⚠️  Failed to remove ({state}): {os.path.basename(filename)}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"      ❌ Error removing {filename}: {e}")
+        return False
+
+def clear_completed_downloads():
+    """Clear the downloads/complete folder"""
+    logging.info("   🗂️  Clearing completed downloads folder...")
+    
+    # Common download paths - check environment or use defaults
+    possible_paths = [
+        os.getenv('SLSKD_DOWNLOADS_COMPLETE'),
+        os.getenv('SLSKD_DOWNLOADS_PATH', '') + '/complete',
+        '/downloads/complete',
+        '/data/downloads/complete',
+        './downloads/complete'
+    ]
+    
+    completed_path = None
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            completed_path = path
+            break
+    
+    if not completed_path:
+        logging.info("   ℹ️  Completed downloads folder not found - skipping")
+        return True
+    
+    try:
+        # Count files before deletion
+        total_files = 0
+        total_dirs = 0
+        total_size = 0
+        
+        for root, dirs, files in os.walk(completed_path):
+            if root != completed_path:  # Don't count the root folder itself
+                total_dirs += 1
+            for file in files:
+                file_path = os.path.join(root, file)
+                if os.path.isfile(file_path):
+                    total_files += 1
+                    total_size += os.path.getsize(file_path)
+        
+        if total_files == 0:
+            logging.info(f"   ✅ Completed folder is already empty: {completed_path}")
+            return True
+        
+        # Format size
+        size_mb = total_size / (1024 * 1024)
+        size_gb = size_mb / 1024
+        
+        if size_gb > 1:
+            size_str = f"{size_gb:.1f} GB"
+        else:
+            size_str = f"{size_mb:.1f} MB"
+        
+        logging.info(f"   🗑️  Removing {total_files} completed files in {total_dirs} folders ({size_str})")
+        logging.info(f"      📁 Path: {completed_path}")
+        
+        # Remove all contents except the root folder
+        for root, dirs, files in os.walk(completed_path, topdown=False):
+            # Remove files
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    logging.warning(f"      ⚠️  Could not remove {file}: {e}")
+            
+            # Remove directories (but not the root completed path)
+            for dir in dirs:
+                dir_path = os.path.join(root, dir)
+                try:
+                    os.rmdir(dir_path)
+                except Exception as e:
+                    logging.warning(f"      ⚠️  Could not remove directory {dir}: {e}")
+        
+        logging.info("   ✅ Completed downloads folder cleared")
+        return True
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error clearing completed folder: {e}")
+        return False
+
+def cancel_ongoing_downloads():
+    """Cancel all ongoing downloads and clear stuck queued downloads in slskd"""
+    logging.info("   🛑 Cancelling ongoing and stuck downloads...")
+    
+    try:
+        # Get current downloads
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads"
+        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            logging.warning("   ⚠️  Could not fetch current downloads")
+            return False
+        
+        downloads_data = response.json()
+        total_cancelled = 0
+        
+        if isinstance(downloads_data, list):
+            for user_group in downloads_data:
+                username = user_group.get('username', '')
+                directories = user_group.get('directories', [])
+                
+                for directory in directories:
+                    files = directory.get('files', [])
+                    for file_transfer in files:
+                        transfer_id = file_transfer.get('id')
+                        filename = file_transfer.get('filename', '')
+                        state = file_transfer.get('state', '')
+                        
+                        # Cancel active downloads and stuck queued downloads
+                        if state in ['Requested', 'Queued', 'Initializing', 'InProgress', 'Cancelled']:
+                            if cancel_download(transfer_id, filename, state):
+                                total_cancelled += 1
+        
+        if total_cancelled > 0:
+            logging.info(f"   ✅ Cancelled {total_cancelled} ongoing/stuck downloads")
+        else:
+            logging.info("   ℹ️  No ongoing downloads to cancel")
+        
+        return True
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error cancelling downloads: {e}")
+        return False
+
+def cancel_download(transfer_id, filename, state='Unknown'):
+    """Cancel a specific download by transfer ID"""
+    try:
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{transfer_id}"
+        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        
+        response = requests.delete(url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            logging.info(f"      🗑️  Cancelled ({state}): {os.path.basename(filename)}")
+            return True
+        else:
+            logging.warning(f"      ⚠️  Failed to cancel ({state}): {os.path.basename(filename)}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"      ❌ Error cancelling {filename}: {e}")
+        return False
+
+def clear_incomplete_downloads():
+    """Clear the downloads/incomplete folder"""
+    logging.info("   🗂️  Clearing incomplete downloads folder...")
+    
+    # Common download paths - check environment or use defaults
+    possible_paths = [
+        os.getenv('SLSKD_DOWNLOADS_INCOMPLETE'),
+        os.getenv('SLSKD_DOWNLOADS_PATH', '') + '/incomplete',
+        '/downloads/incomplete',
+        '/data/downloads/incomplete',
+        './downloads/incomplete'
+    ]
+    
+    incomplete_path = None
+    for path in possible_paths:
+        if path and os.path.exists(path):
+            incomplete_path = path
+            break
+    
+    if not incomplete_path:
+        logging.warning("   ⚠️  Could not find incomplete downloads folder")
+        logging.info("   💡 Set SLSKD_DOWNLOADS_INCOMPLETE environment variable if needed")
+        return False
+    
+    try:
+        # Count files before deletion
+        total_files = 0
+        total_size = 0
+        
+        for root, dirs, files in os.walk(incomplete_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                if os.path.isfile(file_path):
+                    total_files += 1
+                    total_size += os.path.getsize(file_path)
+        
+        if total_files == 0:
+            logging.info(f"   ✅ Incomplete folder is already empty: {incomplete_path}")
+            return True
+        
+        # Format size
+        size_mb = total_size / (1024 * 1024)
+        logging.info(f"   🗑️  Removing {total_files} incomplete files ({size_mb:.1f} MB)")
+        logging.info(f"      📁 Path: {incomplete_path}")
+        
+        # Remove all contents
+        for root, dirs, files in os.walk(incomplete_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    logging.warning(f"      ⚠️  Could not remove {file}: {e}")
+            
+            # Remove empty directories
+            for dir in dirs:
+                dir_path = os.path.join(root, dir)
+                try:
+                    if not os.listdir(dir_path):  # Only remove if empty
+                        os.rmdir(dir_path)
+                except Exception:
+                    pass  # Ignore errors removing directories
+        
+        logging.info("   ✅ Incomplete downloads folder cleared")
+        return True
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error clearing incomplete folder: {e}")
+        return False
+
+def check_completed_downloads(artist_name, album_title):
+    """Check if album is already in completed downloads folder"""
+    completed_paths = [
+        os.getenv('SLSKD_DOWNLOADS_COMPLETE'),
+        os.getenv('SLSKD_DOWNLOADS_PATH', '') + '/complete',
+        '/downloads/complete',
+        '/data/downloads/complete',
+        './downloads/complete'
+    ]
+    
+    completed_path = None
+    for path in completed_paths:
+        if path and os.path.exists(path):
+            completed_path = path
+            break
+    
+    if not completed_path:
+        return False
+    
+    try:
+        # Create search patterns
+        search_patterns = [
+            f"{artist_name.lower()} - {album_title.lower()}",
+            f"{artist_name.lower()}-{album_title.lower()}",
+            f"{artist_name.lower()} {album_title.lower()}",
+            album_title.lower()
+        ]
+        
+        # Search for matching folders/files
+        for root, dirs, files in os.walk(completed_path):
+            folder_name = os.path.basename(root).lower()
+            
+            # Check if any pattern matches the folder name
+            for pattern in search_patterns:
+                if pattern in folder_name or folder_name in pattern:
+                    # Count audio files in this folder (consistent with download filtering)
+                    audio_files = [f for f in files if f.lower().endswith(('.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aiff', '.ape', '.wv'))]
+                    if len(audio_files) >= 3:  # Likely an album
+                        logging.info(f"   📁 Found in completed downloads: {os.path.basename(root)}")
+                        logging.info(f"      🎵 Contains {len(audio_files)} audio files")
+                        return True
+        
+        return False
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error checking completed downloads: {e}")
+        return False
+
+def find_best_matches(results, max_candidates=3):
+    """Find the best album matches from search results, returning multiple candidates"""
+    candidates = []
+    audio_extensions = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aiff', '.ape', '.wv']
+    
+    for user_response in results:
+        username = user_response.get('username', '')
+        files = user_response.get('files', [])
+        file_count = user_response.get('fileCount', 0)
+        
+        for file_info in files:
+            filename = file_info.get('filename', '')
+            filesize = file_info.get('size', 0)
+            
+            # Check if it's an audio file
+            if not any(filename.lower().endswith(ext) for ext in audio_extensions):
+                continue
+            
+            # Skip very small files (likely not full tracks)
+            if filesize < 1000000:  # 1MB minimum
+                continue
+            
+            # Prefer responses with multiple files (album folders)
+            priority = file_count if file_count > 3 else 1
+            
+            candidates.append((priority, filesize, username, filename, filesize))
+    
+    if not candidates:
+        return []
+    
+    # Sort by priority (file count), then by file size
+    candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    
+    # Return unique users (no duplicates)
+    seen_users = set()
+    unique_candidates = []
+    
+    for priority, size, username, filename, filesize in candidates:
+        if username not in seen_users:
+            seen_users.add(username)
+            unique_candidates.append((username, filename, filesize))
+            
+            if len(unique_candidates) >= max_candidates:
+                break
+    
+    return unique_candidates
+    """Find the best album match from search results"""
+    best_matches = []
+    
+    for user_response in results:
+        username = user_response.get('username', '')
+        files = user_response.get('files', [])
+        file_count = user_response.get('fileCount', 0)
+        
+        for file_info in files:
+            filename = file_info.get('filename', '')
+            filesize = file_info.get('size', 0)
+            
+            # Check if it's an audio file
+            if not any(filename.lower().endswith(ext) for ext in ['.mp3', '.flac', '.m4a', '.ogg', '.wav']):
+                continue
+            
+            # Skip very small files (likely not full tracks)
+            if filesize < 1000000:  # 1MB minimum
+                continue
+            
+            # Prefer responses with multiple files (album folders)
+            priority = 1 if file_count > 3 else 0
+            
+            best_matches.append((priority, username, filename, filesize))
+    
+    if not best_matches:
+        return None
+    
+    # Sort by priority (multi-file responses first), then by file size
+    best_matches.sort(key=lambda x: (x[0], x[3]), reverse=True)
+    
+    # Return the best match (without priority)
+    return best_matches[0][1:]
+
+def get_directory_path(filename):
+    """Extract directory path from filename"""
+    # Handle both Windows and Unix path separators
+    normalized = filename.replace('\\', '/')
+    
+    # Get directory by removing the last component
+    if '/' in normalized:
+        directory = '/'.join(normalized.split('/')[:-1])
+    else:
+        # If no separator found, return the original (might be just a directory name)
+        directory = filename
+    
+    return directory
+
+def check_slskd_connection():
+    """Check slskd connection and login status"""
+    logging.info("🔍 Checking slskd connection...")
+    
+    try:
+        # Try the application endpoint for slskd v0.23+
+        url = f"{os.getenv('SLSKD_URL')}/api/v0/application"
+        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            logging.error("✗ Could not connect to slskd API")
+            logging.error("   Check SLSKD_URL and SLSKD_API_KEY")
+            return False
+        
+        app_data = response.json()
+        
+        # Check login status
+        user_info = app_data.get('user', {})
+        server_info = app_data.get('server', {})
+        
+        username = user_info.get('username', '')
+        server_state = server_info.get('state', '')
+        is_logged_in = server_info.get('isLoggedIn', False)
+        
+        if username and is_logged_in:
+            logging.info(f"✓ Connected to slskd as: {username}")
+            logging.info(f"   Server state: {server_state}")
+            
+
+        else:
+            logging.error("⚠️  slskd is not logged in to Soulseek")
+            logging.error(f"   Server state: {server_state}")
+            logging.error("   Login to Soulseek in slskd web interface")
+            return False
+        
+        logging.info("")
+        return True
+        
+    except requests.RequestException as e:
+        logging.error(f"✗ Could not connect to slskd: {e}")
+        return False
+    except Exception as e:
+        logging.error(f"✗ Unexpected error checking slskd: {e}")
+        return False
+
+def main():
+    """Main function"""
+    global interrupted
+    
+    # Set up argument parsing
+    parser = argparse.ArgumentParser(description='Queue Wanted Albums from Lidarr to slskd')
+    parser.add_argument('--dry-run', action='store_true', help='Show what would be done without actually queuing downloads')
+    parser.add_argument('--skip-cleanup', action='store_true', help='Skip cleanup of downloads at startup')
+    
+    # Check for environment variable DRY_RUN as well
+    dry_run_env = os.getenv('DRY_RUN', 'false').lower() == 'true'
+    
+    args = parser.parse_args()
+    dry_run = args.dry_run or dry_run_env
+    skip_cleanup = args.skip_cleanup
+    
+    # Set up logging
+    log_file = setup_logging()
+    
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Check environment variables
+    if not check_environment():
+        sys.exit(1)
+    
+    if dry_run:
+        logging.info("   🧪 DRY RUN MODE - No files will be queued")
+    
+    if skip_cleanup:
+        logging.info("   ⏭️  SKIPPING CLEANUP - Downloads will not be cleaned")
+    
+    logging.info("")
+    logging.info("🚀 Starting Queue Wanted Albums processor")
+    
+    # Pre-flight checks
+    logging.info("🔧 Pre-flight checks...")
+    if not check_slskd_connection():
+        logging.error("❌ Pre-flight check failed - aborting execution")
+        sys.exit(1)
+    
+    # Cleanup downloads unless skipped or dry run
+    if not dry_run and not skip_cleanup:
+        cleanup_downloads()
+    elif dry_run:
+        logging.info("🧹 Would perform download cleanup (skipped in dry run)")
+        logging.info("")
+    else:
+        logging.info("⏭️  Skipping download cleanup")
+        logging.info("")
+    
+    # Process wanted albums
+    success = get_wanted_albums()
+    
+    if not interrupted:
+        print_summary()
+        
+        if dry_run:
+            logging.info("🔍 This was a dry run - no actual downloads were queued")
+            logging.info("   Run without --dry-run to queue albums in slskd")
+        else:
+            logging.info("✅ Completed processing Lidarr want list")
+            logging.info("   📥 Albums have been queued for download in slskd")
+            logging.info("   🌐 Check slskd web interface for download progress")
+        
+        logging.info("")
+        logging.info("💡 Tips:")
+        logging.info("   • Check slskd web interface to monitor download progress")
+        logging.info("   • Ensure you're logged in to Soulseek in slskd")
+        logging.info("   • Downloads will appear in your configured slskd downloads folder")
+        logging.info("   • Use the slskd auto-mover script to organize completed downloads")
+        logging.info("   • Run this script as a cron job to regularly clean up failed downloads")
+        
+        # Simple cache info (for compatibility with previous version)
+        cache_file = "queue_cache.json"
+        cache_entries = 0
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file, 'r') as f:
+                    cache_data = json.load(f)
+                    cache_entries = len(cache_data) if isinstance(cache_data, dict) else 0
+            except:
+                pass
+        
+        logging.info(f"📊 Cache contains {cache_entries} entries")
+        logging.info("✅ Want list processing complete!")
+        
+        if not success:
+            sys.exit(1)
+
+if __name__ == "__main__":
+    main()

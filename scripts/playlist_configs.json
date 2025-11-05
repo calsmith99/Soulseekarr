@@ -1,0 +1,15 @@
+{
+  "spotify_playlist_0": {
+    "name": "Sync: Saft",
+    "description": "Sync Spotify playlist 'Saft' with Lidarr",
+    "script": "scripts/spotify_playlist_monitor.py",
+    "parameters": {
+      "playlist_url": "https://open.spotify.com/playlist/0JTpSLyWjAvcqtll2WyL7C?si=b797fb9c37fe45dd"
+    },
+    "category": "Spotify",
+    "requires_input": false,
+    "playlist_index": 0,
+    "playlist_url": "https://open.spotify.com/playlist/0JTpSLyWjAvcqtll2WyL7C?si=b797fb9c37fe45dd",
+    "playlist_name": "Saft"
+  }
+}

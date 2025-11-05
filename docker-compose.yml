@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  soulseekarr:
+    image: python:3.11-alpine
+    container_name: soulseekarr
+    ports:
+      - "5000:5000"
+    volumes:
+      # Music directories - customize the LEFT side (host paths) for your system
+      - /mnt/storage/Music/Owned:/media/Owned
+      - /mnt/storage/Music/Not_Owned:/media/Not_Owned
+      - /mnt/storage/Music/Incomplete:/media/Incomplete
+      - /mnt/storage/Downloads/slskd/completed:/downloads/completed
+      
+      # Application and logs - customize the LEFT side for your system  
+      - /mnt/storage/AppData/navidrome-cleanup:/data
+      - /mnt/storage/AppData/navidrome-cleanup/logs:/logs:rw
+    
+    # Increase memory limits for MusicBrainz dependency installation
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-1G}
+        reservations:
+          memory: 512M
+    
+    environment:
+      # User and permissions
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      
+      # Web UI Configuration
+      - PORT=5000
+      - HOST=0.0.0.0
+      - FLASK_ENV=${FLASK_ENV:-production}
+      
+      # Navidrome
+      - USER=${NAVIDROME_USERNAME:-user}
+      - PASS=${NAVIDROME_PASSWORD:-pass}
+      - BASE_URL=${NAVIDROME_URL:-http://192.168.1.x:4533}
+      
+      # Lidarr
+      - LIDARR_URL=${LIDARR_URL}
+      - LIDARR_API_KEY=${LIDARR_API_KEY}
+      - NAVIDROME_URL=${NAVIDROME_URL}
+      - NAVIDROME_USERNAME=${NAVIDROME_USERNAME}
+      - NAVIDROME_PASSWORD=${NAVIDROME_PASSWORD}
+      - SLSKD_URL=${SLSKD_URL}
+      - SLSKD_API_KEY=${SLSKD_API_KEY}
+      
+      # Processing Settings
+      - CLEANUP_DAYS=${CLEANUP_DAYS:-30}
+      - MAX_CONCURRENT_DOWNLOADS=${MAX_CONCURRENT_DOWNLOADS:-3}
+      - DOWNLOAD_TIMEOUT_MINUTES=${DOWNLOAD_TIMEOUT_MINUTES:-30}
+      
+      # Audio Fingerprinting Configuration for enhanced metadata fixing
+      - ACOUSTID_API_KEY=${ACOUSTID_API_KEY:-}  # Get free API key from https://acoustid.org/
+      - MUSICBRAINZ_APP_NAME=${MUSICBRAINZ_APP_NAME:-soulseekarr}
+      - MUSICBRAINZ_CONTACT_EMAIL=${MUSICBRAINZ_CONTACT_EMAIL:-admin@localhost}
+      
+      # Logging
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - VERBOSE_LOGGING=${VERBOSE_LOGGING:-false}
+    
+    working_dir: /data
+    entrypoint: ["/data/entrypoint.sh"]
+    restart: unless-stopped

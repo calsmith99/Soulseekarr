@@ -1,0 +1,59 @@
+# SoulSeekarr .gitignore
+
+# Database files
+work/*.db
+work/*.db-shm
+work/*.db-wal
+
+# Log files
+logs/
+*.log
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Config files with secrets
+.env
+config.env
+
+# Cache files
+work/artist_albums.json
+work/artist_search.json
+work/album_expiry_cache.json
+work/folders.json
+work/lidarr_artists.json
+work/process_downloads_history.json
+work/quality_profiles.json
+work/root_folders.json
+work/spotify_playlists.json
+work/starred_albums.txt
+work/starred.json
+work/tracked_albums.txt
+work/failed_albums.txt
+
+# Temporary files
+*.tmp
+*.temp
+.backup/
+backup_ui/

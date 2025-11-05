@@ -1,0 +1,1183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoulSeekarr</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            /* Lidarr Color Scheme */
+            --primary-color: #5d9cec;
+            --primary-hover: #4a8cd1;
+            --success-color: #27c24c;
+            --warning-color: #ff9800;
+            --danger-color: #f44336;
+            --info-color: #2196f3;
+            
+            /* Dark Theme */
+            --background: #1e1e1e;
+            --card-background: #2d2d2d;
+            --sidebar-background: #252525;
+            --header-background: #2d2d2d;
+            --border-color: #404040;
+            --text-primary: #ffffff;
+            --text-secondary: #b8b8b8;
+            --text-muted: #888888;
+            
+            /* Layout */
+            --sidebar-width: 210px;
+            --header-height: 60px;
+            
+            /* Typography */
+            --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --font-size-sm: 13px;
+            --font-size-base: 14px;
+            --font-size-lg: 16px;
+            
+            /* Spacing */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            
+            /* Border radius */
+            --border-radius: 4px;
+            --border-radius-lg: 8px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: var(--font-family);
+            font-size: var(--font-size-base);
+            background-color: var(--background);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        /* Layout */
+        .app {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-background);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            z-index: 100;
+        }
+
+        .sidebar-header {
+            padding: var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .sidebar-logo {
+            font-size: var(--font-size-lg);
+            font-weight: 700;
+            color: var(--primary-color);
+        }
+
+        .sidebar-nav {
+            flex: 1;
+            padding: var(--spacing-md) 0;
+        }
+
+        .sidebar-nav-item {
+            display: flex;
+            align-items: center;
+            padding: 10px var(--spacing-lg);
+            color: var(--text-secondary);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .sidebar-nav-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .sidebar-nav-item.active {
+            background-color: rgba(93, 156, 236, 0.1);
+            color: var(--primary-color);
+            border-left-color: var(--primary-color);
+        }
+
+        .sidebar-nav-icon {
+            margin-right: var(--spacing-md);
+            font-size: 16px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            margin-left: var(--sidebar-width);
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background-color: var(--header-background);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0 var(--spacing-lg);
+            height: var(--header-height);
+            display: flex;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .header h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        /* Page Content */
+        .page-content {
+            flex: 1;
+            padding: var(--spacing-lg);
+        }
+
+        /* Section Cards */
+        .section {
+            background-color: var(--card-background);
+            border-radius: var(--border-radius-lg);
+            border: 1px solid var(--border-color);
+            margin-bottom: var(--spacing-lg);
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .section-title {
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            margin: 0;
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: 6px 12px;
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background-color: var(--card-background);
+            color: var(--text-primary);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background-color: transparent;
+            border-color: var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            border-color: var(--danger-color);
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
+
+        /* Status badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: 4px 8px;
+            border-radius: var(--border-radius);
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-idle {
+            background-color: rgba(136, 136, 136, 0.2);
+            color: var(--text-muted);
+        }
+
+        .status-running {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: var(--warning-color);
+        }
+
+        .status-completed {
+            background-color: rgba(39, 194, 76, 0.2);
+            color: var(--success-color);
+        }
+
+        .status-error {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--danger-color);
+        }
+
+        /* Loading and empty states */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--spacing-xl);
+            color: var(--text-muted);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: var(--spacing-xl);
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-color);
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Tasks grid layout */
+        .tasks-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: var(--spacing-lg);
+            height: calc(100vh - 120px);
+        }
+
+        .scripts-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .scripts-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .queue-section {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .queue-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* Script items */
+        .script-item {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+
+        .script-item:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .script-item:last-child {
+            border-bottom: none;
+        }
+
+        .script-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .script-name {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .script-description {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            margin-bottom: var(--spacing-md);
+            line-height: 1.4;
+        }
+
+        .script-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        /* Queue items */
+        .queue-item {
+            padding: var(--spacing-md);
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .queue-item:hover {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .queue-item:last-child {
+            border-bottom: none;
+        }
+
+        .queue-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .queue-item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .queue-item-time {
+            font-size: var(--font-size-sm);
+            color: var(--text-muted);
+        }
+
+        .queue-item-details {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: var(--spacing-xs);
+            font-size: var(--font-size-sm);
+            color: var(--text-muted);
+        }
+
+        .queue-item-duration {
+            font-weight: 500;
+        }
+
+        .queue-item-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+        }
+
+        /* Log modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background-color: var(--card-background);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            width: 90vw;
+            max-width: 1000px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            transform: scale(0.9);
+            transition: transform 0.3s ease;
+        }
+
+        .modal-overlay.open .modal {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: var(--spacing-md) var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: var(--border-radius);
+            transition: all 0.2s ease;
+        }
+
+        .modal-close:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            flex: 1;
+            padding: var(--spacing-lg);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-container {
+            flex: 1;
+            background-color: var(--background);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .log-header {
+            padding: var(--spacing-sm) var(--spacing-md);
+            background-color: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: var(--font-size-sm);
+        }
+
+        .log-stats {
+            color: var(--text-muted);
+        }
+
+        .log-controls {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .log-content {
+            flex: 1;
+            padding: var(--spacing-md);
+            overflow-y: auto;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            background-color: var(--background);
+            color: var(--text-primary);
+        }
+
+        .log-line {
+            margin-bottom: 2px;
+        }
+
+        .log-line.error {
+            color: var(--danger-color);
+        }
+
+        .log-line.warning {
+            color: var(--warning-color);
+        }
+
+        .log-line.info {
+            color: var(--info-color);
+        }
+
+        .log-empty {
+            text-align: center;
+            color: var(--text-muted);
+            font-style: italic;
+            padding: var(--spacing-xl);
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--card-background);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .tasks-grid {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-md);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">SoulSeekarr</div>
+            </div>
+            <div class="sidebar-nav">
+                <a href="#" class="sidebar-nav-item active" data-page="system">
+                    <span class="sidebar-nav-icon"></span>
+                    <span>System</span>
+                </a>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="header">
+                <h1>System / Tasks</h1>
+            </header>
+
+            <!-- Page Content -->
+            <div class="page-content">
+                <div class="tasks-grid">
+                    <!-- Available Scripts -->
+                    <div class="section scripts-section">
+                        <div class="section-header">
+                            <h2 class="section-title">Available Scripts</h2>
+                        </div>
+                        <div class="scripts-list" id="scripts-list">
+                            <div class="loading">
+                                <div class="spinner"></div>
+                                <span style="margin-left: 8px;">Loading scripts...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Execution Queue -->
+                    <div class="section queue-section">
+                        <div class="section-header">
+                            <h2 class="section-title">Execution Queue</h2>
+                        </div>
+                        <div class="queue-list" id="queue-list">
+                            <div class="empty-state">No tasks in queue</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Log Modal -->
+    <div class="modal-overlay" id="log-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Script Logs</h3>
+                <button class="modal-close" onclick="window.soulSeekarrApp.closeLogModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="log-container">
+                    <div class="log-header">
+                        <div class="log-stats" id="log-stats">Loading...</div>
+                        <div class="log-controls">
+                            <button class="btn btn-sm" onclick="window.soulSeekarrApp.refreshLogs()">
+                                🔄 Refresh
+                            </button>
+                            <button class="btn btn-sm" onclick="window.soulSeekarrApp.clearLogs()">
+                                Clear
+                            </button>
+                            <button class="btn btn-sm" onclick="window.soulSeekarrApp.downloadLogs()">
+                                💾 Download
+                            </button>
+                        </div>
+                    </div>
+                    <div class="log-content" id="log-content">
+                        <div class="log-empty">No logs available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SoulSeekarrApp {
+            constructor() {
+                this.scripts = {};
+                this.executionQueue = [];
+                this.statusUpdateInterval = null;
+                this.logUpdateInterval = null;
+                this.currentLogScript = null;
+                this.currentExecutionId = null;
+                this.isLogModalOpen = false;
+                this.init();
+            }
+
+            init() {
+                this.setupEventListeners();
+                this.loadScripts();
+                this.loadExecutionQueue();
+                this.startStatusUpdates();
+            }
+
+            setupEventListeners() {
+                document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const page = item.dataset.page;
+                        this.navigateToPage(page);
+                    });
+                });
+
+                // Close modal when clicking outside of it
+                document.getElementById('log-modal').addEventListener('click', (e) => {
+                    if (e.target === e.currentTarget) {
+                        this.closeLogModal();
+                    }
+                });
+
+                // Close modal with Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape' && this.isLogModalOpen) {
+                        this.closeLogModal();
+                    }
+                });
+            }
+
+            navigateToPage(page) {
+                document.querySelectorAll('.sidebar-nav-item').forEach(item => {
+                    item.classList.remove('active');
+                });
+                document.querySelector(`[data-page="${page}"]`).classList.add('active');
+                console.log(`Navigating to: ${page}`);
+            }
+
+            async loadExecutionQueue() {
+                try {
+                    const response = await fetch('/api/execution-queue');
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.executionQueue = data.queue.map(item => ({
+                            scriptId: item.scriptId,
+                            name: item.name,
+                            startTime: new Date(item.startTime),
+                            endTime: item.endTime ? new Date(item.endTime) : null,
+                            status: item.status,
+                            duration_seconds: item.duration_seconds,
+                            dry_run: item.dry_run,
+                            execution_id: item.execution_id
+                        }));
+                        this.renderQueue();
+                    } else {
+                        console.error('Failed to load execution queue:', data.error);
+                    }
+                } catch (error) {
+                    console.error('Error loading execution queue:', error);
+                }
+            }
+
+            async loadScripts() {
+                try {
+                    const response = await fetch('/scripts/available');
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.scripts = data;
+                        this.renderScripts();
+                    } else {
+                        this.showError('Failed to load scripts: ' + (data.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error loading scripts:', error);
+                    this.showError('Error loading scripts: ' + error.message);
+                }
+            }
+
+            renderScripts() {
+                const scriptsList = document.getElementById('scripts-list');
+                
+                if (Object.keys(this.scripts).length === 0) {
+                    scriptsList.innerHTML = '<div class="empty-state">No scripts found</div>';
+                    return;
+                }
+
+                const scriptsHtml = Object.entries(this.scripts).map(([scriptId, script]) => {
+                    const status = script.current_status || { running: false };
+                    
+                    return `
+                        <div class="script-item" data-script-id="${scriptId}">
+                            <div class="script-header">
+                                <div class="script-name">${script.name}</div>
+                                <div class="status-badge status-${this.getScriptStatus(status)}" id="status-${scriptId}">
+                                    ${status.running ? '<div class="spinner"></div>' : ''}
+                                    ${this.getStatusText(status)}
+                                </div>
+                            </div>
+                            <div class="script-description">${script.description}</div>
+                            <div class="script-actions">
+                                ${script.supports_dry_run ? `
+                                    <button class="btn btn-secondary btn-sm run-btn" data-script-id="${scriptId}" data-dry-run="true">
+                                        Dry Run
+                                    </button>
+                                ` : ''}
+                                <button class="btn btn-primary btn-sm run-btn" data-script-id="${scriptId}" data-dry-run="false" ${status.running ? 'disabled' : ''}>
+                                    ${status.running ? 'Running...' : 'Run'}
+                                </button>
+                                <button class="btn btn-danger btn-sm stop-btn" data-script-id="${scriptId}" ${!status.running ? 'disabled' : ''}>
+                                    Stop
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                scriptsList.innerHTML = scriptsHtml;
+                this.setupScriptActions();
+            }
+
+            setupScriptActions() {
+                document.querySelectorAll('.run-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const scriptId = btn.dataset.scriptId;
+                        const dryRun = btn.dataset.dryRun === 'true';
+                        await this.runScript(scriptId, dryRun);
+                    });
+                });
+
+                document.querySelectorAll('.stop-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const scriptId = btn.dataset.scriptId;
+                        await this.stopScript(scriptId);
+                    });
+                });
+            }
+
+            async runScript(scriptId, dryRun = false) {
+                try {
+                    const response = await fetch(`/run_script/${scriptId}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ dry_run: dryRun })
+                    });
+
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showNotification(`Started: ${this.scripts[scriptId].name}`, 'success');
+                        this.updateScriptStatus(scriptId);
+                    } else {
+                        this.showNotification(data.error || 'Failed to start script', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error running script:', error);
+                    this.showNotification('Error running script', 'error');
+                }
+            }
+
+            async stopScript(scriptId) {
+                try {
+                    const response = await fetch(`/stop/${scriptId}`);
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showNotification(`Stopped: ${this.scripts[scriptId].name}`, 'warning');
+                        this.updateScriptStatus(scriptId);
+                    } else {
+                        this.showNotification(data.error || 'Failed to stop script', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error stopping script:', error);
+                    this.showNotification('Error stopping script', 'error');
+                }
+            }
+
+            async updateScriptStatus(scriptId) {
+                try {
+                    const response = await fetch(`/status/${scriptId}`);
+                    const status = await response.json();
+                    
+                    if (response.ok) {
+                        this.updateScriptUI(scriptId, status);
+                    }
+                } catch (error) {
+                    console.error('Error updating status:', error);
+                }
+            }
+
+            updateScriptUI(scriptId, status) {
+                const statusElement = document.getElementById(`status-${scriptId}`);
+                const runBtns = document.querySelectorAll(`[data-script-id="${scriptId}"].run-btn`);
+                const stopBtn = document.querySelector(`[data-script-id="${scriptId}"].stop-btn`);
+
+                if (statusElement) {
+                    const statusClass = `status-badge status-${this.getScriptStatus(status)}`;
+                    const spinnerHtml = status.running ? '<div class="spinner"></div>' : '';
+                    statusElement.className = statusClass;
+                    statusElement.innerHTML = spinnerHtml + this.getStatusText(status);
+                }
+
+                runBtns.forEach(btn => {
+                    btn.disabled = status.running;
+                    btn.textContent = status.running ? 'Running...' : (btn.dataset.dryRun === 'true' ? 'Dry Run' : 'Run');
+                });
+
+                if (stopBtn) {
+                    stopBtn.disabled = !status.running;
+                }
+
+                // Reload execution queue to get updated data from database
+                this.loadExecutionQueue();
+            }
+
+            getScriptStatus(status) {
+                if (status.running) return 'running';
+                if (status.return_code === 0) return 'completed';
+                if (status.return_code && status.return_code !== 0) return 'error';
+                return 'idle';
+            }
+
+            getStatusText(status) {
+                if (status.running) return 'Running';
+                if (status.return_code === 0) return 'Completed';
+                if (status.return_code && status.return_code !== 0) return 'Error';
+                return 'Idle';
+            }
+
+            renderQueue() {
+                const queueList = document.getElementById('queue-list');
+                
+                if (this.executionQueue.length === 0) {
+                    queueList.innerHTML = '<div class="empty-state">No tasks in queue</div>';
+                    return;
+                }
+
+                // Sort queue: running first, then by start time (newest first)
+                const sortedQueue = [...this.executionQueue].sort((a, b) => {
+                    if (a.status === 'running' && b.status !== 'running') return -1;
+                    if (b.status === 'running' && a.status !== 'running') return 1;
+                    return new Date(b.startTime) - new Date(a.startTime);
+                });
+
+                const queueHtml = sortedQueue.map(item => {
+                    const duration = this.calculateDurationFromSeconds(item.duration_seconds, item.startTime, item.endTime);
+                    const isRunning = item.status === 'running';
+                    
+                    return `
+                        <div class="queue-item" onclick="window.soulSeekarrApp.openLogModalFromQueue('${item.scriptId}', '${item.name}', ${item.execution_id})">>
+                            <div class="queue-item-header">
+                                <div class="queue-item-name">${item.name}</div>
+                                <div class="status-badge status-${item.status}">
+                                    ${isRunning ? '<div class="spinner"></div>' : ''}
+                                    ${this.getQueueStatusText(item.status)}
+                                </div>
+                            </div>
+                            <div class="queue-item-details">
+                                <div class="queue-item-time">
+                                    Started: ${item.startTime.toLocaleTimeString()}
+                                    ${item.endTime ? ` • Finished: ${item.endTime.toLocaleTimeString()}` : ''}
+                                </div>
+                                <div class="queue-item-duration">
+                                    Duration: ${duration}
+                                </div>
+                            </div>
+                            <div class="queue-item-actions">
+                                <span style="font-size: 12px; color: var(--text-muted);">Click to view logs</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                queueList.innerHTML = queueHtml;
+            }
+
+            calculateDurationFromSeconds(duration_seconds, startTime, endTime) {
+                if (duration_seconds) {
+                    // Use stored duration
+                    const seconds = Math.floor(duration_seconds);
+                    if (seconds < 60) return `${seconds}s`;
+                    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+                    return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+                } else {
+                    // Calculate live duration for running tasks
+                    return this.calculateDuration(startTime, endTime);
+                }
+            }
+
+            calculateDuration(startTime, endTime) {
+                const end = endTime || new Date();
+                const diff = Math.floor((end - startTime) / 1000);
+                
+                if (diff < 60) return `${diff}s`;
+                if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`;
+                return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
+            }
+
+            getQueueStatusText(status) {
+                switch(status) {
+                    case 'running': return 'Running';
+                    case 'completed': return 'Completed';
+                    case 'failed': return 'Failed';
+                    default: return 'Idle';
+                }
+            }
+
+            startStatusUpdates() {
+                this.statusUpdateInterval = setInterval(() => {
+                    this.updateAllStatuses();
+                }, 2000);
+            }
+
+            async updateAllStatuses() {
+                for (const scriptId of Object.keys(this.scripts)) {
+                    await this.updateScriptStatus(scriptId);
+                }
+                // Also refresh the execution queue
+                this.loadExecutionQueue();
+            }
+
+            // Log Modal Functions
+            openLogModal(scriptId, scriptName) {
+                this.currentLogScript = scriptId;
+                this.currentExecutionId = null;
+                this.isLogModalOpen = true;
+                document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
+                document.getElementById('log-modal').classList.add('open');
+                this.loadLogs(scriptId);
+                this.startLogUpdates();
+            }
+
+            openLogModalFromQueue(scriptId, scriptName, executionId) {
+                this.currentLogScript = scriptId;
+                this.currentExecutionId = executionId;
+                this.isLogModalOpen = true;
+                document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
+                document.getElementById('log-modal').classList.add('open');
+                this.loadLogs(scriptId);
+                this.startLogUpdates();
+            }
+
+            closeLogModal() {
+                this.isLogModalOpen = false;
+                this.currentLogScript = null;
+                this.currentExecutionId = null;
+                document.getElementById('log-modal').classList.remove('open');
+                this.stopLogUpdates();
+            }
+
+            async loadLogs(scriptId) {
+                try {
+                    const response = await fetch(`/logs/${scriptId}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.displayLogs(data);
+                    } else {
+                        document.getElementById('log-content').innerHTML = 
+                            '<div class="log-empty">Failed to load logs</div>';
+                    }
+                } catch (error) {
+                    console.error('Error loading logs:', error);
+                    document.getElementById('log-content').innerHTML = 
+                        '<div class="log-empty">Error loading logs</div>';
+                }
+            }
+
+            displayLogs(logData) {
+                const logContent = document.getElementById('log-content');
+                const logStats = document.getElementById('log-stats');
+                
+                if (!logData.logs || logData.logs.length === 0) {
+                    logContent.innerHTML = '<div class="log-empty">No logs available</div>';
+                    logStats.textContent = 'No logs';
+                    return;
+                }
+
+                const logsHtml = logData.logs.map(line => {
+                    const logClass = this.getLogLineClass(line);
+                    return `<div class="log-line ${logClass}">${this.escapeHtml(line)}</div>`;
+                }).join('');
+
+                logContent.innerHTML = logsHtml;
+                logStats.textContent = `${logData.logs.length} lines • Last updated: ${new Date().toLocaleTimeString()}`;
+                
+                // Auto-scroll to bottom
+                logContent.scrollTop = logContent.scrollHeight;
+            }
+
+            getLogLineClass(line) {
+                const lowerLine = line.toLowerCase();
+                if (lowerLine.includes('error') || lowerLine.includes('exception') || lowerLine.includes('failed')) {
+                    return 'error';
+                }
+                if (lowerLine.includes('warning') || lowerLine.includes('warn')) {
+                    return 'warning';
+                }
+                if (lowerLine.includes('info') || lowerLine.includes('success') || lowerLine.includes('completed')) {
+                    return 'info';
+                }
+                return '';
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            startLogUpdates() {
+                if (this.logUpdateInterval) {
+                    clearInterval(this.logUpdateInterval);
+                }
+                
+                this.logUpdateInterval = setInterval(() => {
+                    if (this.isLogModalOpen && this.currentLogScript) {
+                        this.loadLogs(this.currentLogScript);
+                    }
+                }, 1000); // Update logs every second
+            }
+
+            stopLogUpdates() {
+                if (this.logUpdateInterval) {
+                    clearInterval(this.logUpdateInterval);
+                    this.logUpdateInterval = null;
+                }
+            }
+
+            refreshLogs() {
+                if (this.currentLogScript) {
+                    this.loadLogs(this.currentLogScript);
+                }
+            }
+
+            async clearLogs() {
+                if (!this.currentLogScript) return;
+                
+                if (confirm('Are you sure you want to clear the logs for this script?')) {
+                    try {
+                        const response = await fetch(`/logs/${this.currentLogScript}`, {
+                            method: 'DELETE'
+                        });
+                        
+                        if (response.ok) {
+                            this.loadLogs(this.currentLogScript);
+                            this.showNotification('Logs cleared', 'success');
+                        } else {
+                            this.showNotification('Failed to clear logs', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error clearing logs:', error);
+                        this.showNotification('Error clearing logs', 'error');
+                    }
+                }
+            }
+
+            downloadLogs() {
+                if (!this.currentLogScript) return;
+                
+                const script = this.scripts[this.currentLogScript];
+                const filename = `${script.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_logs_${new Date().toISOString().slice(0, 10)}.txt`;
+                
+                // Create download link
+                const link = document.createElement('a');
+                link.href = `/logs/${this.currentLogScript}/download`;
+                link.download = filename;
+                link.click();
+            }
+
+            showNotification(message, type = 'info') {
+                console.log(`${type.toUpperCase()}: ${message}`);
+            }
+
+            showError(message) {
+                const scriptsList = document.getElementById('scripts-list');
+                scriptsList.innerHTML = `<div class="empty-state">Error: ${message}</div>`;
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            window.soulSeekarrApp = new SoulSeekarrApp();
+        });
+    </script>
+</body>
+</html>
