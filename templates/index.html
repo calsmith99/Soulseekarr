@@ -581,6 +581,159 @@
             background: var(--primary-color);
         }
 
+        /* Settings Page Styles */
+        .page-section {
+            display: block;
+        }
+
+        .settings-grid {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .connection-form {
+            padding: var(--spacing-lg);
+        }
+
+        .connection-group {
+            margin-bottom: var(--spacing-xl);
+            padding-bottom: var(--spacing-lg);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .connection-group:last-child {
+            border-bottom: none;
+        }
+
+        .connection-title {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+            color: var(--primary-color);
+        }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .form-field {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-field label {
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .form-field input {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background-color: var(--card-background);
+            color: var(--text-primary);
+            font-size: var(--font-size-base);
+            transition: border-color 0.2s ease;
+        }
+
+        .form-field input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .form-field input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .form-field input[value="********"] {
+            font-style: italic;
+            color: var(--text-muted);
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        .form-help {
+            font-size: var(--font-size-xs);
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .form-actions {
+            grid-column: 1 / -1;
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
+        .connection-status {
+            margin-top: var(--spacing-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border-radius: var(--border-radius);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+        }
+
+        .connection-status.success {
+            background-color: rgba(39, 194, 76, 0.2);
+            color: var(--success-color);
+            border: 1px solid rgba(39, 194, 76, 0.3);
+        }
+
+        .connection-status.error {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--danger-color);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+        }
+
+        .connection-status.testing {
+            background-color: rgba(255, 152, 0, 0.2);
+            color: var(--warning-color);
+            border: 1px solid rgba(255, 152, 0, 0.3);
+        }
+
+        .oauth-section {
+            padding: var(--spacing-md) 0;
+        }
+
+        .oauth-description {
+            color: var(--text-secondary);
+            margin-bottom: var(--spacing-md);
+            font-size: var(--font-size-sm);
+            line-height: 1.4;
+        }
+
+        .oauth-status {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+            padding: 4px 8px;
+            border-radius: var(--border-radius);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+        }
+
+        .status-indicator.connected {
+            background-color: rgba(39, 194, 76, 0.2);
+            color: var(--success-color);
+        }
+
+        .status-indicator.disconnected {
+            background-color: rgba(136, 136, 136, 0.2);
+            color: var(--text-muted);
+        }
+
+        .oauth-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+        }
+
         /* Responsive design */
         @media (max-width: 768px) {
             .sidebar {
@@ -600,6 +753,15 @@
                 grid-template-columns: 1fr;
                 gap: var(--spacing-md);
             }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .oauth-actions,
+            .form-actions {
+                flex-direction: column;
+            }
         }
     </style>
 </head>
@@ -612,8 +774,12 @@
             </div>
             <div class="sidebar-nav">
                 <a href="#" class="sidebar-nav-item active" data-page="system">
-                    <span class="sidebar-nav-icon"></span>
+                    <span class="sidebar-nav-icon">⚙️</span>
                     <span>System</span>
+                </a>
+                <a href="#" class="sidebar-nav-item" data-page="settings">
+                    <span class="sidebar-nav-icon">🔧</span>
+                    <span>Settings</span>
                 </a>
             </div>
         </nav>
@@ -622,32 +788,147 @@
         <main class="main-content">
             <!-- Header -->
             <header class="header">
-                <h1>System / Tasks</h1>
+                <h1 id="page-title">System / Tasks</h1>
             </header>
 
             <!-- Page Content -->
             <div class="page-content">
-                <div class="tasks-grid">
-                    <!-- Available Scripts -->
-                    <div class="section scripts-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Available Scripts</h2>
+                <!-- System / Tasks Page -->
+                <div id="system-page" class="page-section">
+                    <div class="tasks-grid">
+                        <!-- Available Scripts -->
+                        <div class="section scripts-section">
+                            <div class="section-header">
+                                <h2 class="section-title">Available Scripts</h2>
+                            </div>
+                            <div class="scripts-list" id="scripts-list">
+                                <div class="loading">
+                                    <div class="spinner"></div>
+                                    <span style="margin-left: 8px;">Loading scripts...</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="scripts-list" id="scripts-list">
-                            <div class="loading">
-                                <div class="spinner"></div>
-                                <span style="margin-left: 8px;">Loading scripts...</span>
+
+                        <!-- Execution Queue -->
+                        <div class="section queue-section">
+                            <div class="section-header">
+                                <h2 class="section-title">Execution Queue</h2>
+                            </div>
+                            <div class="queue-list" id="queue-list">
+                                <div class="empty-state">No tasks in queue</div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <!-- Execution Queue -->
-                    <div class="section queue-section">
-                        <div class="section-header">
-                            <h2 class="section-title">Execution Queue</h2>
-                        </div>
-                        <div class="queue-list" id="queue-list">
-                            <div class="empty-state">No tasks in queue</div>
+                <!-- Settings Page -->
+                <div id="settings-page" class="page-section" style="display: none;">
+                    <div class="settings-grid">
+                        <!-- Service Connections -->
+                        <div class="section">
+                            <div class="section-header">
+                                <h2 class="section-title">Service Connections</h2>
+                            </div>
+                            <div class="section-content">
+                                <div class="connection-form">
+                                    <!-- Navidrome Settings -->
+                                    <div class="connection-group">
+                                        <h3 class="connection-title">Navidrome</h3>
+                                        <div class="form-grid">
+                                            <div class="form-field">
+                                                <label for="navidrome-url">Server URL</label>
+                                                <input type="url" id="navidrome-url" placeholder="http://localhost:4533" />
+                                            </div>
+                                            <div class="form-field">
+                                                <label for="navidrome-username">Username</label>
+                                                <input type="text" id="navidrome-username" placeholder="admin" />
+                                            </div>
+                                            <div class="form-field">
+                                                <label for="navidrome-password">Password</label>
+                                                <input type="password" id="navidrome-password" placeholder="••••••••" />
+                                                <small class="form-help">Saved values show as ******** for security</small>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button class="btn btn-primary" onclick="window.soulSeekarrApp.testConnection('navidrome')">Test Connection</button>
+                                                <button class="btn btn-secondary" onclick="window.soulSeekarrApp.saveConnection('navidrome')">Save</button>
+                                            </div>
+                                        </div>
+                                        <div class="connection-status" id="navidrome-status"></div>
+                                    </div>
+
+                                    <!-- Lidarr Settings -->
+                                    <div class="connection-group">
+                                        <h3 class="connection-title">Lidarr</h3>
+                                        <div class="form-grid">
+                                            <div class="form-field">
+                                                <label for="lidarr-url">Server URL</label>
+                                                <input type="url" id="lidarr-url" placeholder="http://localhost:8686" />
+                                            </div>
+                                            <div class="form-field">
+                                                <label for="lidarr-api-key">API Key</label>
+                                                <input type="text" id="lidarr-api-key" placeholder="Your Lidarr API key" />
+                                                <small class="form-help">Saved values show as ******** for security</small>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button class="btn btn-primary" onclick="window.soulSeekarrApp.testConnection('lidarr')">Test Connection</button>
+                                                <button class="btn btn-secondary" onclick="window.soulSeekarrApp.saveConnection('lidarr')">Save</button>
+                                            </div>
+                                        </div>
+                                        <div class="connection-status" id="lidarr-status"></div>
+                                    </div>
+
+                                    <!-- slskd Settings -->
+                                    <div class="connection-group">
+                                        <h3 class="connection-title">slskd</h3>
+                                        <div class="form-grid">
+                                            <div class="form-field">
+                                                <label for="slskd-url">Server URL</label>
+                                                <input type="url" id="slskd-url" placeholder="http://localhost:5030" />
+                                            </div>
+                                            <div class="form-field">
+                                                <label for="slskd-api-key">API Key</label>
+                                                <input type="password" id="slskd-api-key" placeholder="••••••••" />
+                                                <small class="form-help">Found in slskd settings under API configuration. Saved values show as ******** for security</small>
+                                            </div>
+                                            <div class="form-actions">
+                                                <button class="btn btn-primary" onclick="window.soulSeekarrApp.testConnection('slskd')">Test Connection</button>
+                                                <button class="btn btn-secondary" onclick="window.soulSeekarrApp.saveConnection('slskd')">Save</button>
+                                            </div>
+                                        </div>
+                                        <div class="connection-status" id="slskd-status"></div>
+                                    </div>
+
+                                    <!-- Spotify OAuth -->
+                                    <div class="connection-group">
+                                        <h3 class="connection-title">Spotify</h3>
+                                        <div class="oauth-section">
+                                            <p class="oauth-description">Connect your Spotify account to sync playlists and discover new music.</p>
+                                            <div class="oauth-status" id="spotify-status">
+                                                <span class="status-indicator">Not Connected</span>
+                                            </div>
+                                            <div class="oauth-actions">
+                                                <button class="btn btn-primary" onclick="window.soulSeekarrApp.connectSpotify()" id="spotify-connect-btn">Connect to Spotify</button>
+                                                <button class="btn btn-danger" onclick="window.soulSeekarrApp.disconnectSpotify()" id="spotify-disconnect-btn" style="display: none;">Disconnect</button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Tidal OAuth -->
+                                    <div class="connection-group">
+                                        <h3 class="connection-title">Tidal</h3>
+                                        <div class="oauth-section">
+                                            <p class="oauth-description">Connect your Tidal account to sync playlists and discover new music.</p>
+                                            <div class="oauth-status" id="tidal-status">
+                                                <span class="status-indicator">Not Connected</span>
+                                            </div>
+                                            <div class="oauth-actions">
+                                                <button class="btn btn-primary" onclick="window.soulSeekarrApp.connectTidal()" id="tidal-connect-btn">Connect to Tidal</button>
+                                                <button class="btn btn-danger" onclick="window.soulSeekarrApp.disconnectTidal()" id="tidal-disconnect-btn" style="display: none;">Disconnect</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -731,10 +1012,30 @@
             }
 
             navigateToPage(page) {
+                // Update active nav item
                 document.querySelectorAll('.sidebar-nav-item').forEach(item => {
                     item.classList.remove('active');
                 });
                 document.querySelector(`[data-page="${page}"]`).classList.add('active');
+                
+                // Update page title
+                const pageTitles = {
+                    'system': 'System / Tasks',
+                    'settings': 'Settings / Connections'
+                };
+                document.getElementById('page-title').textContent = pageTitles[page] || 'SoulSeekarr';
+                
+                // Show/hide page sections
+                document.querySelectorAll('.page-section').forEach(section => {
+                    section.style.display = 'none';
+                });
+                document.getElementById(`${page}-page`).style.display = 'block';
+                
+                // Load page-specific data
+                if (page === 'settings') {
+                    this.loadSettingsData();
+                }
+                
                 console.log(`Navigating to: ${page}`);
             }
 
@@ -1202,6 +1503,314 @@
             showError(message) {
                 const scriptsList = document.getElementById('scripts-list');
                 scriptsList.innerHTML = `<div class="empty-state">Error: ${message}</div>`;
+            }
+
+            // Settings Methods
+            async loadSettingsData() {
+                try {
+                    // Load current connection settings
+                    const response = await fetch('/api/settings/connections');
+                    if (response.ok) {
+                        const settings = await response.json();
+                        this.populateSettingsForm(settings);
+                    }
+                    
+                    // Load OAuth status
+                    await this.loadOAuthStatus();
+                } catch (error) {
+                    console.error('Error loading settings:', error);
+                }
+            }
+
+            populateSettingsForm(settings) {
+                // Populate Navidrome settings
+                if (settings.navidrome) {
+                    document.getElementById('navidrome-url').value = settings.navidrome.url || '';
+                    document.getElementById('navidrome-username').value = settings.navidrome.username || '';
+                    document.getElementById('navidrome-password').value = settings.navidrome.password || '';
+                }
+                
+                // Populate Lidarr settings
+                if (settings.lidarr) {
+                    document.getElementById('lidarr-url').value = settings.lidarr.url || '';
+                    document.getElementById('lidarr-api-key').value = settings.lidarr.api_key || '';
+                }
+                
+                // Populate slskd settings
+                if (settings.slskd) {
+                    document.getElementById('slskd-url').value = settings.slskd.url || '';
+                    document.getElementById('slskd-api-key').value = settings.slskd.api_key || '';
+                }
+                
+                // Add event listeners for masked fields
+                this.setupMaskedFieldHandlers();
+            }
+
+            setupMaskedFieldHandlers() {
+                const maskedFields = ['navidrome-password', 'lidarr-api-key', 'slskd-api-key'];
+                
+                maskedFields.forEach(fieldId => {
+                    const field = document.getElementById(fieldId);
+                    if (field) {
+                        // Clear field when user clicks on it if it contains masked value
+                        field.addEventListener('focus', (e) => {
+                            if (e.target.value === '********') {
+                                e.target.value = '';
+                                e.target.style.fontStyle = 'normal';
+                                e.target.style.color = '';
+                                e.target.style.backgroundColor = '';
+                            }
+                        });
+                        
+                        // If user leaves field empty, restore masked value
+                        field.addEventListener('blur', (e) => {
+                            const originalValue = e.target.getAttribute('data-original-value');
+                            if (e.target.value === '' && originalValue === '********') {
+                                e.target.value = '********';
+                                e.target.style.fontStyle = 'italic';
+                                e.target.style.color = 'var(--text-muted)';
+                                e.target.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
+                            }
+                        });
+                        
+                        // Store original value for restoration
+                        if (field.value === '********') {
+                            field.setAttribute('data-original-value', '********');
+                        }
+                    }
+                });
+            }
+
+            async loadOAuthStatus() {
+                try {
+                    // Check Spotify status
+                    const spotifyResponse = await fetch('/api/oauth/spotify/status');
+                    if (spotifyResponse.ok) {
+                        const spotifyData = await spotifyResponse.json();
+                        this.updateOAuthStatus('spotify', spotifyData.connected, spotifyData.user);
+                    }
+                    
+                    // Check Tidal status
+                    const tidalResponse = await fetch('/api/oauth/tidal/status');
+                    if (tidalResponse.ok) {
+                        const tidalData = await tidalResponse.json();
+                        this.updateOAuthStatus('tidal', tidalData.connected, tidalData.user);
+                    }
+                } catch (error) {
+                    console.error('Error loading OAuth status:', error);
+                }
+            }
+
+            updateOAuthStatus(service, connected, userInfo = null) {
+                const statusElement = document.getElementById(`${service}-status`);
+                const connectBtn = document.getElementById(`${service}-connect-btn`);
+                const disconnectBtn = document.getElementById(`${service}-disconnect-btn`);
+                
+                if (connected) {
+                    statusElement.innerHTML = `
+                        <span class="status-indicator connected">
+                            ✅ Connected${userInfo ? ` as ${userInfo.name || userInfo.username || 'User'}` : ''}
+                        </span>
+                    `;
+                    connectBtn.style.display = 'none';
+                    disconnectBtn.style.display = 'inline-flex';
+                } else {
+                    statusElement.innerHTML = `
+                        <span class="status-indicator disconnected">
+                            ❌ Not Connected
+                        </span>
+                    `;
+                    connectBtn.style.display = 'inline-flex';
+                    disconnectBtn.style.display = 'none';
+                }
+            }
+
+            async testConnection(service) {
+                const statusElement = document.getElementById(`${service}-status`);
+                statusElement.className = 'connection-status testing';
+                statusElement.innerHTML = '🔄 Testing connection...';
+                
+                try {
+                    const formData = this.getConnectionFormData(service);
+                    const response = await fetch(`/api/settings/test-connection/${service}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        statusElement.className = 'connection-status success';
+                        statusElement.innerHTML = `✅ ${result.message}`;
+                    } else {
+                        statusElement.className = 'connection-status error';
+                        statusElement.innerHTML = `❌ ${result.error}`;
+                    }
+                } catch (error) {
+                    statusElement.className = 'connection-status error';
+                    statusElement.innerHTML = `❌ Error: ${error.message}`;
+                }
+            }
+
+            async saveConnection(service) {
+                try {
+                    const formData = this.getConnectionFormData(service);
+                    const response = await fetch(`/api/settings/connections/${service}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.showNotification(`${service} settings saved successfully`, 'success');
+                        // Test connection after saving
+                        await this.testConnection(service);
+                    } else {
+                        this.showNotification(`Failed to save ${service} settings: ${result.error}`, 'error');
+                    }
+                } catch (error) {
+                    this.showNotification(`Error saving ${service} settings: ${error.message}`, 'error');
+                }
+            }
+
+            getConnectionFormData(service) {
+                switch (service) {
+                    case 'navidrome':
+                        return {
+                            url: document.getElementById('navidrome-url').value,
+                            username: document.getElementById('navidrome-username').value,
+                            password: document.getElementById('navidrome-password').value
+                        };
+                    case 'lidarr':
+                        return {
+                            url: document.getElementById('lidarr-url').value,
+                            api_key: document.getElementById('lidarr-api-key').value
+                        };
+                    case 'slskd':
+                        return {
+                            url: document.getElementById('slskd-url').value,
+                            api_key: document.getElementById('slskd-api-key').value
+                        };
+                    default:
+                        return {};
+                }
+            }
+
+            async connectSpotify() {
+                try {
+                    const response = await fetch('/api/oauth/spotify/authorize');
+                    const data = await response.json();
+                    
+                    if (data.auth_url) {
+                        // Open OAuth URL in new window
+                        const popup = window.open(data.auth_url, 'spotify-auth', 'width=600,height=700');
+                        
+                        // Poll for completion
+                        const checkAuth = setInterval(async () => {
+                            try {
+                                const statusResponse = await fetch('/api/oauth/spotify/status');
+                                const statusData = await statusResponse.json();
+                                
+                                if (statusData.connected) {
+                                    clearInterval(checkAuth);
+                                    popup.close();
+                                    this.updateOAuthStatus('spotify', true, statusData.user);
+                                    this.showNotification('Successfully connected to Spotify!', 'success');
+                                }
+                            } catch (error) {
+                                // Continue polling
+                            }
+                        }, 2000);
+                        
+                        // Stop polling after 5 minutes
+                        setTimeout(() => {
+                            clearInterval(checkAuth);
+                            if (!popup.closed) {
+                                popup.close();
+                            }
+                        }, 300000);
+                    } else {
+                        this.showNotification('Failed to initiate Spotify connection', 'error');
+                    }
+                } catch (error) {
+                    this.showNotification(`Error connecting to Spotify: ${error.message}`, 'error');
+                }
+            }
+
+            async disconnectSpotify() {
+                try {
+                    const response = await fetch('/api/oauth/spotify/disconnect', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.updateOAuthStatus('spotify', false);
+                        this.showNotification('Disconnected from Spotify', 'success');
+                    } else {
+                        this.showNotification('Failed to disconnect from Spotify', 'error');
+                    }
+                } catch (error) {
+                    this.showNotification(`Error disconnecting from Spotify: ${error.message}`, 'error');
+                }
+            }
+
+            async connectTidal() {
+                try {
+                    const response = await fetch('/api/oauth/tidal/authorize');
+                    const data = await response.json();
+                    
+                    if (data.auth_url) {
+                        // Open OAuth URL in new window
+                        const popup = window.open(data.auth_url, 'tidal-auth', 'width=600,height=700');
+                        
+                        // Poll for completion
+                        const checkAuth = setInterval(async () => {
+                            try {
+                                const statusResponse = await fetch('/api/oauth/tidal/status');
+                                const statusData = await statusResponse.json();
+                                
+                                if (statusData.connected) {
+                                    clearInterval(checkAuth);
+                                    popup.close();
+                                    this.updateOAuthStatus('tidal', true, statusData.user);
+                                    this.showNotification('Successfully connected to Tidal!', 'success');
+                                }
+                            } catch (error) {
+                                // Continue polling
+                            }
+                        }, 2000);
+                        
+                        // Stop polling after 5 minutes
+                        setTimeout(() => {
+                            clearInterval(checkAuth);
+                            if (!popup.closed) {
+                                popup.close();
+                            }
+                        }, 300000);
+                    } else {
+                        this.showNotification('Failed to initiate Tidal connection', 'error');
+                    }
+                } catch (error) {
+                    this.showNotification(`Error connecting to Tidal: ${error.message}`, 'error');
+                }
+            }
+
+            async disconnectTidal() {
+                try {
+                    const response = await fetch('/api/oauth/tidal/disconnect', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        this.updateOAuthStatus('tidal', false);
+                        this.showNotification('Disconnected from Tidal', 'success');
+                    } else {
+                        this.showNotification('Failed to disconnect from Tidal', 'error');
+                    }
+                } catch (error) {
+                    this.showNotification(`Error disconnecting from Tidal: ${error.message}`, 'error');
+                }
             }
         }
 

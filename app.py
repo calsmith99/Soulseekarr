@@ -244,7 +244,12 @@ def scan_scripts_folder():
         logger.info(f"Using scripts directory: {scripts_dir}")
         
         for filename in os.listdir(scripts_dir):
-            if filename.endswith('.py') and not filename.startswith('__'):
+            # Skip system files, hidden files, and Python cache files
+            if (filename.endswith('.py') and 
+                not filename.startswith('__') and 
+                not filename.startswith('._') and 
+                not filename.startswith('.') and
+                filename != '__pycache__'):
                 script_id = filename[:-3]  # Remove .py extension
                 script_path = os.path.join(scripts_dir, filename)
                 
@@ -1499,6 +1504,275 @@ def refresh_services_status():
             'success': False,
             'error': str(e)
         }), 500
+
+# Settings and Configuration Routes
+@app.route('/api/settings/connections', methods=['GET'])
+def get_connection_settings():
+    """Get current connection settings (without sensitive data)."""
+    try:
+        settings = {}
+        
+        # Get settings from database
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT key, value FROM app_settings WHERE key LIKE '%_connection_%'")
+            for row in cursor.fetchall():
+                key_parts = row['key'].split('_')
+                if len(key_parts) >= 3:
+                    service = key_parts[0]
+                    setting = '_'.join(key_parts[2:])
+                    
+                    if service not in settings:
+                        settings[service] = {}
+                    
+                    # Mask sensitive data but indicate it exists
+                    if setting in ['password', 'api_key']:
+                        settings[service][setting] = '********' if row['value'] else ''
+                    else:
+                        settings[service][setting] = row['value']
+        
+        return jsonify(settings)
+    except Exception as e:
+        logger.error(f"Error getting connection settings: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/settings/connections/<service>', methods=['POST'])
+def save_connection_settings(service):
+    """Save connection settings for a service."""
+    try:
+        data = request.get_json()
+        
+        if service not in ['navidrome', 'lidarr', 'slskd']:
+            return jsonify({'error': 'Invalid service'}), 400
+        
+        # Save settings to database
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            for key, value in data.items():
+                # Skip saving if value is the mask (unchanged sensitive field)
+                if value == '********':
+                    continue
+                    
+                if value:  # Only save non-empty values
+                    setting_key = f"{service}_connection_{key}"
+                    cursor.execute("""
+                        INSERT OR REPLACE INTO app_settings (key, value, description, updated_at)
+                        VALUES (?, ?, ?, ?)
+                    """, (setting_key, value, f"{service.title()} {key}", datetime.now()))
+            
+            conn.commit()
+        
+        logger.info(f"Saved {service} connection settings")
+        return jsonify({'success': True, 'message': f'{service.title()} settings saved'})
+        
+    except Exception as e:
+        logger.error(f"Error saving {service} connection settings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/settings/test-connection/<service>', methods=['POST'])
+def test_connection_settings(service):
+    """Test connection to a service with provided settings."""
+    try:
+        data = request.get_json()
+        
+        # Helper function to get actual value if masked
+        def get_actual_value(key, provided_value):
+            if provided_value == '********':
+                # Get the actual stored value from database
+                with db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    setting_key = f"{service}_connection_{key}"
+                    cursor.execute("SELECT value FROM app_settings WHERE key = ?", (setting_key,))
+                    row = cursor.fetchone()
+                    return row['value'] if row else ''
+            return provided_value
+        
+        if service == 'navidrome':
+            url = get_actual_value('url', data.get('url', '').rstrip('/'))
+            username = get_actual_value('username', data.get('username', ''))
+            password = get_actual_value('password', data.get('password', ''))
+            
+            if not all([url, username, password]):
+                return jsonify({'success': False, 'error': 'URL, username, and password are required'})
+            
+            # Test Navidrome connection
+            auth_url = f"{url}/auth/login"
+            auth_data = {'username': username, 'password': password}
+            
+            response = requests.post(auth_url, json=auth_data, timeout=10)
+            if response.status_code == 200:
+                return jsonify({'success': True, 'message': 'Connection successful'})
+            else:
+                return jsonify({'success': False, 'error': f'Authentication failed (HTTP {response.status_code})'})
+                
+        elif service == 'lidarr':
+            url = get_actual_value('url', data.get('url', '').rstrip('/'))
+            api_key = get_actual_value('api_key', data.get('api_key', ''))
+            
+            if not all([url, api_key]):
+                return jsonify({'success': False, 'error': 'URL and API key are required'})
+            
+            # Test Lidarr API
+            status_url = f"{url}/api/v1/system/status"
+            headers = {'X-Api-Key': api_key}
+            
+            response = requests.get(status_url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                version = data.get('version', 'Unknown')
+                return jsonify({'success': True, 'message': f'Connected to Lidarr v{version}'})
+            else:
+                return jsonify({'success': False, 'error': f'API error (HTTP {response.status_code})'})
+                
+        elif service == 'slskd':
+            url = get_actual_value('url', data.get('url', '').rstrip('/'))
+            api_key = get_actual_value('api_key', data.get('api_key', ''))
+            
+            if not all([url, api_key]):
+                return jsonify({'success': False, 'error': 'URL and API key are required'})
+            
+            # Set up headers for API requests
+            headers = {'X-API-Key': api_key}
+            
+            # Test slskd API - try multiple endpoints for better compatibility
+            test_endpoints = [
+                f"{url}/api/v0/session",
+                f"{url}/api/v0/application",
+                f"{url}/api/v0/system/info"
+            ]
+            
+            last_error = None
+            for endpoint in test_endpoints:
+                try:
+                    response = requests.get(endpoint, headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        try:
+                            # Try to parse JSON response
+                            data = response.json()
+                            if endpoint.endswith('/session'):
+                                state = data.get('state', 'Connected')
+                                return jsonify({'success': True, 'message': f'Connected to slskd ({state})'})
+                            else:
+                                return jsonify({'success': True, 'message': 'Connected to slskd (API responded)'})
+                        except ValueError:
+                            # If response is not JSON, but status is 200, consider it a success
+                            return jsonify({'success': True, 'message': 'Connected to slskd (API available)'})
+                    elif response.status_code == 401:
+                        return jsonify({'success': False, 'error': 'Authentication failed - check API key'})
+                    else:
+                        last_error = f'HTTP {response.status_code}'
+                        continue
+                except requests.exceptions.RequestException as e:
+                    last_error = str(e)
+                    continue
+            
+            # If all endpoints failed
+            return jsonify({'success': False, 'error': f'All API endpoints failed. Last error: {last_error}'})
+        
+        else:
+            return jsonify({'success': False, 'error': 'Invalid service'}), 400
+            
+    except requests.exceptions.ConnectionError:
+        return jsonify({'success': False, 'error': 'Connection refused - check URL and network'})
+    except requests.exceptions.Timeout:
+        return jsonify({'success': False, 'error': 'Connection timeout'})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': f'Invalid response format: {str(e)}'})
+    except Exception as e:
+        logger.error(f"Error testing {service} connection: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# OAuth Routes (placeholder - will need OAuth libraries)
+@app.route('/api/oauth/spotify/status')
+def get_spotify_oauth_status():
+    """Get Spotify OAuth connection status."""
+    try:
+        # Check if we have stored Spotify credentials
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM app_settings WHERE key = 'spotify_oauth_token'")
+            row = cursor.fetchone()
+            
+            if row and row['value']:
+                # TODO: Validate token with Spotify API
+                return jsonify({
+                    'connected': True,
+                    'user': {'name': 'Spotify User'}  # TODO: Get actual user info
+                })
+            else:
+                return jsonify({'connected': False})
+    except Exception as e:
+        logger.error(f"Error checking Spotify OAuth status: {e}")
+        return jsonify({'connected': False, 'error': str(e)})
+
+@app.route('/api/oauth/spotify/authorize')
+def spotify_oauth_authorize():
+    """Initialize Spotify OAuth flow."""
+    # TODO: Implement Spotify OAuth using spotipy or similar library
+    return jsonify({
+        'error': 'Spotify OAuth not yet implemented',
+        'message': 'OAuth integration will be added in a future update'
+    }), 501
+
+@app.route('/api/oauth/spotify/disconnect', methods=['POST'])
+def spotify_oauth_disconnect():
+    """Disconnect Spotify OAuth."""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM app_settings WHERE key LIKE 'spotify_oauth_%'")
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Disconnected from Spotify'})
+    except Exception as e:
+        logger.error(f"Error disconnecting Spotify: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/oauth/tidal/status')
+def get_tidal_oauth_status():
+    """Get Tidal OAuth connection status."""
+    try:
+        # Check if we have stored Tidal credentials
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM app_settings WHERE key = 'tidal_oauth_token'")
+            row = cursor.fetchone()
+            
+            if row and row['value']:
+                # TODO: Validate token with Tidal API
+                return jsonify({
+                    'connected': True,
+                    'user': {'name': 'Tidal User'}  # TODO: Get actual user info
+                })
+            else:
+                return jsonify({'connected': False})
+    except Exception as e:
+        logger.error(f"Error checking Tidal OAuth status: {e}")
+        return jsonify({'connected': False, 'error': str(e)})
+
+@app.route('/api/oauth/tidal/authorize')
+def tidal_oauth_authorize():
+    """Initialize Tidal OAuth flow."""
+    # TODO: Implement Tidal OAuth using tidalapi or similar library
+    return jsonify({
+        'error': 'Tidal OAuth not yet implemented',
+        'message': 'OAuth integration will be added in a future update'
+    }), 501
+
+@app.route('/api/oauth/tidal/disconnect', methods=['POST'])
+def tidal_oauth_disconnect():
+    """Disconnect Tidal OAuth."""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM app_settings WHERE key LIKE 'tidal_oauth_%'")
+            conn.commit()
+        
+        return jsonify({'success': True, 'message': 'Disconnected from Tidal'})
+    except Exception as e:
+        logger.error(f"Error disconnecting Tidal: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/slskd/downloads')
 def get_slskd_downloads():

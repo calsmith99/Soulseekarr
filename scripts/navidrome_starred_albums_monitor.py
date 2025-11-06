@@ -42,7 +42,6 @@ import sys
 import json
 import argparse
 import logging
-import requests
 import hashlib
 import time
 import random
@@ -51,8 +50,23 @@ from pathlib import Path
 from datetime import datetime
 import re
 
+# Try to import optional dependencies
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
+
 # Add parent directory to path so we can import action_logger and lidarr_utils
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Try to import settings
+try:
+    from settings import get_navidrome_config, get_lidarr_config
+    SETTINGS_AVAILABLE = True
+except ImportError:
+    SETTINGS_AVAILABLE = False
 try:
     from action_logger import log_action
 except ImportError as e:
@@ -184,9 +198,24 @@ class NavidromeStarredAlbumsMonitor:
     def _setup_navidrome_auth(self):
         """Set up Navidrome authentication"""
         try:
-            self.navidrome_url = os.getenv('NAVIDROME_URL')
-            self.navidrome_username = os.getenv('NAVIDROME_USERNAME')
-            navidrome_password = os.getenv('NAVIDROME_PASSWORD')
+            # Try to get configuration from settings module first
+            if SETTINGS_AVAILABLE:
+                try:
+                    navidrome_config = get_navidrome_config()
+                    self.navidrome_url = navidrome_config.get('url')
+                    self.navidrome_username = navidrome_config.get('username')
+                    navidrome_password = navidrome_config.get('password')
+                except Exception as e:
+                    self.logger.warning(f"Could not load from settings module: {e}")
+                    navidrome_config = None
+            else:
+                navidrome_config = None
+            
+            # Fall back to environment variables if settings not available
+            if not navidrome_config or not all([self.navidrome_url, self.navidrome_username, navidrome_password]):
+                self.navidrome_url = os.getenv('NAVIDROME_URL')
+                self.navidrome_username = os.getenv('NAVIDROME_USERNAME')
+                navidrome_password = os.getenv('NAVIDROME_PASSWORD')
             
             if not all([self.navidrome_url, self.navidrome_username, navidrome_password]):
                 missing = []
@@ -196,7 +225,7 @@ class NavidromeStarredAlbumsMonitor:
                     missing.append('NAVIDROME_USERNAME')
                 if not navidrome_password:
                     missing.append('NAVIDROME_PASSWORD')
-                raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+                raise ValueError(f"Missing required configuration: {', '.join(missing)}")
             
             # Generate Subsonic API token and salt
             self.subsonic_salt = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
@@ -212,8 +241,22 @@ class NavidromeStarredAlbumsMonitor:
     def _setup_lidarr_connection(self):
         """Set up Lidarr connection"""
         try:
-            self.lidarr_url = os.getenv('LIDARR_URL')
-            self.lidarr_api_key = os.getenv('LIDARR_API_KEY')
+            # Try to get configuration from settings module first
+            if SETTINGS_AVAILABLE:
+                try:
+                    lidarr_config = get_lidarr_config()
+                    self.lidarr_url = lidarr_config.get('url')
+                    self.lidarr_api_key = lidarr_config.get('api_key')
+                except Exception as e:
+                    self.logger.warning(f"Could not load from settings module: {e}")
+                    lidarr_config = None
+            else:
+                lidarr_config = None
+            
+            # Fall back to environment variables if settings not available
+            if not lidarr_config or not all([self.lidarr_url, self.lidarr_api_key]):
+                self.lidarr_url = os.getenv('LIDARR_URL')
+                self.lidarr_api_key = os.getenv('LIDARR_API_KEY')
             
             if not self.lidarr_url or not self.lidarr_api_key:
                 missing = []
@@ -221,7 +264,7 @@ class NavidromeStarredAlbumsMonitor:
                     missing.append('LIDARR_URL')
                 if not self.lidarr_api_key:
                     missing.append('LIDARR_API_KEY')
-                raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+                raise ValueError(f"Missing required configuration: {', '.join(missing)}")
             
             # Test Lidarr connection
             if not self.dry_run:

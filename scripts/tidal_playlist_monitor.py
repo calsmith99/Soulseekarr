@@ -38,6 +38,11 @@ import sys
 import json
 import argparse
 import logging
+
+# Add parent directory to path to import settings
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from settings import (get_navidrome_config, get_lidarr_config, get_tidal_access_token, 
+                     get_tidal_country_code)
 import requests
 import time
 from pathlib import Path
@@ -62,14 +67,18 @@ except ImportError as e:
 
 class TidalPlaylistMonitor:
     def __init__(self, dry_run=False):
-        # Environment variables
-        self.tidal_access_token = os.environ.get('TIDAL_ACCESS_TOKEN')
-        self.tidal_country_code = os.environ.get('TIDAL_COUNTRY_CODE', 'US')
-        self.navidrome_url = os.environ.get('NAVIDROME_URL')
-        self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
-        self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
-        self.lidarr_url = os.environ.get('LIDARR_URL')
-        self.lidarr_api_key = os.environ.get('LIDARR_API_KEY')
+        # Get configuration from settings
+        navidrome_config = get_navidrome_config()
+        lidarr_config = get_lidarr_config()
+        
+        # Configuration values
+        self.tidal_access_token = get_tidal_access_token()
+        self.tidal_country_code = get_tidal_country_code()
+        self.navidrome_url = navidrome_config.get('url', '')
+        self.navidrome_username = navidrome_config.get('username', '')
+        self.navidrome_password = navidrome_config.get('password', '')
+        self.lidarr_url = lidarr_config.get('url', '')
+        self.lidarr_api_key = lidarr_config.get('api_key', '')
 
         self.dry_run = dry_run
 

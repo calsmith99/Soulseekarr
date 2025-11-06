@@ -48,6 +48,14 @@ import re
 
 # Add parent directory to path so we can import action_logger and lidarr_utils
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Try to import settings
+try:
+    from settings import get_navidrome_config, get_lidarr_config, get_spotify_config
+    SETTINGS_AVAILABLE = True
+except ImportError:
+    SETTINGS_AVAILABLE = False
+
 try:
     from action_logger import log_action
 except ImportError as e:
@@ -63,16 +71,45 @@ except ImportError as e:
 
 class SpotifyPlaylistMonitor:
     def __init__(self, dry_run=False):
-        # Environment variables
-        self.spotify_client_id = os.environ.get('SPOTIFY_CLIENT_ID')
-        self.spotify_client_secret = os.environ.get('SPOTIFY_CLIENT_SECRET')
-        self.navidrome_url = os.environ.get('NAVIDROME_URL')
-        self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
-        self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
-        self.lidarr_url = os.environ.get('LIDARR_URL')
-        self.lidarr_api_key = os.environ.get('LIDARR_API_KEY')
-
         self.dry_run = dry_run
+        
+        # Try to get configuration from settings module first
+        if SETTINGS_AVAILABLE:
+            try:
+                spotify_config = get_spotify_config()
+                navidrome_config = get_navidrome_config()
+                lidarr_config = get_lidarr_config()
+                
+                self.spotify_client_id = spotify_config.get('client_id')
+                self.spotify_client_secret = spotify_config.get('client_secret')
+                self.navidrome_url = navidrome_config.get('url')
+                self.navidrome_username = navidrome_config.get('username')
+                self.navidrome_password = navidrome_config.get('password')
+                self.lidarr_url = lidarr_config.get('url')
+                self.lidarr_api_key = lidarr_config.get('api_key')
+            except Exception as e:
+                print(f"Warning: Could not load from settings module: {e}")
+                spotify_config = None
+                navidrome_config = None
+                lidarr_config = None
+        else:
+            spotify_config = None
+            navidrome_config = None
+            lidarr_config = None
+        
+        # Fall back to environment variables if settings not available
+        if not spotify_config or not all([self.spotify_client_id, self.spotify_client_secret]):
+            self.spotify_client_id = os.environ.get('SPOTIFY_CLIENT_ID')
+            self.spotify_client_secret = os.environ.get('SPOTIFY_CLIENT_SECRET')
+        
+        if not navidrome_config or not all([self.navidrome_url, self.navidrome_username, self.navidrome_password]):
+            self.navidrome_url = os.environ.get('NAVIDROME_URL')
+            self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
+            self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
+        
+        if not lidarr_config or not all([self.lidarr_url, self.lidarr_api_key]):
+            self.lidarr_url = os.environ.get('LIDARR_URL')
+            self.lidarr_api_key = os.environ.get('LIDARR_API_KEY')
 
         # Initialize basic attributes first
         self.logger = None

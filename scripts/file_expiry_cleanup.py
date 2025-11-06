@@ -34,14 +34,36 @@ from time import sleep
 
 # Add parent directory to path so we can import action_logger
 sys.path.append(str(Path(__file__).parent.parent))
+
+# Try to import settings
+try:
+    from settings import get_navidrome_config
+    SETTINGS_AVAILABLE = True
+except ImportError:
+    SETTINGS_AVAILABLE = False
+
 from action_logger import log_action
 
 class FileExpiryCleanup:
     def __init__(self, cleanup_days=None, dry_run=False):
-        # Environment variables
-        self.navidrome_url = os.environ.get('NAVIDROME_URL')
-        self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
-        self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
+        # Try to get configuration from settings module first
+        if SETTINGS_AVAILABLE:
+            try:
+                navidrome_config = get_navidrome_config()
+                self.navidrome_url = navidrome_config.get('url')
+                self.navidrome_username = navidrome_config.get('username')
+                self.navidrome_password = navidrome_config.get('password')
+            except Exception as e:
+                print(f"Warning: Could not load from settings module: {e}")
+                navidrome_config = None
+        else:
+            navidrome_config = None
+        
+        # Fall back to environment variables if settings not available
+        if not navidrome_config or not all([self.navidrome_url, self.navidrome_username, self.navidrome_password]):
+            self.navidrome_url = os.environ.get('NAVIDROME_URL')
+            self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
+            self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
         
         # Use mounted volume paths
         self.incomplete_dir = '/media/Incomplete'

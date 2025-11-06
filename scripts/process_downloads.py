@@ -27,6 +27,22 @@ from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
 
+# Try to import optional dependencies
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
+
+# Add parent directory to path to import settings
+try:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from settings import get_lidarr_config
+    SETTINGS_AVAILABLE = True
+except ImportError:
+    SETTINGS_AVAILABLE = False
+
 # Set up basic logging immediately to catch early errors
 try:
     # Create a basic logger first
@@ -130,6 +146,12 @@ class DownloadsProcessor:
         logger.info(f"Dry run mode: {self.dry_run}")
         logger.info(f"Skip metadata fix: {self.skip_metadata_fix}")
         
+        # Check for required dependencies
+        if not REQUESTS_AVAILABLE:
+            logger.error("Missing required dependency: requests")
+            logger.error("Install with: pip install requests")
+            raise SystemExit(1)
+        
         self.logger = logger  # Use the global logger
         self.setup_paths()
         self.setup_lidarr_config()
@@ -166,14 +188,28 @@ class DownloadsProcessor:
     def setup_lidarr_config(self):
         """Setup Lidarr API configuration"""
         logger.info("Setting up Lidarr configuration...")
-        self.lidarr_url = os.getenv('LIDARR_URL', 'http://lidarr:8686')
-        self.lidarr_api_key = os.getenv('LIDARR_API_KEY')
+        
+        if SETTINGS_AVAILABLE:
+            # Get configuration from settings module
+            lidarr_config = get_lidarr_config()
+            self.lidarr_url = lidarr_config.get('url') or 'http://lidarr:8686'
+            self.lidarr_api_key = lidarr_config.get('api_key')
+            logger.info("Using Lidarr configuration from settings")
+        else:
+            # Fall back to environment variables
+            self.lidarr_url = os.getenv('LIDARR_URL', 'http://lidarr:8686')
+            self.lidarr_api_key = os.getenv('LIDARR_API_KEY')
+            logger.info("Using Lidarr configuration from environment variables")
         
         logger.info(f"Lidarr URL: {self.lidarr_url}")
         
         if not self.lidarr_api_key:
-            logger.error("LIDARR_API_KEY environment variable not set")
-            logger.error("Please set LIDARR_API_KEY environment variable to use this script")
+            if SETTINGS_AVAILABLE:
+                logger.error("Lidarr API key not configured in settings or LIDARR_API_KEY environment variable")
+                logger.error("Please configure Lidarr in the web interface Settings page")
+            else:
+                logger.error("LIDARR_API_KEY environment variable not set")
+                logger.error("Please set LIDARR_API_KEY environment variable to use this script")
             raise SystemExit(1)
             
         self.lidarr_headers = {'X-Api-Key': self.lidarr_api_key}
@@ -183,7 +219,7 @@ class DownloadsProcessor:
         """Setup MusicBrainz API configuration"""
         logger.info("Setting up MusicBrainz configuration...")
         
-        # Set user agent for MusicBrainz API requests
+        # Set user agent for MusicBrainz API requests (can use env vars for flexibility)
         app_name = os.getenv('MUSICBRAINZ_APP_NAME', 'navidrome-cleanup')
         app_version = os.getenv('MUSICBRAINZ_APP_VERSION', '1.0')
         contact_email = os.getenv('MUSICBRAINZ_CONTACT_EMAIL', 'admin@localhost')

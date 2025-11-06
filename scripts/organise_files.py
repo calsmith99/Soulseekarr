@@ -33,6 +33,10 @@ import shutil
 import logging
 import argparse
 import requests
+
+# Add parent directory to path to import settings
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from settings import get_lidarr_config, get_target_uid, get_target_gid, is_dry_run
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
@@ -78,14 +82,19 @@ class FileOrganiser:
         self.owned_dir = Path(owned_dir).resolve()
         self.music_dir = Path(music_dir).resolve()
         self.incomplete_dir = Path(incomplete_dir).resolve()
-        self.lidarr_url = lidarr_url.rstrip('/') if lidarr_url else os.environ.get('LIDARR_URL', '').rstrip('/')
-        self.lidarr_api_key = lidarr_api_key or os.environ.get('LIDARR_API_KEY', '')
+        
+        # Get Lidarr configuration from settings with fallback to parameters
+        lidarr_config = get_lidarr_config()
+        self.lidarr_url = (lidarr_url.rstrip('/') if lidarr_url 
+                          else lidarr_config.get('url', '').rstrip('/'))
+        self.lidarr_api_key = lidarr_api_key or lidarr_config.get('api_key', '')
+        
         self.dry_run = dry_run
         self.bidirectional = bidirectional
         
-        # File permission settings for services (configurable via env vars)
-        self.target_uid = int(os.environ.get('TARGET_UID', '1000'))
-        self.target_gid = int(os.environ.get('TARGET_GID', '1000'))
+        # File permission settings for services (configurable via settings/env vars)
+        self.target_uid = get_target_uid()
+        self.target_gid = get_target_gid()
         self.file_mode = 0o644  # rw-r--r--
         self.dir_mode = 0o755   # rwxr-xr-x
         
@@ -1465,7 +1474,7 @@ def main():
     args = parser.parse_args()
     
     # Check for DRY_RUN environment variable (from web interface)
-    if os.environ.get('DRY_RUN') == 'true':
+    if is_dry_run():
         args.dry_run = True
     
     # Handle bidirectional flag

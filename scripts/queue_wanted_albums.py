@@ -29,20 +29,39 @@ import json
 import time
 import signal
 import logging
-import requests
 import shutil
 from datetime import datetime
 from urllib.parse import urlparse
 from pathlib import Path
 import argparse
 
-# Enable detailed HTTP logging
-import http.client as http_client
-http_client.HTTPConnection.debuglevel = 1
+# Try to import optional dependencies
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    requests = None
 
-# Configure requests logging
-logging.getLogger("requests.packages.urllib3").setLevel(logging.DEBUG)
-logging.getLogger("urllib3.connectionpool").setLevel(logging.DEBUG)
+# Add parent directory to path to import settings
+try:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from settings import (get_lidarr_config, get_slskd_config, is_dry_run, 
+                         get_slskd_downloads_complete_path, get_slskd_downloads_incomplete_path, 
+                         get_slskd_downloads_path)
+    SETTINGS_AVAILABLE = True
+except ImportError:
+    SETTINGS_AVAILABLE = False
+
+# Only configure HTTP logging if requests is available
+if REQUESTS_AVAILABLE:
+    # Enable detailed HTTP logging
+    import http.client as http_client
+    http_client.HTTPConnection.debuglevel = 1
+
+    # Configure requests logging
+    logging.getLogger("requests.packages.urllib3").setLevel(logging.DEBUG)
+    logging.getLogger("urllib3.connectionpool").setLevel(logging.DEBUG)
 
 # Global variables for graceful shutdown
 ALBUMS_CHECKED = 0
@@ -51,6 +70,10 @@ ALBUMS_SKIPPED_UNMONITORED = 0
 ALBUMS_QUEUED = 0
 ALBUMS_FAILED = 0
 interrupted = False
+
+# Global configuration variables (populated in main)
+LIDARR_CONFIG = {}
+SLSKD_CONFIG = {}
 
 def log_download_request(method, url, data=None, response=None):
     """Simple logging for download requests"""
@@ -119,30 +142,104 @@ def print_summary(interrupted=False):
     logging.info("")
 
 def check_environment():
-    """Check required environment variables"""
-    required_vars = {
-        'LIDARR_URL': 'Lidarr server URL',
-        'LIDARR_API_KEY': 'Lidarr API key',
-        'SLSKD_URL': 'slskd server URL', 
-        'SLSKD_API_KEY': 'slskd API key'
-    }
+    """Check required configuration from settings or environment variables"""
     
-    missing_vars = []
-    for var, desc in required_vars.items():
-        if not os.getenv(var):
-            missing_vars.append(f"{var} ({desc})")
-    
-    if missing_vars:
-        logging.error("✗ Missing required environment variables:")
-        for var in missing_vars:
-            logging.error(f"   - {var}")
+    if not REQUESTS_AVAILABLE:
+        logging.error("✗ Missing required dependency: requests")
+        logging.error("   Install with: pip install requests")
         return False
     
-    logging.info("🔧 Using environment variables from Portainer stack")
-    logging.info(f"   📍 Lidarr: {os.getenv('LIDARR_URL')}")
-    logging.info(f"   📍 slskd: {os.getenv('SLSKD_URL')}")
+    if SETTINGS_AVAILABLE:
+        # Get configuration from settings module
+        lidarr_config = get_lidarr_config()
+        slskd_config = get_slskd_config()
+        
+        missing_configs = []
+        
+        if not lidarr_config.get('url'):
+            missing_configs.append("Lidarr URL (set in web interface Settings or LIDARR_URL env var)")
+        if not lidarr_config.get('api_key'):
+            missing_configs.append("Lidarr API key (set in web interface Settings or LIDARR_API_KEY env var)")
+        if not slskd_config.get('url'):
+            missing_configs.append("slskd URL (set in web interface Settings or SLSKD_URL env var)")
+        if not slskd_config.get('api_key'):
+            missing_configs.append("slskd API key (set in web interface Settings or SLSKD_API_KEY env var)")
+        
+        if missing_configs:
+            logging.error("✗ Missing required configuration:")
+            for config in missing_configs:
+                logging.error(f"   - {config}")
+            return False
+        
+        logging.info("🔧 Using configuration from settings")
+        logging.info(f"   📍 Lidarr: {lidarr_config['url']}")
+        logging.info(f"   📍 slskd: {slskd_config['url']}")
+        
+    else:
+        # Fall back to environment variables
+        required_vars = {
+            'LIDARR_URL': 'Lidarr server URL',
+            'LIDARR_API_KEY': 'Lidarr API key',
+            'SLSKD_URL': 'slskd server URL', 
+            'SLSKD_API_KEY': 'slskd API key'
+        }
+        
+        missing_vars = []
+        for var, desc in required_vars.items():
+            if not os.getenv(var):
+                missing_vars.append(f"{var} ({desc})")
+        
+        if missing_vars:
+            logging.error("✗ Missing required environment variables:")
+            for var in missing_vars:
+                logging.error(f"   - {var}")
+            return False
+        
+        logging.info("🔧 Using environment variables")
+        # Note: These are fallback environment variables when settings module unavailable
+        logging.info(f"   📍 Lidarr: {os.getenv('LIDARR_URL', 'Not set')}")
+        logging.info(f"   📍 slskd: {os.getenv('SLSKD_URL', 'Not set')}")
     
     return True
+
+def get_missing_tracks_for_album(album_id):
+    """Get list of missing tracks for an album from Lidarr"""
+    try:
+        # Get album details with tracks
+        url = f"{LIDARR_CONFIG['url']}/api/v1/album/{album_id}"
+        params = {'apikey': LIDARR_CONFIG['api_key']}
+        
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code != 200:
+            logging.warning(f"   ⚠️  Could not get album details for ID {album_id}")
+            return []
+        
+        album_data = response.json()
+        media = album_data.get('media', [])
+        missing_tracks = []
+        
+        for disc in media:
+            tracks = disc.get('tracks', [])
+            for track in tracks:
+                # Check if track has a file
+                has_file = track.get('hasFile', False)
+                if not has_file:
+                    track_info = {
+                        'id': track.get('id'),
+                        'title': track.get('title', 'Unknown Track'),
+                        'trackNumber': track.get('trackNumber', 0),
+                        'discNumber': disc.get('discNumber', 1),
+                        'duration': track.get('duration', 0),
+                        'artist': album_data.get('artist', {}).get('artistName', 'Unknown Artist'),
+                        'album': album_data.get('title', 'Unknown Album')
+                    }
+                    missing_tracks.append(track_info)
+        
+        return missing_tracks
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error getting missing tracks for album {album_id}: {e}")
+        return []
 
 def check_existing_tracks(album_id, artist_name, album_title):
     """Check if we already have tracks from an album in Lidarr or completed downloads"""
@@ -155,57 +252,30 @@ def check_existing_tracks(album_id, artist_name, album_title):
         return True
     
     try:
-        # Get album info to check expected track count
-        url = f"{os.getenv('LIDARR_URL')}/api/v1/album/{album_id}"
-        params = {'apikey': os.getenv('LIDARR_API_KEY')}
+        # Get missing tracks for this album
+        missing_tracks = get_missing_tracks_for_album(album_id)
         
-        response = requests.get(url, params=params, timeout=30)
-        if response.status_code != 200:
-            logging.warning("   ⚠️  Could not get album info")
-            return False
+        if not missing_tracks:
+            logging.info("   ✅ Album is complete - no missing tracks")
+            return True
         
-        album_info = response.json()
-        expected_tracks = album_info.get('statistics', {}).get('trackCount', 0)
+        total_tracks = len(missing_tracks)
+        logging.info(f"   📊 Found {total_tracks} missing tracks in album")
         
-        # Get track files for this specific album
-        url = f"{os.getenv('LIDARR_URL')}/api/v1/trackFile"
-        params = {'albumId': album_id, 'apikey': os.getenv('LIDARR_API_KEY')}
-        
-        response = requests.get(url, params=params, timeout=30)
-        if response.status_code != 200:
-            logging.warning("   ⚠️  Could not check existing tracks")
-            return False
-        
-        track_files = response.json()
-        existing_tracks = len(track_files)
-        
-        if existing_tracks == 0:
-            logging.info("   📭 No existing tracks found in Lidarr")
-            return False
+        # Log some details about missing tracks
+        if total_tracks <= 5:
+            for track in missing_tracks:
+                disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
+                logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
         else:
-            logging.info(f"   📀 Found {existing_tracks} existing tracks in Lidarr (expected: {expected_tracks})")
-            
-            # Show some details about existing tracks
-            for i, track in enumerate(track_files[:3]):
-                file_path = track.get('path', '')
-                file_name = os.path.basename(file_path)
-                logging.info(f"      • {file_name}")
-            
-            if existing_tracks > 3:
-                remaining = existing_tracks - 3
-                logging.info(f"      ... and {remaining} more tracks")
-            
-            # Check if we have all expected tracks
-            if existing_tracks >= expected_tracks and expected_tracks > 0:
-                logging.info(f"   ✅ Album appears complete in Lidarr ({existing_tracks}/{expected_tracks} tracks)")
-                return True
-            else:
-                logging.info(f"   ⚠️  Album incomplete in Lidarr ({existing_tracks}/{expected_tracks} tracks) - will search for missing tracks")
-                return False
-                
-    except requests.RequestException as e:
-        logging.error(f"   ❌ Error checking tracks: {e}")
-        return False
+            # Just show first few tracks
+            for track in missing_tracks[:3]:
+                disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
+                logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
+            logging.info(f"      ... and {total_tracks - 3} more tracks")
+        
+        return False  # Album has missing tracks
+        
     except Exception as e:
         logging.error(f"   ❌ Unexpected error checking tracks: {e}")
         return False
@@ -218,9 +288,9 @@ def get_wanted_albums():
     
     try:
         # Get all albums that are monitored and not downloaded
-        url = f"{os.getenv('LIDARR_URL')}/api/v1/wanted/missing"
+        url = f"{LIDARR_CONFIG['url']}/api/v1/wanted/missing"
         params = {
-            'apikey': os.getenv('LIDARR_API_KEY'),
+            'apikey': LIDARR_CONFIG['api_key'],
             'page': 1,
             'pageSize': 1000,
             'sortKey': 'releaseDate',
@@ -272,11 +342,18 @@ def get_wanted_albums():
                     logging.info("   ✅ Album already has tracks - skipping download")
                     ALBUMS_SKIPPED_EXISTING += 1
                 else:
-                    # Queue album for download via slskd
-                    if queue_album_in_slskd(album_id, artist_name, album_title):
-                        ALBUMS_QUEUED += 1
+                    # Get missing tracks for targeted downloading
+                    missing_tracks = get_missing_tracks_for_album(album_id)
+                    
+                    if missing_tracks:
+                        # Queue missing tracks for download via slskd
+                        if queue_missing_tracks_in_slskd(album_id, artist_name, album_title, missing_tracks):
+                            ALBUMS_QUEUED += 1
+                        else:
+                            ALBUMS_FAILED += 1
                     else:
-                        ALBUMS_FAILED += 1
+                        logging.info("   ℹ️  No missing tracks found for this album")
+                        ALBUMS_SKIPPED_EXISTING += 1
             else:
                 logging.info("   ⏭️  Skipping (not monitored)")
                 ALBUMS_SKIPPED_UNMONITORED += 1
@@ -295,7 +372,139 @@ def get_wanted_albums():
         logging.error(f"✗ Unexpected error fetching wanted albums: {e}")
         return False
 
+def queue_missing_tracks_in_slskd(album_id, artist_name, album_title, missing_tracks, dry_run=False):
+    """Queue specific missing tracks for download in slskd"""
+    if not missing_tracks:
+        logging.info("   ℹ️  No missing tracks to queue")
+        return True
+    
+    total_missing = len(missing_tracks)
+    logging.info(f"   🎯 Queuing {total_missing} missing tracks from: {album_title}")
+    
+    if dry_run:
+        logging.info(f"   [DRY RUN] Would search slskd for {total_missing} missing tracks")
+        for track in missing_tracks[:3]:  # Show first 3 tracks
+            logging.info(f"      [DRY RUN] Would search: \"{artist_name} {track['title']}\"")
+        if total_missing > 3:
+            logging.info(f"      [DRY RUN] ... and {total_missing - 3} more tracks")
+        return True
+    
+    success_count = 0
+    
+    # Strategy 1: Try searching for the full album first (might get all tracks at once)
+    album_search_query = f"{artist_name} {album_title}"
+    logging.info(f"   🔍 First trying album search: \"{album_search_query}\"")
+    
+    if queue_single_search_in_slskd(album_search_query, "album"):
+        success_count += 1
+        logging.info("   ✓ Album search queued successfully")
+    else:
+        logging.info("   ⚠️  Album search failed, trying individual tracks...")
+        
+        # Strategy 2: Search for individual tracks if album search fails
+        for i, track in enumerate(missing_tracks[:5], 1):  # Limit to first 5 tracks to avoid spam
+            if interrupted:
+                break
+                
+            track_search_query = f"{artist_name} {track['title']}"
+            logging.info(f"   🔍 Searching for track {i}/{min(5, total_missing)}: \"{track['title']}\"")
+            
+            if queue_single_search_in_slskd(track_search_query, "track"):
+                success_count += 1
+                logging.info(f"      ✓ Track search queued: {track['title']}")
+            else:
+                logging.info(f"      ✗ Failed to queue: {track['title']}")
+            
+            # Small delay between track searches
+            if i < min(5, total_missing):
+                time.sleep(1)
+        
+        if total_missing > 5:
+            logging.info(f"   ℹ️  Limited to first 5 tracks. {total_missing - 5} tracks not searched individually.")
+    
+    return success_count > 0
+
+def queue_single_search_in_slskd(search_query, search_type="unknown"):
+    """Queue a single search in slskd and attempt to download results"""
+    try:
+        # Search slskd
+        url = f"{SLSKD_CONFIG['url']}/api/v0/searches"
+        headers = {
+            'Content-Type': 'application/json',
+            'X-API-Key': SLSKD_CONFIG['api_key']
+        }
+        data = {
+            'searchText': search_query,
+            'timeout': 30000
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=35)
+        if response.status_code != 200:
+            logging.error(f"      ✗ Failed to search slskd for {search_type}")
+            return False
+        
+        search_response = response.json()
+        search_id = search_response.get('id')
+        
+        if not search_id:
+            logging.error(f"      ✗ Failed to get search ID from slskd for {search_type}")
+            return False
+        
+        # Wait a bit for search to populate
+        time.sleep(3)
+        
+        # Get search results and try to queue the best match
+        return queue_best_search_result(search_id, search_query, search_type)
+
+def queue_best_search_result(search_id, search_query, search_type):
+    """Get search results and queue the best match"""
+    try:
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
+        
+        # Get search responses
+        url = f"{SLSKD_CONFIG['url']}/api/v0/searches/{search_id}/responses"
+        response = requests.get(url, headers=headers, timeout=30)
+        
+        if response.status_code != 200:
+            logging.error(f"      ✗ Failed to get search responses for {search_type}")
+            return False
+        
+        results = response.json()
+        
+        # Find best matches (use existing function but limit results)
+        candidates = find_best_matches(results, max_candidates=1)  # Just get the best one
+        
+        if not candidates:
+            logging.info(f"      ℹ️  No suitable matches found for {search_type}")
+            return False
+        
+        # Try the best candidate
+        username, filename, filesize = candidates[0]
+        logging.info(f"      🎯 Found match from user: {username}")
+        
+        # Try to download
+        success = attempt_download_from_user(username, filename, results)
+        
+        if success:
+            logging.info(f"      ✅ Successfully queued {search_type}")
+            return True
+        else:
+            logging.info(f"      ⚠️  Failed to queue {search_type}")
+            return False
+            
+    except Exception as e:
+        logging.error(f"      ❌ Error processing {search_type} results: {e}")
+        return False
+        
+    except Exception as e:
+        logging.error(f"      ❌ Error searching for {search_type}: {e}")
+        return False
+
 def queue_album_in_slskd(album_id, artist_name, album_title, dry_run=False):
+    """Queue album for download in slskd (legacy function - now redirects to missing tracks)"""
+    # Get missing tracks and use the new targeted approach
+    missing_tracks = get_missing_tracks_for_album(album_id)
+    return queue_missing_tracks_in_slskd(album_id, artist_name, album_title, missing_tracks, dry_run)
     """Queue album for download in slskd"""
     search_query = f"{artist_name} {album_title}"
     
@@ -307,10 +516,10 @@ def queue_album_in_slskd(album_id, artist_name, album_title, dry_run=False):
     
     try:
         # Search slskd for the album
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/searches"
+        url = f"{SLSKD_CONFIG['url']}/api/v0/searches"
         headers = {
             'Content-Type': 'application/json',
-            'X-API-Key': os.getenv('SLSKD_API_KEY')
+            'X-API-Key': SLSKD_CONFIG['api_key']
         }
         data = {
             'searchText': search_query,
@@ -342,8 +551,8 @@ def queue_album_in_slskd(album_id, artist_name, album_title, dry_run=False):
             time.sleep(5)
             
             # Get search status
-            url = f"{os.getenv('SLSKD_URL')}/api/v0/searches/{search_id}"
-            headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+            url = f"{SLSKD_CONFIG['url']}/api/v0/searches/{search_id}"
+            headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
             
             response = requests.get(url, headers=headers, timeout=30)
             if response.status_code != 200:
@@ -369,7 +578,7 @@ def queue_album_in_slskd(album_id, artist_name, album_title, dry_run=False):
         
         # Get detailed responses
         logging.info(f"   📋 Found {response_count} user(s) with {file_count} files, fetching file details...")
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/searches/{search_id}/responses"
+        url = f"{SLSKD_CONFIG['url']}/api/v0/searches/{search_id}/responses"
         
         response = requests.get(url, headers=headers, timeout=30)
         if response.status_code != 200:
@@ -469,10 +678,10 @@ def attempt_download_from_user(username, filename, results):
         logging.info(f"   📋 Found {audio_files_count} audio files for download")
     
     # Use the actual endpoint discovered from UI network tab
-    enqueue_url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{username}"
+    enqueue_url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads/{username}"
     enqueue_headers = {
         'Content-Type': 'application/json',
-        'X-API-Key': os.getenv('SLSKD_API_KEY')
+        'X-API-Key': SLSKD_CONFIG['api_key']
     }
     
     # Payload is just the files array, not wrapped in an object
@@ -506,7 +715,7 @@ def attempt_download_from_user(username, filename, results):
             for file_info in user_files:
                 single_file_data = [file_info]  # Just the file in an array
                 
-                single_url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{username}"
+                single_url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads/{username}"
                 log_download_request("POST", single_url, single_file_data)
                 single_response = requests.post(single_url, headers=enqueue_headers, json=single_file_data, timeout=30)
                 log_download_request("POST", single_url, single_file_data, single_response)
@@ -556,8 +765,8 @@ def remove_completed_downloads():
     
     try:
         # Get current downloads including completed ones
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads"
-        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads"
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
         
         response = requests.get(url, headers=headers, timeout=30)
         if response.status_code != 200:
@@ -604,8 +813,8 @@ def should_clear_stuck_queued(file_transfer):
 def remove_download(transfer_id, filename, state):
     """Remove a specific download by transfer ID"""
     try:
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{transfer_id}"
-        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads/{transfer_id}"
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
         
         response = requests.delete(url, headers=headers, timeout=30)
         if response.status_code == 200:
@@ -623,10 +832,10 @@ def clear_completed_downloads():
     """Clear the downloads/complete folder"""
     logging.info("   🗂️  Clearing completed downloads folder...")
     
-    # Common download paths - check environment or use defaults
+    # Common download paths - check settings/environment or use defaults
     possible_paths = [
-        os.getenv('SLSKD_DOWNLOADS_COMPLETE'),
-        os.getenv('SLSKD_DOWNLOADS_PATH', '') + '/complete',
+        get_slskd_downloads_complete_path(),
+        get_slskd_downloads_path() + '/complete' if get_slskd_downloads_path() else '',
         '/downloads/complete',
         '/data/downloads/complete',
         './downloads/complete'
@@ -704,8 +913,8 @@ def cancel_ongoing_downloads():
     
     try:
         # Get current downloads
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads"
-        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads"
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
         
         response = requests.get(url, headers=headers, timeout=30)
         if response.status_code != 200:
@@ -746,8 +955,8 @@ def cancel_ongoing_downloads():
 def cancel_download(transfer_id, filename, state='Unknown'):
     """Cancel a specific download by transfer ID"""
     try:
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/transfers/downloads/{transfer_id}"
-        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads/{transfer_id}"
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
         
         response = requests.delete(url, headers=headers, timeout=30)
         if response.status_code == 200:
@@ -765,10 +974,10 @@ def clear_incomplete_downloads():
     """Clear the downloads/incomplete folder"""
     logging.info("   🗂️  Clearing incomplete downloads folder...")
     
-    # Common download paths - check environment or use defaults
+    # Common download paths - check settings/environment or use defaults
     possible_paths = [
-        os.getenv('SLSKD_DOWNLOADS_INCOMPLETE'),
-        os.getenv('SLSKD_DOWNLOADS_PATH', '') + '/incomplete',
+        get_slskd_downloads_incomplete_path(),
+        get_slskd_downloads_path() + '/incomplete' if get_slskd_downloads_path() else '',
         '/downloads/incomplete',
         '/data/downloads/incomplete',
         './downloads/incomplete'
@@ -834,8 +1043,8 @@ def clear_incomplete_downloads():
 def check_completed_downloads(artist_name, album_title):
     """Check if album is already in completed downloads folder"""
     completed_paths = [
-        os.getenv('SLSKD_DOWNLOADS_COMPLETE'),
-        os.getenv('SLSKD_DOWNLOADS_PATH', '') + '/complete',
+        get_slskd_downloads_complete_path(),
+        get_slskd_downloads_path() + '/complete' if get_slskd_downloads_path() else '',
         '/downloads/complete',
         '/data/downloads/complete',
         './downloads/complete'
@@ -979,8 +1188,8 @@ def check_slskd_connection():
     
     try:
         # Try the application endpoint for slskd v0.23+
-        url = f"{os.getenv('SLSKD_URL')}/api/v0/application"
-        headers = {'X-API-Key': os.getenv('SLSKD_API_KEY')}
+        url = f"{SLSKD_CONFIG['url']}/api/v0/application"
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
         
         response = requests.get(url, headers=headers, timeout=30)
         
@@ -1022,7 +1231,22 @@ def check_slskd_connection():
 
 def main():
     """Main function"""
-    global interrupted
+    global interrupted, LIDARR_CONFIG, SLSKD_CONFIG
+    
+    # Initialize configurations if settings are available
+    if SETTINGS_AVAILABLE:
+        LIDARR_CONFIG = get_lidarr_config()
+        SLSKD_CONFIG = get_slskd_config()
+    else:
+        # Use environment variables as fallback
+        LIDARR_CONFIG = {
+            'url': os.getenv('LIDARR_URL', ''),
+            'api_key': os.getenv('LIDARR_API_KEY', '')
+        }
+        SLSKD_CONFIG = {
+            'url': os.getenv('SLSKD_URL', ''),
+            'api_key': os.getenv('SLSKD_API_KEY', '')
+        }
     
     # Set up argument parsing
     parser = argparse.ArgumentParser(description='Queue Wanted Albums from Lidarr to slskd')
@@ -1030,7 +1254,10 @@ def main():
     parser.add_argument('--skip-cleanup', action='store_true', help='Skip cleanup of downloads at startup')
     
     # Check for environment variable DRY_RUN as well
-    dry_run_env = os.getenv('DRY_RUN', 'false').lower() == 'true'
+    if SETTINGS_AVAILABLE:
+        dry_run_env = is_dry_run()
+    else:
+        dry_run_env = os.getenv('DRY_RUN', 'false').lower() == 'true'
     
     args = parser.parse_args()
     dry_run = args.dry_run or dry_run_env
