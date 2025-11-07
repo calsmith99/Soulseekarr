@@ -550,42 +550,42 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
         
         return success_count > 0
 
-def wait_for_search_to_populate(search_id: str, search_query: str, max_wait_time: int = 15) -> bool:
-    """Wait for search responses to populate before proceeding"""
-    logging.debug(f"      ⏳ Waiting for search {search_id} to populate...")
+def wait_for_search_to_complete(search_id: str, search_query: str, max_wait_time: int = 30) -> bool:
+    """Wait for search to complete by checking search status"""
+    logging.debug(f"      ⏳ Waiting for search {search_id} to complete...")
     
     headers = {'X-API-Key': CONFIG['slskd_api_key']}
-    responses_url = f"{CONFIG['slskd_url']}/api/v0/searches/{search_id}/responses"
+    search_url = f"{CONFIG['slskd_url']}/api/v0/searches/{search_id}"
     
     for attempt in range(max_wait_time):
         try:
-            response = requests.get(responses_url, headers=headers, timeout=10)
+            response = requests.get(search_url, headers=headers, timeout=10)
             
             if response.status_code == 200:
-                responses = response.json()
-                response_count = len(responses) if responses else 0
+                search_data = response.json()
+                is_complete = search_data.get('isComplete', False)
+                state = search_data.get('state', 'Unknown')
+                response_count = search_data.get('responseCount', 0)
                 
-                # Debug: log the raw response to see what we're getting
+                # Debug: log the search progress
                 if attempt == 0 or attempt % 5 == 0:  # Log every 5 attempts
-                    logging.debug(f"      🔍 Response status: {response.status_code}, response type: {type(responses)}, count: {response_count}")
-                    if response_count == 0:
-                        logging.debug(f"      🔍 Raw response: {str(responses)[:200]}")
+                    logging.debug(f"      🔍 Search state: {state}, isComplete: {is_complete}, responses: {response_count}")
                 
-                if response_count > 0:
-                    logging.debug(f"      ✅ Search has {response_count} responses after {attempt + 1}s")
+                if is_complete:
+                    logging.debug(f"      ✅ Search completed after {attempt + 1}s with {response_count} responses")
                     return True
                 elif attempt % 3 == 0:  # Log every 3 seconds
-                    logging.debug(f"      ⏳ Still waiting for responses... ({attempt + 1}s)")
+                    logging.debug(f"      ⏳ Search still running... state: {state} ({attempt + 1}s)")
             else:
                 logging.debug(f"      ⚠️ HTTP {response.status_code}: {response.text[:100]}")
             
         except Exception as e:
-            logging.debug(f"      ⚠️ Error checking responses: {e}")
+            logging.debug(f"      ⚠️ Error checking search status: {e}")
         
         time.sleep(1)
     
     logging.debug(f"      ⏰ Search timed out after {max_wait_time}s, proceeding anyway")
-    return True  # Proceed even if we didn't get responses
+    return True  # Proceed even if we didn't get completion
 
 def queue_album_with_specific_tracks(search_query: str, artist_name: str, album_title: str, missing_tracks: List[Dict]) -> bool:
     """Search for album and queue only the specific tracks we need"""
@@ -611,8 +611,8 @@ def queue_album_with_specific_tracks(search_query: str, artist_name: str, album_
         if not search_id:
             return False
         
-        # Wait for search to populate
-        wait_for_search_to_populate(search_id, search_query)
+        # Wait for search to complete
+        wait_for_search_to_complete(search_id, search_query)
         
         # Get search results
         url = f"{CONFIG['slskd_url']}/api/v0/searches/{search_id}/responses"
@@ -737,8 +737,8 @@ def queue_single_search(search_query: str, search_type: str, artist_name: str, a
         if not search_id:
             return False
         
-        # Wait for search to populate
-        wait_for_search_to_populate(search_id, search_query)
+        # Wait for search to complete
+        wait_for_search_to_complete(search_id, search_query)
         
         # Get results and queue best match
         return queue_best_result(search_id, artist_name, album_title, track_title)
