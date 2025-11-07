@@ -428,6 +428,20 @@ class DownloadsProcessor:
             if not fingerprint_metadata:
                 self.logger.info(f"Skipping track due to failed audio fingerprinting: {file_path}")
                 return False
+                
+            # Check if the identified album is better than current metadata
+            current_album = current_metadata.get('album', '')
+            identified_album = fingerprint_metadata.get('album', '')
+            track_title = fingerprint_metadata.get('title', current_metadata.get('title', ''))
+            
+            # Apply additional logic to prefer original album releases
+            if current_album and identified_album and current_album != identified_album:
+                if self.should_prefer_track_from_original_album(track_title, identified_album, current_album):
+                    self.logger.info(f"Using original album '{identified_album}' instead of '{current_album}' for track '{track_title}'")
+                elif not self.should_prefer_track_from_original_album(track_title, current_album, identified_album):
+                    # If neither is clearly better, trust the fingerprint result as it's more accurate
+                    self.logger.info(f"Audio fingerprinting suggests album '{identified_album}' for track '{track_title}' (current: '{current_album}')")
+                
             self.logger.info(f"Successfully identified track via audio fingerprinting: {fingerprint_metadata.get('artist')} - {fingerprint_metadata.get('title')}")
             return self.apply_metadata_to_file(file_path, fingerprint_metadata)
                 
@@ -591,70 +605,76 @@ class DownloadsProcessor:
             if is_debug_case:
                 self.logger.debug(f"  Found {len(releasegroups)} release groups")
             if releasegroups:
-                # Strategy: Find the best release group prioritizing original albums
-                best_release = None
-                original_albums = []
-                non_compilation_albums = []
-                compilation_albums = []
+                # Score all releases and select the best one
+                scored_releases = []
                 
                 for i, release in enumerate(releasegroups):
-                    release_type = release.get('type', '')
-                    secondarytypes = release.get('secondarytypes', [])
+                    score, reason = self.score_release_for_originality(release)
                     release_title = release.get('title', '')
-                    is_compilation = 'Compilation' in secondarytypes
+                    release_type = release.get('type', '')
+                    
+                    scored_releases.append((score, release, reason))
                     
                     if is_debug_case:
-                        self.logger.debug(f"    Release {i+1}: '{release_title}' (type: {release_type}, compilation: {is_compilation})")
-                    
-                    # Categorize releases by priority
-                    if release_type.lower() == 'album' and not is_compilation:
-                        original_albums.append(release)
-                    elif release_type.lower() in ['album', ''] and not is_compilation:
-                        non_compilation_albums.append(release)
-                    elif is_compilation:
-                        compilation_albums.append(release)
+                        self.logger.debug(f"    Release {i+1}: '{release_title}' (type: {release_type}, score: {score}) - {reason}")
                 
-                # Select best release in order of preference
-                if original_albums:
-                    best_release = original_albums[0]  # Prefer original albums
-                    if is_debug_case:
-                        self.logger.debug(f"    Selected original album: '{best_release.get('title', '')}'")
-                elif non_compilation_albums:
-                    best_release = non_compilation_albums[0]  # Then non-compilation albums
-                    if is_debug_case:
-                        self.logger.debug(f"    Selected non-compilation album: '{best_release.get('title', '')}'")
-                elif compilation_albums:
-                    # Try to find original release via MusicBrainz recording search before accepting compilations
-                    if is_debug_case:
-                        self.logger.debug(f"    All AcoustID results are compilations, searching for original recording...")
-                    
-                    # Get the first recording ID to search for original releases
-                    recording_id = recording.get('id')
-                    if recording_id:
-                        original_release = self._search_original_recording_release(recording_id, is_debug_case)
-                        if original_release:
-                            best_release = original_release
-                            if is_debug_case:
-                                self.logger.debug(f"    Found original recording release: '{best_release.get('title', '')}'")
-                        else:
-                            # Only use compilations as last resort, but prefer earlier/official ones
-                            # Sort by release date if available
-                            sorted_compilations = sorted(compilation_albums, 
-                                                       key=lambda x: x.get('releases', [{}])[0].get('date', {}).get('year', 9999))
-                            best_release = sorted_compilations[0]
-                            if is_debug_case:
-                                self.logger.debug(f"    No original found, using compilation as fallback: '{best_release.get('title', '')}'")
-                    else:
-                        # No recording ID available, fall back to compilation
-                        sorted_compilations = sorted(compilation_albums, 
-                                                   key=lambda x: x.get('releases', [{}])[0].get('date', {}).get('year', 9999))
-                        best_release = sorted_compilations[0]
+                # Sort by score (highest first) and select the best
+                scored_releases.sort(key=lambda x: x[0], reverse=True)
+                
+                # Try to find a high-quality release
+                best_release = None
+                for score, release, reason in scored_releases:
+                    if score >= 70:  # High quality threshold
+                        best_release = release
                         if is_debug_case:
-                            self.logger.debug(f"    No recording ID available, using compilation as fallback: '{best_release.get('title', '')}'")
-                elif releasegroups:
-                    best_release = releasegroups[0]  # Absolute fallback
+                            self.logger.debug(f"    Selected high-quality release (score: {score}): '{release.get('title', '')}' - {reason}")
+                        break
+                
+                # If no high-quality release found, check for original recording via MusicBrainz
+                if not best_release and scored_releases:
+                    top_score, top_release, top_reason = scored_releases[0]
+                    
+                    # If the top scored release is still not great, try to find original via MusicBrainz
+                    if top_score < 50:  # Below acceptable threshold
+                        if is_debug_case:
+                            self.logger.debug(f"    Top release score too low ({top_score}), searching for original recording...")
+                        
+                        recording_id = recording.get('id')
+                        if recording_id:
+                            original_release = self._search_original_recording_release(recording_id, is_debug_case)
+                            if original_release:
+                                # Score the found original release
+                                orig_score, orig_reason = self.score_release_for_originality(original_release)
+                                if orig_score > top_score:
+                                    best_release = original_release
+                                    if is_debug_case:
+                                        self.logger.debug(f"    Found better original recording release (score: {orig_score}): '{original_release.get('title', '')}' - {orig_reason}")
+                                else:
+                                    # Original wasn't better, use the top scored one
+                                    best_release = top_release
+                                    if is_debug_case:
+                                        self.logger.debug(f"    Original wasn't better (score: {orig_score}), using top scored: '{top_release.get('title', '')}' - {top_reason}")
+                            else:
+                                # No original found, use the top scored one
+                                best_release = top_release
+                                if is_debug_case:
+                                    self.logger.debug(f"    No original found, using top scored: '{top_release.get('title', '')}' - {top_reason}")
+                        else:
+                            # No recording ID, use the top scored one
+                            best_release = top_release
+                            if is_debug_case:
+                                self.logger.debug(f"    No recording ID, using top scored: '{top_release.get('title', '')}' - {top_reason}")
+                    else:
+                        # Top score is acceptable, use it
+                        best_release = top_release
+                        if is_debug_case:
+                            self.logger.debug(f"    Using top scored release: '{top_release.get('title', '')}' (score: {top_score}) - {top_reason}")
+                
+                # Fallback to first release if still nothing selected
+                if not best_release and releasegroups:
+                    best_release = releasegroups[0]
                     if is_debug_case:
-                        self.logger.debug(f"    Using first release as absolute fallback: '{best_release.get('title', '')}'")
+                        self.logger.debug(f"    Fallback to first release: '{best_release.get('title', '')}'")
                     
                 if best_release:
                     metadata['album'] = best_release.get('title', '')
@@ -723,23 +743,24 @@ class DownloadsProcessor:
             if is_debug_case:
                 self.logger.debug(f"    Found {len(release_groups)} release groups for recording")
             
-            # Look for non-compilation albums
+            # Score all release groups and find the best original
+            scored_releases = []
             for release_group in release_groups:
-                release_type = release_group.get('type', '')
-                secondary_types = release_group.get('secondary-type-list', [])
-                
-                # Check if it's a compilation
-                is_compilation = any(sec_type.get('name', '').lower() == 'compilation' 
-                                   for sec_type in secondary_types)
+                score, reason = self.score_release_for_originality(release_group)
+                scored_releases.append((score, release_group, reason))
                 
                 if is_debug_case:
                     title = release_group.get('title', '')
-                    self.logger.debug(f"    Release group: '{title}' (type: {release_type}, compilation: {is_compilation})")
-                
-                # Prefer non-compilation albums
-                if release_type.lower() == 'album' and not is_compilation:
+                    self.logger.debug(f"    Release group: '{title}' (score: {score}) - {reason}")
+            
+            # Sort by score and find the best original release
+            scored_releases.sort(key=lambda x: x[0], reverse=True)
+            
+            for score, release_group, reason in scored_releases:
+                # Look for high-quality, original releases
+                if score >= 60:  # Good enough threshold for original releases
                     if is_debug_case:
-                        self.logger.debug(f"    Found original album: '{release_group.get('title', '')}'")
+                        self.logger.debug(f"    Found good original album (score: {score}): '{release_group.get('title', '')}'")
                     
                     # Convert to the format expected by our code
                     converted_release = {
@@ -752,7 +773,8 @@ class DownloadsProcessor:
                     return converted_release
             
             if is_debug_case:
-                self.logger.debug(f"    No original albums found for recording {recording_id}")
+                best_score = scored_releases[0][0] if scored_releases else 0
+                self.logger.debug(f"    No suitable original albums found for recording {recording_id} (best score: {best_score})")
             return None
             
         except Exception as e:
@@ -899,14 +921,19 @@ class DownloadsProcessor:
                 if self.fuzzy_match_strings(recording_title, target_title):
                     score += 3
                     
-                # Check if recording appears on target album
+                # Check if recording appears on target album - prioritize original releases
                 releases = recording.get('release-list', [])
+                best_release_score = 0
                 for release in releases:
                     release_title = release.get('title', '')
                     if self.fuzzy_match_strings(release_title, target_album):
-                        score += 2
-                        break
+                        # Score the release for originality
+                        originality_score, _ = self.score_release_for_originality(release)
+                        # Combine title match bonus with originality score
+                        release_match_score = 2 + (originality_score / 50)  # Scale originality to 0-2 bonus
+                        best_release_score = max(best_release_score, release_match_score)
                         
+                score += best_release_score
                 return score
                 
             # Find recording with highest score
@@ -920,7 +947,7 @@ class DownloadsProcessor:
                     best_recording = recording
                     
             if best_recording and best_score >= 3:  # Minimum threshold
-                self.logger.debug(f"Selected recording with score {best_score}: {best_recording.get('title')}")
+                self.logger.debug(f"Selected recording with score {best_score:.2f}: {best_recording.get('title')}")
                 return best_recording
                 
             return None
@@ -946,6 +973,10 @@ class DownloadsProcessor:
                 release_title = release.get('title', '')
                 if self.fuzzy_match_strings(release_title, target_album):
                     score += 3
+                
+                # Add originality score to prioritize original releases
+                originality_score, _ = self.score_release_for_originality(release)
+                score += (originality_score / 25)  # Scale to 0-4 additional points
                     
                 return score
                 
@@ -960,7 +991,8 @@ class DownloadsProcessor:
                     best_release = release
                     
             if best_release and best_score >= 3:  # Minimum threshold
-                self.logger.debug(f"Selected release with score {best_score}: {best_release.get('title')}")
+                originality_score, reason = self.score_release_for_originality(best_release)
+                self.logger.debug(f"Selected release with score {best_score:.2f} (originality: {originality_score}): {best_release.get('title')} - {reason}")
                 return best_release
                 
             return None
@@ -1181,6 +1213,185 @@ class DownloadsProcessor:
             self.logger.error(f"Error applying generic metadata: {e}")
             return False
         
+    def score_release_for_originality(self, release):
+        """
+        Score a release based on how likely it is to be an original studio album.
+        Higher scores indicate more original/preferred releases.
+        Returns: (score, reason) tuple where score is 0-100
+        """
+        import re
+        
+        score = 50  # Base score
+        reasons = []
+        
+        release_type = release.get('type', '').lower()
+        secondary_types = release.get('secondarytypes', [])
+        title = release.get('title', '').lower()
+        
+        # Check primary release type
+        if release_type == 'album':
+            score += 30
+            reasons.append("Studio album")
+        elif release_type == 'single':
+            score -= 20
+            reasons.append("Single release")
+        elif release_type == 'ep':
+            score -= 10
+            reasons.append("EP release")
+        elif release_type in ['compilation', 'soundtrack']:
+            score -= 30
+            reasons.append(f"{release_type.title()} release")
+        
+        # Check secondary types (these are generally negative indicators)
+        secondary_penalties = {
+            'compilation': -40,
+            'soundtrack': -25,
+            'live': -35,
+            'remix': -30,
+            'interview': -50,
+            'demo': -20,
+            'mixtape/street': -25,
+            'dj-mix': -30,
+            'spokenword': -40,
+            'audio drama': -50
+        }
+        
+        for sec_type in secondary_types:
+            sec_type_name = sec_type.get('name', '').lower() if isinstance(sec_type, dict) else str(sec_type).lower()
+            if sec_type_name in secondary_penalties:
+                penalty = secondary_penalties[sec_type_name]
+                score += penalty
+                reasons.append(f"Secondary type: {sec_type_name} ({penalty:+d})")
+        
+        # Title-based scoring to detect special editions, live albums, etc.
+        title_penalties = {
+            # Live versions
+            r'\b(live|concert|tour)\b': -35,
+            r'\(live\)': -40,
+            r'\[live\]': -40,
+            
+            # Instrumental/Karaoke
+            r'\b(instrumental|karaoke)\b': -30,
+            r'\(instrumental\)': -35,
+            
+            # Remixes and special versions
+            r'\b(remix|remixed|remixes)\b': -25,
+            r'\b(acoustic|unplugged)\b': -15,
+            r'\b(radio edit|radio version)\b': -20,
+            r'\b(extended|club mix)\b': -25,
+            
+            # Special editions (less penalty as content is usually original)
+            r'\b(deluxe|special|collector|anniversary|limited)\s+edition\b': -10,
+            r'\(deluxe\)': -8,
+            r'\[deluxe\]': -8,
+            r'\((special|collector|anniversary|limited)\)': -10,
+            
+            # Remastered versions (small penalty - content is original)
+            r'\b(remaster|remastered)\b': -5,
+            r'\((19|20)\d{2}\s*(remaster|remastered)\)': -5,
+            
+            # Expanded/bonus versions
+            r'\b(expanded|bonus|extras)\b': -8,
+            r'\(bonus\s+tracks?\)': -8,
+            r'\(with\s+bonus\)': -8,
+            
+            # Compilations
+            r'\b(greatest\s+hits|best\s+of|collection|anthology|hits)\b': -30,
+            r'\bvol\.?\s*\d+\b': -15,  # Volume numbers often indicate compilations
+            
+            # Demo/rough versions
+            r'\b(demo|demos|rough|rehearsal)\b': -25,
+            
+            # Soundtracks
+            r'\b(soundtrack|ost|original\s+motion\s+picture)\b': -25,
+        }
+        
+        for pattern, penalty in title_penalties.items():
+            if re.search(pattern, title, re.IGNORECASE):
+                score += penalty
+                reasons.append(f"Title pattern '{pattern}' ({penalty:+d})")
+        
+        # Bonus points for clean, simple album titles (likely original releases)
+        if not re.search(r'[\(\[\]]', title):  # No parentheses or brackets
+            score += 5
+            reasons.append("Clean title (+5)")
+        
+        # Prefer earlier releases (original over reissues)
+        first_release_date = release.get('first-release-date', '')
+        releases = release.get('releases', [])
+        if releases:
+            earliest_year = None
+            for rel in releases:
+                date = rel.get('date', {})
+                if isinstance(date, dict) and 'year' in date:
+                    year = date['year']
+                elif isinstance(date, str) and len(date) >= 4:
+                    try:
+                        year = int(date[:4])
+                    except:
+                        continue
+                else:
+                    continue
+                
+                if earliest_year is None or year < earliest_year:
+                    earliest_year = year
+            
+            # Small bonus for releases from certain decades (peak album era)
+            if earliest_year:
+                if 1960 <= earliest_year <= 2010:  # Golden age of albums
+                    score += 3
+                    reasons.append(f"Release year {earliest_year} (+3)")
+        
+        # Ensure score stays within bounds
+        score = max(0, min(100, score))
+        
+        return score, '; '.join(reasons)
+    
+    def should_prefer_track_from_original_album(self, track_title, original_album, current_album):
+        """
+        Determine if we should prefer a track from an original album over the current album.
+        This helps ensure individual songs come from their original album release.
+        """
+        import re
+        
+        # If albums are the same (cleaned), no preference
+        if self.clean_album_name(original_album).lower() == self.clean_album_name(current_album).lower():
+            return False
+        
+        # Patterns that indicate non-original versions
+        non_original_patterns = [
+            r'\b(greatest\s+hits|best\s+of|collection|anthology)\b',
+            r'\b(live|concert|tour)\b',
+            r'\b(remix|remixed|acoustic)\b',
+            r'\b(compilation|sampler)\b',
+            r'\bvol\.?\s*\d+\b',
+            r'\b(soundtrack|ost)\b'
+        ]
+        
+        current_album_lower = current_album.lower()
+        for pattern in non_original_patterns:
+            if re.search(pattern, current_album_lower):
+                self.logger.debug(f"Preferring original album '{original_album}' over '{current_album}' for track '{track_title}' (pattern: {pattern})")
+                return True
+        
+        # If current album looks like a special edition and original doesn't
+        original_album_lower = original_album.lower()
+        special_edition_patterns = [
+            r'\b(deluxe|special|collector|anniversary|limited)\s+edition\b',
+            r'\(deluxe\)',
+            r'\(remaster\)',
+            r'\(expanded\)'
+        ]
+        
+        current_has_special = any(re.search(pattern, current_album_lower) for pattern in special_edition_patterns)
+        original_has_special = any(re.search(pattern, original_album_lower) for pattern in special_edition_patterns)
+        
+        if current_has_special and not original_has_special:
+            self.logger.debug(f"Preferring original album '{original_album}' over special edition '{current_album}' for track '{track_title}'")
+            return True
+        
+        return False
+    
     def clean_album_name(self, album_name):
         """Clean album name by removing edition info like (Deluxe Edition), [Remastered], etc."""
         import re

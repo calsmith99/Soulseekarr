@@ -33,6 +33,11 @@ import shutil
 import logging
 import argparse
 import requests
+# For reading audio metadata
+try:
+    from mutagen import File as MutagenFile
+except ImportError:
+    MutagenFile = None
 
 # Add parent directory to path to import settings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -62,6 +67,216 @@ logger = logging.getLogger(__name__)
 AUDIO_EXTENSIONS = {'.mp3', '.flac', '.m4a', '.mp4', '.ogg', '.opus', '.wma', '.aac'}
 
 class FileOrganiser:
+    def check_folder_structure_with_metadata(self, search_dirs=None):
+        """
+        Check if files are in the correct folder structure based on MusicBrainz Picard metadata.
+        Moves files to correct location unless running in dry run mode.
+        Args:
+            search_dirs: List of directories to check (default: [self.music_dir, self.incomplete_dir])
+                        Note: Owned directory is excluded by default as it's protected
+        """
+        if MutagenFile is None:
+            logger.error("mutagen is not installed. Please install mutagen to use metadata checking.")
+            return
+
+        if search_dirs is None:
+            # Exclude owned directory by default as it's protected
+            search_dirs = [self.music_dir, self.incomplete_dir]
+
+        mismatches = []
+        checked = 0
+        moved_files = 0
+        errors = 0
+        
+        for base_dir in search_dirs:
+            if not base_dir.exists():
+                continue
+                
+            logger.info(f"Checking folder structure in: {base_dir}")
+            
+            for file_path in base_dir.rglob('*'):
+                if file_path.is_file() and file_path.suffix.lower() in AUDIO_EXTENSIONS:
+                    checked += 1
+                    
+                    if checked % 100 == 0:
+                        logger.info(f"Progress: {checked} files checked...")
+                    
+                    tags = self._extract_musicbrainz_metadata(file_path)
+                    if not tags:
+                        logger.debug(f"No metadata found for: {file_path}")
+                        continue
+                    
+                    # Get current path structure
+                    current_artist_dir = file_path.parent.parent.name
+                    current_album_dir = file_path.parent.name
+                    current_track_name = file_path.stem
+
+                    # Get metadata tags
+                    artist_tag = tags.get('artist')
+                    album_tag = tags.get('album')
+                    title_tag = tags.get('title')
+
+                    # Check if any tag is missing
+                    if not artist_tag or not album_tag:
+                        logger.debug(f"Missing essential metadata for: {file_path}")
+                        continue
+
+                    # Sanitize folder names for filesystem
+                    safe_artist = self._sanitize_filename(artist_tag)
+                    safe_album = self._sanitize_filename(album_tag)
+                    safe_title = self._sanitize_filename(title_tag) if title_tag else file_path.stem
+
+                    # Check if file is in correct location
+                    artist_mismatch = safe_artist != current_artist_dir
+                    album_mismatch = safe_album != current_album_dir
+                    title_mismatch = title_tag and safe_title != current_track_name
+
+                    if artist_mismatch or album_mismatch or title_mismatch:
+                        # Calculate correct path
+                        correct_artist_dir = base_dir / safe_artist
+                        correct_album_dir = correct_artist_dir / safe_album
+                        
+                        # Use original filename if no title tag or if we're not renaming files
+                        new_filename = file_path.name  # Keep original filename
+                        correct_file_path = correct_album_dir / new_filename
+
+                        mismatch_info = {
+                            'file': str(file_path),
+                            'artist_tag': artist_tag,
+                            'album_tag': album_tag,
+                            'title_tag': title_tag,
+                            'current_artist': current_artist_dir,
+                            'current_album': current_album_dir,
+                            'current_title': current_track_name,
+                            'correct_path': str(correct_file_path),
+                            'artist_mismatch': artist_mismatch,
+                            'album_mismatch': album_mismatch,
+                            'title_mismatch': title_mismatch
+                        }
+                        mismatches.append(mismatch_info)
+
+                        # Move file if not in dry run mode
+                        if not self.dry_run:
+                            try:
+                                # Create target directories
+                                correct_album_dir.mkdir(parents=True, exist_ok=True)
+                                self.fix_permissions(correct_artist_dir)
+                                self.fix_permissions(correct_album_dir)
+
+                                # Check if target file already exists
+                                if correct_file_path.exists():
+                                    logger.warning(f"Target file already exists, skipping: {correct_file_path}")
+                                    continue
+
+                                # Move the file
+                                shutil.move(str(file_path), str(correct_file_path))
+                                self.fix_permissions(correct_file_path)
+                                
+                                logger.info(f"Moved: {file_path.relative_to(base_dir)} -> {correct_file_path.relative_to(base_dir)}")
+                                moved_files += 1
+
+                                # Record the action
+                                self.record_action(
+                                    action_type="moved_for_metadata_compliance",
+                                    artist_name=artist_tag,
+                                    album_name=album_tag,
+                                    source_path=str(file_path),
+                                    destination_path=str(correct_file_path)
+                                )
+
+                            except Exception as e:
+                                logger.error(f"Failed to move {file_path}: {e}")
+                                errors += 1
+                        else:
+                            logger.info(f"[DRY RUN] Would move: {file_path.relative_to(base_dir)} -> {correct_file_path.relative_to(base_dir)}")
+
+        # Clean up empty directories after moves
+        if not self.dry_run and moved_files > 0:
+            logger.info("Cleaning up empty directories after file moves...")
+            removed_dirs = self.cleanup_empty_dirs()
+            logger.info(f"Removed {removed_dirs} empty directories")
+
+        # Print summary
+        logger.info(f"\n{'='*60}")
+        logger.info("FOLDER STRUCTURE CHECK COMPLETE")
+        logger.info(f"{'='*60}")
+        logger.info(f"Files checked:        {checked:,}")
+        logger.info(f"Mismatches found:     {len(mismatches):,}")
+        logger.info(f"Files moved:          {moved_files:,}")
+        if errors > 0:
+            logger.warning(f"Errors encountered:   {errors:,}")
+        
+        if self.dry_run and mismatches:
+            logger.info(f"[DRY RUN] Would move {len(mismatches)} files to correct locations")
+        elif not mismatches:
+            logger.info("All files are already in correct folder structure based on metadata")
+            
+        return moved_files
+
+    def _sanitize_filename(self, name):
+        """
+        Sanitize a filename/folder name for filesystem compatibility.
+        
+        Args:
+            name: String to sanitize
+            
+        Returns:
+            Sanitized string safe for filesystem use
+        """
+        if not name:
+            return "Unknown"
+        
+        # Replace invalid characters with underscores
+        invalid_chars = '<>:"/\\|?*'
+        sanitized = name
+        
+        for char in invalid_chars:
+            sanitized = sanitized.replace(char, '_')
+        
+        # Remove leading/trailing dots and spaces
+        sanitized = sanitized.strip('. ')
+        
+        # Ensure it's not empty
+        if not sanitized:
+            return "Unknown"
+            
+        return sanitized
+
+    def _extract_musicbrainz_metadata(self, file_path):
+        """
+        Extract artist, album, and title from audio file using mutagen.
+        Returns dict with keys: artist, album, title
+        """
+        try:
+            audio = MutagenFile(file_path)
+            if not audio or not audio.tags:
+                return None
+            tags = {}
+            # Try common tag keys
+            for key in ['artist', 'album', 'title']:
+                value = None
+                for tag_key in [key, f'TAG:{key}', f'TIT2' if key=='title' else key.upper()]:
+                    if tag_key in audio.tags:
+                        v = audio.tags[tag_key]
+                        if isinstance(v, list):
+                            value = v[0]
+                        else:
+                            value = str(v)
+                        break
+                if not value:
+                    # Try ID3 frames for MP3
+                    if key == 'artist' and 'TPE1' in audio.tags:
+                        value = str(audio.tags['TPE1'])
+                    elif key == 'album' and 'TALB' in audio.tags:
+                        value = str(audio.tags['TALB'])
+                    elif key == 'title' and 'TIT2' in audio.tags:
+                        value = str(audio.tags['TIT2'])
+                if value:
+                    tags[key] = value.strip()
+            return tags if tags else None
+        except Exception as e:
+            logger.debug(f"Failed to extract metadata from {file_path}: {e}")
+            return None
     """Main class for organizing music files across Owned, Not_Owned, and Incomplete directories."""
     
     def __init__(self, owned_dir: str = '/media/Owned', music_dir: str = '/media/Not_Owned', 
@@ -1471,6 +1686,12 @@ def main():
         help='Only remove duplicate tracks, skip album completeness checks'
     )
     
+    parser.add_argument(
+        '--check-folder-structure',
+        action='store_true',
+        help='Check and fix folder structure based on MusicBrainz Picard metadata'
+    )
+    
     args = parser.parse_args()
     
     # Check for DRY_RUN environment variable (from web interface)
@@ -1494,6 +1715,8 @@ def main():
         # Run appropriate method based on mode
         if args.duplicates_only:
             checker.remove_duplicates_only()
+        elif args.check_folder_structure:
+            checker.check_folder_structure_with_metadata()
         else:
             checker.check_and_organize_albums()
         
