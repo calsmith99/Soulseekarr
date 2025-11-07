@@ -69,6 +69,7 @@ ALBUMS_SKIPPED_EXISTING = 0
 ALBUMS_SKIPPED_UNMONITORED = 0
 ALBUMS_QUEUED = 0
 ALBUMS_FAILED = 0
+ALBUMS_SKIPPED_ALREADY_QUEUED = 0
 interrupted = False
 
 # Global configuration variables (populated in main)
@@ -135,7 +136,8 @@ def print_summary(interrupted=False):
     else:
         logging.info("📊 Want List Processing Summary:")
     logging.info(f"   📋 Albums checked: {ALBUMS_CHECKED}")
-    logging.info(f"   ✅ Skipped (already have tracks): {ALBUMS_SKIPPED_EXISTING}")
+    logging.info(f"   ✅ Skipped (complete): {ALBUMS_SKIPPED_EXISTING}")
+    logging.info(f"   🔄 Skipped (already queued): {ALBUMS_SKIPPED_ALREADY_QUEUED}")
     logging.info(f"   ⏭️  Skipped (not monitored): {ALBUMS_SKIPPED_UNMONITORED}")
     logging.info(f"   📥 Queued for download: {ALBUMS_QUEUED}")
     logging.info(f"   ❌ Failed to queue: {ALBUMS_FAILED}")
@@ -203,7 +205,10 @@ def check_environment():
     return True
 
 def get_missing_tracks_for_album(album_id):
-    """Get list of missing tracks for an album from Lidarr"""
+    """
+    Get list of missing tracks for an album from Lidarr.
+    Returns tuple: (missing_tracks_list, total_tracks_count)
+    """
     try:
         # Get album details with tracks
         url = f"{LIDARR_CONFIG['url']}/api/v1/album/{album_id}"
@@ -212,14 +217,17 @@ def get_missing_tracks_for_album(album_id):
         response = requests.get(url, params=params, timeout=30)
         if response.status_code != 200:
             logging.warning(f"   ⚠️  Could not get album details for ID {album_id}")
-            return []
+            return [], 0
         
         album_data = response.json()
         media = album_data.get('media', [])
         missing_tracks = []
+        total_tracks = 0
         
         for disc in media:
             tracks = disc.get('tracks', [])
+            total_tracks += len(tracks)
+            
             for track in tracks:
                 # Check if track has a file
                 has_file = track.get('hasFile', False)
@@ -235,54 +243,197 @@ def get_missing_tracks_for_album(album_id):
                     }
                     missing_tracks.append(track_info)
         
-        return missing_tracks
+        return missing_tracks, total_tracks
         
     except Exception as e:
         logging.error(f"   ❌ Error getting missing tracks for album {album_id}: {e}")
-        return []
+        return [], 0
 
-def check_existing_tracks(album_id, artist_name, album_title):
-    """Check if we already have tracks from an album in Lidarr or completed downloads"""
-    if not album_id:
-        return False
-    
-    # First check if files are already in completed downloads
-    if check_completed_downloads(artist_name, album_title):
-        logging.info("   ✅ Album found in completed downloads - skipping")
-        return True
-    
+def get_album_tracks_from_musicbrainz(album_id):
+    """
+    Get complete track listing for an album from MusicBrainz via Lidarr.
+    Returns list of track information that can be added to Lidarr.
+    """
     try:
-        # Get missing tracks for this album
-        missing_tracks = get_missing_tracks_for_album(album_id)
+        # First get the album info from Lidarr to get MusicBrainz ID
+        url = f"{LIDARR_CONFIG['url']}/api/v1/album/{album_id}"
+        params = {'apikey': LIDARR_CONFIG['api_key']}
         
-        if not missing_tracks:
-            logging.info("   ✅ Album is complete - no missing tracks")
-            return True
+        response = requests.get(url, params=params, timeout=30)
+        if response.status_code != 200:
+            logging.warning(f"   ⚠️  Could not get album details for track lookup")
+            return []
         
-        total_tracks = len(missing_tracks)
-        logging.info(f"   📊 Found {total_tracks} missing tracks in album")
+        album_data = response.json()
+        mb_id = album_data.get('foreignAlbumId')  # MusicBrainz ID
         
-        # Log some details about missing tracks
-        if total_tracks <= 5:
-            for track in missing_tracks:
-                disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
-                logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
+        if not mb_id:
+            logging.warning(f"   ⚠️  Album has no MusicBrainz ID for track lookup")
+            return []
+        
+        # Refresh album data from MusicBrainz to get complete track listing
+        refresh_url = f"{LIDARR_CONFIG['url']}/api/v1/album/{album_id}"
+        refresh_data = {
+            'id': album_id,
+            'foreignAlbumId': mb_id,
+            'monitored': album_data.get('monitored', True)
+        }
+        headers = {'X-Api-Key': LIDARR_CONFIG['api_key'], 'Content-Type': 'application/json'}
+        
+        # Trigger a refresh to get updated track info from MusicBrainz
+        logging.info(f"   🔄 Refreshing album metadata from MusicBrainz...")
+        
+        # Use the refresh command endpoint
+        refresh_command_url = f"{LIDARR_CONFIG['url']}/api/v1/command"
+        refresh_command_data = {
+            'name': 'RefreshAlbum',
+            'albumId': album_id
+        }
+        
+        refresh_response = requests.post(refresh_command_url, 
+                                       headers=headers, 
+                                       json=refresh_command_data, 
+                                       timeout=30)
+        
+        if refresh_response.status_code in [200, 201]:
+            # Wait a bit for the refresh to complete
+            import time
+            logging.info(f"   ⏳ Waiting for metadata refresh to complete...")
+            time.sleep(8)  # Increased wait time for MusicBrainz to process
+            
+            # Now get the updated album data
+            updated_response = requests.get(url, params=params, timeout=30)
+            if updated_response.status_code == 200:
+                updated_album_data = updated_response.json()
+                media = updated_album_data.get('media', [])
+                
+                track_list = []
+                for disc in media:
+                    tracks = disc.get('tracks', [])
+                    for track in tracks:
+                        track_info = {
+                            'id': track.get('id'),
+                            'title': track.get('title', 'Unknown Track'),
+                            'trackNumber': track.get('trackNumber', 0),
+                            'discNumber': disc.get('discNumber', 1),
+                            'duration': track.get('duration', 0),
+                            'hasFile': track.get('hasFile', False)
+                        }
+                        track_list.append(track_info)
+                
+                if track_list:
+                    logging.info(f"   ✅ Retrieved {len(track_list)} tracks from MusicBrainz")
+                    return track_list
+                else:
+                    logging.warning(f"   ⚠️  No tracks found after MusicBrainz refresh")
+                    return []
+            else:
+                logging.warning(f"   ⚠️  Could not get updated album data after refresh")
+                return []
         else:
-            # Just show first few tracks
-            for track in missing_tracks[:3]:
-                disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
-                logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
-            logging.info(f"      ... and {total_tracks - 3} more tracks")
-        
-        return False  # Album has missing tracks
+            logging.warning(f"   ⚠️  Failed to trigger MusicBrainz refresh")
+            return []
         
     except Exception as e:
-        logging.error(f"   ❌ Unexpected error checking tracks: {e}")
-        return False
+        logging.error(f"   ❌ Error getting track listing from MusicBrainz: {e}")
+        return []
+
+def check_tracks_in_download_queue(missing_tracks, artist_name, album_title):
+    """
+    Check if any of the missing tracks are already in the download queue.
+    Returns a list of tracks that are NOT already queued.
+    """
+    try:
+        # Get current downloads from slskd
+        url = f"{SLSKD_CONFIG['url']}/api/v0/transfers/downloads"
+        headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
+        
+        response = requests.get(url, headers=headers, timeout=30)
+        if response.status_code != 200:
+            logging.warning("   ⚠️  Could not fetch current download queue - proceeding with all tracks")
+            return missing_tracks
+        
+        downloads_data = response.json()
+        
+        # Collect all filenames currently in queue (any state except completed)
+        queued_files = set()
+        for user_group in downloads_data:
+            directories = user_group.get('directories', [])
+            for directory in directories:
+                files = directory.get('files', [])
+                for file_transfer in files:
+                    filename = file_transfer.get('filename', '').lower()
+                    state = file_transfer.get('state', '')
+                    
+                    # Include queued, downloading, and requested states
+                    if state in ['Queued', 'Requested', 'Initializing', 'InProgress']:
+                        # Extract just the filename without path for comparison
+                        file_basename = filename.split('/')[-1].split('\\')[-1]
+                        queued_files.add(file_basename)
+        
+        if not queued_files:
+            logging.debug("   ℹ️  No files currently in download queue")
+            return missing_tracks
+        
+        # Check each missing track against the queue
+        tracks_to_queue = []
+        already_queued = []
+        
+        for track in missing_tracks:
+            track_title = track['title']
+            artist_name_clean = artist_name.replace('/', '_').replace('\\', '_')  # Safe filename
+            
+            # Create possible filename patterns to match
+            possible_patterns = [
+                f"{track['trackNumber']:02d}",  # Track number
+                track_title.lower(),             # Track title
+                f"{track['trackNumber']:02d} - {track_title}".lower(),  # Number - Title
+                f"{track['trackNumber']:02d}. {track_title}".lower(),   # Number. Title
+                f"{artist_name_clean} - {track_title}".lower(),         # Artist - Title
+            ]
+            
+            # Check if any queued file matches this track
+            track_already_queued = False
+            for queued_file in queued_files:
+                for pattern in possible_patterns:
+                    # Remove special characters for comparison
+                    pattern_clean = ''.join(c for c in pattern if c.isalnum() or c in ' -.')
+                    queued_clean = ''.join(c for c in queued_file if c.isalnum() or c in ' -.')
+                    
+                    if pattern_clean in queued_clean or queued_clean in pattern_clean:
+                        track_already_queued = True
+                        already_queued.append(track_title)
+                        break
+                
+                if track_already_queued:
+                    break
+            
+            if not track_already_queued:
+                tracks_to_queue.append(track)
+        
+        # Log results
+        if already_queued:
+            logging.info(f"   ⏭️  Skipping {len(already_queued)} tracks already in download queue:")
+            for track_title in already_queued[:3]:  # Show first 3
+                logging.info(f"      🎵 {track_title}")
+            if len(already_queued) > 3:
+                logging.info(f"      ... and {len(already_queued) - 3} more")
+        
+        if tracks_to_queue:
+            logging.info(f"   📥 {len(tracks_to_queue)} tracks need to be queued")
+        else:
+            logging.info("   ℹ️  All tracks are already in download queue")
+        
+        return tracks_to_queue
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error checking download queue: {e}")
+        logging.info("   ⚠️  Proceeding with all tracks due to queue check error")
+        return missing_tracks
 
 def get_wanted_albums():
     """Get wanted albums from Lidarr"""
-    global ALBUMS_CHECKED, ALBUMS_SKIPPED_EXISTING, ALBUMS_SKIPPED_UNMONITORED, ALBUMS_QUEUED, ALBUMS_FAILED
+    global ALBUMS_CHECKED, ALBUMS_SKIPPED_EXISTING, ALBUMS_SKIPPED_UNMONITORED, ALBUMS_QUEUED, ALBUMS_FAILED, ALBUMS_SKIPPED_ALREADY_QUEUED
     
     logging.info("🔍 Fetching wanted albums from Lidarr...")
     
@@ -337,23 +488,113 @@ def get_wanted_albums():
             logging.info(f"   👁️  Monitored: {monitored}")
             
             if monitored:
-                # Check if we already have tracks from this album
-                if check_existing_tracks(album_id, artist_name, album_title):
-                    logging.info("   ✅ Album already has tracks - skipping download")
-                    ALBUMS_SKIPPED_EXISTING += 1
-                else:
-                    # Get missing tracks for targeted downloading
-                    missing_tracks = get_missing_tracks_for_album(album_id)
+                # Get missing tracks for this album first
+                missing_tracks, total_tracks = get_missing_tracks_for_album(album_id)
+                
+                # Check different cases
+                if total_tracks == 0:
+                    logging.info("   ⚠️  Album has no track information in Lidarr")
+                    logging.info("   🔄 Attempting to get track listing from MusicBrainz...")
                     
-                    if missing_tracks:
-                        # Queue missing tracks for download via slskd
-                        if queue_missing_tracks_in_slskd(album_id, artist_name, album_title, missing_tracks):
+                    # Try to get complete track listing from MusicBrainz
+                    track_list = get_album_tracks_from_musicbrainz(album_id)
+                    
+                    if track_list:
+                        # We now have track information, create missing tracks list
+                        missing_tracks_from_mb = []
+                        for track in track_list:
+                            if not track.get('hasFile', False):
+                                track_info = {
+                                    'id': track.get('id'),
+                                    'title': track.get('title', 'Unknown Track'),
+                                    'trackNumber': track.get('trackNumber', 0),
+                                    'discNumber': track.get('discNumber', 1),
+                                    'duration': track.get('duration', 0),
+                                    'artist': artist_name,
+                                    'album': album_title
+                                }
+                                missing_tracks_from_mb.append(track_info)
+                        
+                        if missing_tracks_from_mb:
+                            total_tracks_mb = len(track_list)
+                            missing_count_mb = len(missing_tracks_from_mb)
+                            logging.info(f"   📊 Found {missing_count_mb}/{total_tracks_mb} missing tracks from MusicBrainz")
+                            
+                            # Check which tracks are not already in download queue
+                            tracks_to_queue = check_tracks_in_download_queue(missing_tracks_from_mb, artist_name, album_title)
+                            
+                            if not tracks_to_queue:
+                                logging.info("   ✅ All missing tracks already in download queue - skipping")
+                                ALBUMS_SKIPPED_ALREADY_QUEUED += 1
+                            else:
+                                tracks_needed = len(tracks_to_queue)
+                                logging.info(f"   🎯 Queuing {tracks_needed} tracks for download")
+                                
+                                # Log some details about tracks to queue
+                                if tracks_needed <= 5:
+                                    for track in tracks_to_queue:
+                                        disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
+                                        logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
+                                else:
+                                    # Just show first few tracks
+                                    for track in tracks_to_queue[:3]:
+                                        disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
+                                        logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
+                                    logging.info(f"      ... and {tracks_needed - 3} more tracks")
+                                
+                                # Queue missing tracks for download via slskd
+                                if queue_missing_tracks_in_slskd(album_id, artist_name, album_title, tracks_to_queue):
+                                    ALBUMS_QUEUED += 1
+                                else:
+                                    ALBUMS_FAILED += 1
+                        else:
+                            logging.info(f"   ✅ All {len(track_list)} tracks from MusicBrainz are already downloaded")
+                            ALBUMS_SKIPPED_EXISTING += 1
+                    else:
+                        # Fallback to full album search if MusicBrainz lookup fails
+                        logging.info("   ⚠️  Could not get track listing from MusicBrainz - falling back to album search")
+                        if queue_missing_tracks_in_slskd(album_id, artist_name, album_title, [], dry_run=False):
                             ALBUMS_QUEUED += 1
                         else:
                             ALBUMS_FAILED += 1
+                elif not missing_tracks:
+                    logging.info(f"   ✅ Album is complete - all {total_tracks} tracks downloaded")
+                    ALBUMS_SKIPPED_EXISTING += 1
+                elif check_completed_downloads(artist_name, album_title):
+                    logging.info("   ✅ Album found in completed downloads - skipping")
+                    ALBUMS_SKIPPED_EXISTING += 1
+                else:
+                    # Album has missing tracks, check if any are already queued
+                    missing_count = len(missing_tracks)
+                    logging.info(f"   📊 Found {missing_count}/{total_tracks} missing tracks")
+                    
+                    # Check which tracks are not already in download queue
+                    tracks_to_queue = check_tracks_in_download_queue(missing_tracks, artist_name, album_title)
+                    
+                    if not tracks_to_queue:
+                        logging.info("   ✅ All missing tracks already in download queue - skipping")
+                        ALBUMS_SKIPPED_ALREADY_QUEUED += 1
                     else:
-                        logging.info("   ℹ️  No missing tracks found for this album")
-                        ALBUMS_SKIPPED_EXISTING += 1
+                        tracks_needed = len(tracks_to_queue)
+                        logging.info(f"   🎯 Queuing {tracks_needed} tracks for download")
+                        
+                        # Log some details about tracks to queue
+                        if tracks_needed <= 5:
+                            for track in tracks_to_queue:
+                                disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
+                                logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
+                        else:
+                            # Just show first few tracks
+                            for track in tracks_to_queue[:3]:
+                                disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
+                                logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
+                            logging.info(f"      ... and {tracks_needed - 3} more tracks")
+                        
+                        # Queue missing tracks for download via slskd
+                        if queue_missing_tracks_in_slskd(album_id, artist_name, album_title, tracks_to_queue):
+                            ALBUMS_QUEUED += 1
+                        else:
+                            ALBUMS_FAILED += 1
             else:
                 logging.info("   ⏭️  Skipping (not monitored)")
                 ALBUMS_SKIPPED_UNMONITORED += 1
@@ -374,9 +615,20 @@ def get_wanted_albums():
 
 def queue_missing_tracks_in_slskd(album_id, artist_name, album_title, missing_tracks, dry_run=False):
     """Queue specific missing tracks for download in slskd"""
+    
+    # Handle case where album has no track information - search for full album
     if not missing_tracks:
-        logging.info("   ℹ️  No missing tracks to queue")
-        return True
+        logging.info(f"   🎯 Searching for complete album: {album_title}")
+        
+        if dry_run:
+            logging.info(f"   [DRY RUN] Would search slskd for complete album: \"{artist_name} {album_title}\"")
+            return True
+        
+        # Search for the full album only
+        album_search_query = f"{artist_name} {album_title}"
+        logging.info(f"   🔍 Searching for album: \"{album_search_query}\"")
+        
+        return queue_single_search_in_slskd(album_search_query, "album")
     
     total_missing = len(missing_tracks)
     logging.info(f"   🎯 Queuing {total_missing} missing tracks from: {album_title}")
@@ -455,6 +707,10 @@ def queue_single_search_in_slskd(search_query, search_type="unknown"):
         
         # Get search results and try to queue the best match
         return queue_best_search_result(search_id, search_query, search_type)
+    
+    except Exception as e:
+        logging.error(f"      ❌ Error searching for {search_type}: {e}")
+        return False
 
 def queue_best_search_result(search_id, search_query, search_type):
     """Get search results and queue the best match"""
@@ -495,140 +751,12 @@ def queue_best_search_result(search_id, search_query, search_type):
     except Exception as e:
         logging.error(f"      ❌ Error processing {search_type} results: {e}")
         return False
-        
-    except Exception as e:
-        logging.error(f"      ❌ Error searching for {search_type}: {e}")
-        return False
 
 def queue_album_in_slskd(album_id, artist_name, album_title, dry_run=False):
     """Queue album for download in slskd (legacy function - now redirects to missing tracks)"""
     # Get missing tracks and use the new targeted approach
-    missing_tracks = get_missing_tracks_for_album(album_id)
+    missing_tracks, total_tracks = get_missing_tracks_for_album(album_id)
     return queue_missing_tracks_in_slskd(album_id, artist_name, album_title, missing_tracks, dry_run)
-    """Queue album for download in slskd"""
-    search_query = f"{artist_name} {album_title}"
-    
-    if dry_run:
-        logging.info(f"   [DRY RUN] Would search slskd for: \"{search_query}\"")
-        return True
-    
-    logging.info(f"   🔍 Searching slskd for: \"{search_query}\"")
-    
-    try:
-        # Search slskd for the album
-        url = f"{SLSKD_CONFIG['url']}/api/v0/searches"
-        headers = {
-            'Content-Type': 'application/json',
-            'X-API-Key': SLSKD_CONFIG['api_key']
-        }
-        data = {
-            'searchText': search_query,
-            'timeout': 30000
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=35)
-        if response.status_code != 200:
-            logging.error("   ✗ Failed to search slskd")
-            return False
-        
-        search_response = response.json()
-        search_id = search_response.get('id')
-        
-        if not search_id:
-            logging.error("   ✗ Failed to get search ID from slskd")
-            return False
-        
-        logging.info(f"   ✓ Search initiated (ID: {search_id})")
-        
-        # Wait for search to complete and get responses
-        logging.info("   ⏳ Waiting for search to complete...")
-        max_attempts = 8
-        
-        for attempt in range(1, max_attempts + 1):
-            if interrupted:
-                return False
-                
-            time.sleep(5)
-            
-            # Get search status
-            url = f"{SLSKD_CONFIG['url']}/api/v0/searches/{search_id}"
-            headers = {'X-API-Key': SLSKD_CONFIG['api_key']}
-            
-            response = requests.get(url, headers=headers, timeout=30)
-            if response.status_code != 200:
-                logging.warning(f"   ⚠️  Could not fetch search status (attempt {attempt})")
-                continue
-            
-            status_data = response.json()
-            file_count = status_data.get('fileCount', 0)
-            response_count = status_data.get('responseCount', 0)
-            is_complete = status_data.get('isComplete', False)
-            search_state = status_data.get('state', 'unknown')
-            
-            logging.info(f"   📊 Attempt {attempt}: Files={file_count}, Responses={response_count}, Complete={is_complete}, State={search_state}")
-            
-            if is_complete:
-                logging.info("   ✅ Search completed, fetching detailed responses...")
-                break
-        
-        # Check final results
-        if file_count == 0:
-            logging.info("   ℹ️  No files found for this album")
-            return True
-        
-        # Get detailed responses
-        logging.info(f"   📋 Found {response_count} user(s) with {file_count} files, fetching file details...")
-        url = f"{SLSKD_CONFIG['url']}/api/v0/searches/{search_id}/responses"
-        
-        response = requests.get(url, headers=headers, timeout=30)
-        if response.status_code != 200:
-            logging.error("   ❌ Failed to get detailed search responses")
-            return False
-        
-        results = response.json()
-        
-        # Find the best album matches (try multiple users)
-        candidates = find_best_matches(results, max_candidates=3)
-        
-        if not candidates:
-            logging.info("   ℹ️  No suitable album matches found")
-            return True
-        
-        logging.info(f"   🎯 Found {len(candidates)} potential sources")
-        
-        # Try each candidate until one succeeds
-        for i, (username, filename, filesize) in enumerate(candidates):
-            logging.info(f"   🎯 Trying source {i+1}/{len(candidates)}:")
-            logging.info(f"      👤 User: {username}")
-            logging.info(f"      📁 Directory: {get_directory_path(filename)}")
-            
-            if filesize:
-                try:
-                    size_mb = int(filesize) // (1024 * 1024)
-                    logging.info(f"      💾 Size: {size_mb} MB")
-                except:
-                    logging.info(f"      💾 Size: {filesize} bytes")
-            
-            # Try to download from this user
-            success = attempt_download_from_user(username, filename, results)
-            
-            if success:
-                logging.info(f"   ✅ Successfully queued from {username}")
-                return True
-            else:
-                logging.info(f"   ⚠️  Failed to download from {username}")
-                if i < len(candidates) - 1:
-                    logging.info("   🔄 Trying next source...")
-        
-        logging.error("   ❌ Failed to queue download from any source")
-        return False
-        
-    except requests.RequestException as e:
-        logging.error(f"   ❌ Network error queuing album: {e}")
-        return False
-    except Exception as e:
-        logging.error(f"   ❌ Unexpected error queuing album: {e}")
-        return False
 
 def attempt_download_from_user(username, filename, results):
     """Attempt to download an album from a specific user"""

@@ -266,19 +266,20 @@ class NavidromeStarredAlbumsMonitor:
                     missing.append('LIDARR_API_KEY')
                 raise ValueError(f"Missing required configuration: {', '.join(missing)}")
             
-            # Test Lidarr connection
-            if not self.dry_run:
-                headers = {'X-Api-Key': self.lidarr_api_key}
-                test_url = f"{self.lidarr_url}/api/v1/system/status"
-                response = requests.get(test_url, headers=headers, timeout=10)
-                
-                if response.status_code != 200:
-                    raise ValueError(f"Failed to connect to Lidarr: HTTP {response.status_code}")
-                
-                system_status = response.json()
-                self.logger.info(f"Connected to Lidarr: {system_status.get('appName', 'Unknown')} v{system_status.get('version', 'Unknown')}")
+            # Test Lidarr connection (always test, even in dry run mode)
+            headers = {'X-Api-Key': self.lidarr_api_key}
+            test_url = f"{self.lidarr_url}/api/v1/system/status"
+            response = requests.get(test_url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                raise ValueError(f"Failed to connect to Lidarr: HTTP {response.status_code}")
+            
+            system_status = response.json()
+            connection_info = f"Connected to Lidarr: {system_status.get('appName', 'Unknown')} v{system_status.get('version', 'Unknown')}"
+            if self.dry_run:
+                self.logger.info(f"DRY RUN: {connection_info} (connection test successful)")
             else:
-                self.logger.info("DRY RUN: Skipping Lidarr connection test")
+                self.logger.info(connection_info)
             
         except Exception as e:
             self.logger.error(f"Failed to setup Lidarr connection: {e}")
@@ -371,15 +372,19 @@ class NavidromeStarredAlbumsMonitor:
     def find_album_in_lidarr(self, starred_album):
         """Find a starred album in Lidarr by searching through artist's albums"""
         try:
-            if self.dry_run:
-                return None
-            
             artist_name = starred_album.get('artist', '').strip()
             album_name = starred_album.get('name', '').strip()
             
             if not artist_name or not album_name:
                 self.logger.debug(f"Missing artist or album name: artist='{artist_name}', album='{album_name}'")
                 return None
+            
+            self.logger.debug(f"Searching for album: '{album_name}' by '{artist_name}'")
+            
+            # If dry run, still search but don't modify anything
+            if self.dry_run:
+                self.logger.debug("DRY RUN: Would search for album in Lidarr")
+                # Continue with the search even in dry run mode for better feedback
             
             # First, find the artist in Lidarr
             headers = {'X-Api-Key': self.lidarr_api_key}
@@ -391,19 +396,60 @@ class NavidromeStarredAlbumsMonitor:
                 return None
             
             artists = artists_response.json()
+            self.logger.debug(f"Retrieved {len(artists)} artists from Lidarr")
             
             # Find matching artist
             lidarr_artist = None
             normalized_starred_artist = self.normalize_artist_name(artist_name)
+            self.logger.debug(f"Normalized starred artist: '{artist_name}' -> '{normalized_starred_artist}'")
             
+            # Check for exact matches first
             for artist in artists:
                 lidarr_artist_name = artist.get('artistName', '').strip()
-                if self.normalize_artist_name(lidarr_artist_name) == normalized_starred_artist:
+                normalized_lidarr_artist = self.normalize_artist_name(lidarr_artist_name)
+                
+                if normalized_lidarr_artist == normalized_starred_artist:
                     lidarr_artist = artist
+                    self.logger.debug(f"Found exact artist match: '{artist_name}' -> '{lidarr_artist_name}'")
                     break
+            
+            # If no exact match, try fuzzy matching for artists
+            if not lidarr_artist:
+                self.logger.debug("No exact artist match found, trying fuzzy matching...")
+                from difflib import SequenceMatcher
+                best_artist_match = None
+                best_artist_score = 0.0
+                
+                for artist in artists:
+                    lidarr_artist_name = artist.get('artistName', '').strip()
+                    normalized_lidarr_artist = self.normalize_artist_name(lidarr_artist_name)
+                    
+                    score = SequenceMatcher(None, normalized_starred_artist, normalized_lidarr_artist).ratio()
+                    if score > best_artist_score and score >= 0.7:  # 70% similarity threshold for artists
+                        best_artist_score = score
+                        best_artist_match = artist
+                        self.logger.debug(f"Potential artist match ({score:.3f}): '{artist_name}' -> '{lidarr_artist_name}'")
+                
+                if best_artist_match:
+                    lidarr_artist = best_artist_match
+                    self.logger.info(f"Found fuzzy artist match ({best_artist_score:.3f}): '{artist_name}' -> '{best_artist_match.get('artistName', '')}'")
             
             if not lidarr_artist:
                 self.logger.debug(f"Artist '{artist_name}' not found in Lidarr")
+                # Show some similar artists for debugging
+                similar_artists = []
+                from difflib import SequenceMatcher
+                for artist in artists[:50]:  # Check first 50 artists
+                    lidarr_artist_name = artist.get('artistName', '').strip()
+                    normalized_lidarr_artist = self.normalize_artist_name(lidarr_artist_name)
+                    score = SequenceMatcher(None, normalized_starred_artist, normalized_lidarr_artist).ratio()
+                    if score >= 0.3:  # Show artists with at least 30% similarity
+                        similar_artists.append((score, lidarr_artist_name))
+                
+                if similar_artists:
+                    similar_artists.sort(reverse=True)
+                    self.logger.debug(f"Similar artists in Lidarr: {[f'{name} ({score:.3f})' for score, name in similar_artists[:5]]}")
+                
                 return None
             
             # Get albums for this artist
@@ -416,9 +462,16 @@ class NavidromeStarredAlbumsMonitor:
                 return None
             
             albums = albums_response.json()
+            self.logger.debug(f"Retrieved {len(albums)} albums for artist '{lidarr_artist.get('artistName', '')}'")
             
             # Find matching album
             normalized_starred_album = self.normalize_album_title(album_name)
+            self.logger.debug(f"Normalized starred album: '{album_name}' -> '{normalized_starred_album}'")
+            
+            # Check available albums for debugging
+            if len(albums) <= 10:
+                album_titles = [f"'{album.get('title', '')}'" for album in albums]
+                self.logger.debug(f"Available albums: {', '.join(album_titles)}")
             
             for album in albums:
                 lidarr_album_title = album.get('title', '').strip()
@@ -441,6 +494,7 @@ class NavidromeStarredAlbumsMonitor:
                 if score > best_score and score >= 0.8:  # 80% similarity threshold
                     best_score = score
                     best_match = album
+                    self.logger.debug(f"Potential album match ({score:.3f}): '{album_name}' -> '{lidarr_album_title}'")
             
             if best_match:
                 self.logger.info(f"Found fuzzy album match ({best_score:.3f}): '{album_name}' -> '{best_match.get('title', '')}'")

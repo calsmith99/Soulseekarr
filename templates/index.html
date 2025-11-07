@@ -240,6 +240,19 @@
             line-height: 1.2;
         }
 
+        .btn-paused {
+            background-color: var(--warning-color);
+            border-color: var(--warning-color);
+            color: white;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
         /* Status badges */
         .status-badge {
             display: inline-flex;
@@ -521,6 +534,11 @@
 
         .log-stats {
             color: var(--text-muted);
+        }
+
+        .log-stats.paused {
+            color: var(--warning-color);
+            font-weight: 600;
         }
 
         .log-controls {
@@ -948,6 +966,9 @@
                     <div class="log-header">
                         <div class="log-stats" id="log-stats">Loading...</div>
                         <div class="log-controls">
+                            <button class="btn btn-sm" id="pause-logs-btn" onclick="window.soulSeekarrApp.toggleLogPause()">
+                                ⏸️ Pause
+                            </button>
                             <button class="btn btn-sm" onclick="window.soulSeekarrApp.refreshLogs()">
                                 🔄 Refresh
                             </button>
@@ -977,6 +998,8 @@
                 this.currentLogScript = null;
                 this.currentExecutionId = null;
                 this.isLogModalOpen = false;
+                this.isLogsPaused = false;
+                this.lastScrollPosition = 0;
                 this.init();
             }
 
@@ -1007,6 +1030,11 @@
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape' && this.isLogModalOpen) {
                         this.closeLogModal();
+                    }
+                    // Toggle pause with spacebar when modal is open
+                    if (e.key === ' ' && this.isLogModalOpen && e.target.tagName !== 'INPUT') {
+                        e.preventDefault();
+                        this.toggleLogPause();
                     }
                 });
             }
@@ -1353,6 +1381,9 @@
                 this.currentLogScript = scriptId;
                 this.currentExecutionId = null;
                 this.isLogModalOpen = true;
+                this.isLogsPaused = false;
+                this.lastScrollPosition = 0;
+                this.updatePauseButton();
                 document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
                 document.getElementById('log-modal').classList.add('open');
                 this.loadLogs(scriptId);
@@ -1363,6 +1394,9 @@
                 this.currentLogScript = scriptId;
                 this.currentExecutionId = executionId;
                 this.isLogModalOpen = true;
+                this.isLogsPaused = false;
+                this.lastScrollPosition = 0;
+                this.updatePauseButton();
                 document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
                 document.getElementById('log-modal').classList.add('open');
                 this.loadLogs(scriptId);
@@ -1373,6 +1407,8 @@
                 this.isLogModalOpen = false;
                 this.currentLogScript = null;
                 this.currentExecutionId = null;
+                this.isLogsPaused = false;
+                this.lastScrollPosition = 0;
                 document.getElementById('log-modal').classList.remove('open');
                 this.stopLogUpdates();
             }
@@ -1401,7 +1437,13 @@
                 if (!logData.logs || logData.logs.length === 0) {
                     logContent.innerHTML = '<div class="log-empty">No logs available</div>';
                     logStats.textContent = 'No logs';
+                    logStats.classList.remove('paused');
                     return;
+                }
+
+                // Store current scroll position if logs are paused
+                if (this.isLogsPaused) {
+                    this.lastScrollPosition = logContent.scrollTop;
                 }
 
                 const logsHtml = logData.logs.map(line => {
@@ -1410,10 +1452,25 @@
                 }).join('');
 
                 logContent.innerHTML = logsHtml;
-                logStats.textContent = `${logData.logs.length} lines • Last updated: ${new Date().toLocaleTimeString()}`;
                 
-                // Auto-scroll to bottom
-                logContent.scrollTop = logContent.scrollHeight;
+                const pausedText = this.isLogsPaused ? ' (PAUSED - Press Space or click Resume to continue)' : '';
+                logStats.textContent = `${logData.logs.length} lines • Last updated: ${new Date().toLocaleTimeString()}${pausedText}`;
+                
+                // Apply paused styling
+                if (this.isLogsPaused) {
+                    logStats.classList.add('paused');
+                } else {
+                    logStats.classList.remove('paused');
+                }
+                
+                // Handle scrolling behavior
+                if (this.isLogsPaused) {
+                    // Restore previous scroll position when paused
+                    logContent.scrollTop = this.lastScrollPosition;
+                } else {
+                    // Auto-scroll to bottom when not paused
+                    logContent.scrollTop = logContent.scrollHeight;
+                }
             }
 
             getLogLineClass(line) {
@@ -1442,7 +1499,7 @@
                 }
                 
                 this.logUpdateInterval = setInterval(() => {
-                    if (this.isLogModalOpen && this.currentLogScript) {
+                    if (this.isLogModalOpen && this.currentLogScript && !this.isLogsPaused) {
                         this.loadLogs(this.currentLogScript);
                     }
                 }, 1000); // Update logs every second
@@ -1458,6 +1515,38 @@
             refreshLogs() {
                 if (this.currentLogScript) {
                     this.loadLogs(this.currentLogScript);
+                }
+            }
+
+            toggleLogPause() {
+                this.isLogsPaused = !this.isLogsPaused;
+                
+                if (this.isLogsPaused) {
+                    // Store current scroll position when pausing
+                    const logContent = document.getElementById('log-content');
+                    this.lastScrollPosition = logContent.scrollTop;
+                } else {
+                    // Resume auto-updating and auto-scrolling
+                    if (this.currentLogScript) {
+                        this.loadLogs(this.currentLogScript);
+                    }
+                }
+                
+                this.updatePauseButton();
+            }
+
+            updatePauseButton() {
+                const pauseBtn = document.getElementById('pause-logs-btn');
+                if (pauseBtn) {
+                    if (this.isLogsPaused) {
+                        pauseBtn.innerHTML = '▶️ Resume';
+                        pauseBtn.title = 'Resume automatic log updates';
+                        pauseBtn.classList.add('btn-paused');
+                    } else {
+                        pauseBtn.innerHTML = '⏸️ Pause';
+                        pauseBtn.title = 'Pause automatic log updates to scroll and read previous entries';
+                        pauseBtn.classList.remove('btn-paused');
+                    }
                 }
             }
 
