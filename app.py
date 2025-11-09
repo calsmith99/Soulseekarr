@@ -983,22 +983,39 @@ def get_available_scripts():
 
 @app.route('/library/expiring-albums')
 def get_expiring_albums():
-    """Get albums that will expire soon from cache."""
+    """Get albums that will expire soon from database."""
     try:
-        cache_file = Path('work/album_expiry_cache.json')
-        
-        if not cache_file.exists():
-            return jsonify({
-                'error': 'No album expiry data available',
-                'message': 'Run the file expiry cleanup script to generate data'
-            }), 404
-        
-        with open(cache_file, 'r') as f:
-            cache_data = json.load(f)
-        
-        return jsonify(cache_data)
+        # Get from database
+        summary = db.get_expiring_albums_summary()
+        return jsonify(summary)
     except Exception as e:
         logger.error(f"Error getting expiring albums: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/library/album/<path:album_key>/tracks')
+def get_album_tracks(album_key):
+    """Get tracks for a specific album."""
+    try:
+        tracks = db.get_album_tracks(album_key)
+        
+        # Format tracks for display
+        formatted_tracks = []
+        for track in tracks:
+            formatted_tracks.append({
+                'file_name': track['file_name'],
+                'track_title': track['track_title'],
+                'file_size_mb': round(track['file_size_mb'], 2),
+                'days_old': track['days_old'],
+                'last_modified': track['last_modified'].isoformat()
+            })
+        
+        return jsonify({
+            'album_key': album_key,
+            'tracks': formatted_tracks,
+            'total_tracks': len(formatted_tracks)
+        })
+    except Exception as e:
+        logger.error(f"Error getting album tracks: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Helper function to ensure playlists have active flags
