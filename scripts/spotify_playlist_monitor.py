@@ -49,6 +49,8 @@ import re
 # Add parent directory to path so we can import action_logger and lidarr_utils
 sys.path.append(str(Path(__file__).parent.parent))
 
+from slskd_utils import search_and_download_song
+
 # Try to import settings
 try:
     from settings import get_navidrome_config, get_lidarr_config, get_spotify_config
@@ -977,6 +979,52 @@ class SpotifyPlaylistMonitor:
         except Exception as e:
             self.logger.error(f"Error checking for existing download: {e}")
             return False  # If we can't check, assume it's not downloaded
+    
+    def is_song_currently_downloading(self, song):
+        """Check if a song is currently being downloaded in slskd"""
+        try:
+            slskd_url = os.getenv('SLSKD_URL')
+            slskd_api_key = os.getenv('SLSKD_API_KEY')
+            
+            if not slskd_url or not slskd_api_key:
+                return False
+            
+            # Get current downloads from slskd
+            url = f"{slskd_url}/api/v0/transfers/downloads"
+            headers = {'X-API-Key': slskd_api_key}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code != 200:
+                self.logger.debug(f"Failed to get downloads list: {response.status_code}")
+                return False
+            
+            downloads = response.json()
+            
+            # Normalize song info for comparison
+            artist = self.normalize_string(song['artist'])
+            title = self.normalize_string(song['title'])
+            cleaned_title = self.normalize_string(self.clean_song_title(song['title']))
+            
+            # Check if any active download matches this song
+            for download in downloads:
+                filename = download.get('filename', '')
+                normalized_filename = self.normalize_string(filename)
+                
+                # Check if both artist and title (or cleaned title) appear in the filename
+                if (artist in normalized_filename and 
+                    (title in normalized_filename or cleaned_title in normalized_filename)):
+                    # Check download state - consider these as "downloading"
+                    state = download.get('state', '').lower()
+                    if state in ['queued', 'initializing', 'requested', 'inprogress', 'completed']:
+                        self.logger.debug(f"Song is currently downloading: {filename} (state: {state})")
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error checking current downloads: {e}")
+            return False  # If we can't check, assume it's not downloading
     
     def ensure_navidrome_playlist(self, playlist_name):
         """Ensure a playlist with the given name exists in Navidrome, create if it doesn't exist"""
@@ -2006,6 +2054,13 @@ class SpotifyPlaylistMonitor:
                         skipped_count += 1
                         continue
                     
+                    # Check if song is currently downloading
+                    if self.is_song_currently_downloading(song):
+                        print(f"⏳ Skipping song {i}/{len(songs_to_queue)} (currently downloading): {song['artist']} - {song['title']}")
+                        self.logger.info(f"Song currently downloading, skipping: {song['artist']} - {song['title']}")
+                        skipped_count += 1
+                        continue
+                    
                     print(f"📥 Queuing song {i}/{len(songs_to_queue)}: {song['artist']} - {song['title']}")
                     
                     if self.queue_song_in_slskd(song):
@@ -2026,7 +2081,7 @@ class SpotifyPlaylistMonitor:
             if queued_count > 0:
                 print(f"✅ Successfully queued {queued_count} songs for download")
             if skipped_count > 0:
-                print(f"⏭️  Skipped {skipped_count} songs (already downloaded)")
+                print(f"⏭️  Skipped {skipped_count} songs (already downloaded or downloading)")
             if failed_count > 0:
                 print(f"⚠️  Failed to queue {failed_count} songs")
             
@@ -2061,167 +2116,29 @@ class SpotifyPlaylistMonitor:
             return False
     
     def queue_song_in_slskd(self, song):
-        """Queue a single song for download in slskd"""
+        """Queue a single song for download in slskd using shared utility."""
         try:
             slskd_url = os.getenv('SLSKD_URL')
             slskd_api_key = os.getenv('SLSKD_API_KEY')
             
-            # Clean the title for better matching
-            cleaned_title = self.clean_song_title(song['title'])
-            
-            # Use a simple, effective search query with cleaned title
-            search_query = f'{song["artist"]} {cleaned_title}'
-            
-            self.logger.info(f"Searching slskd for: {search_query}")
-            if cleaned_title != song['title']:
-                self.logger.info(f"  (Original title: {song['title']})")
-            
-            # Search slskd for the song
-            url = f"{slskd_url}/api/v0/searches"
-            headers = {
-                'Content-Type': 'application/json',
-                'X-API-Key': slskd_api_key
-            }
-            data = {
-                'searchText': search_query,
-                'timeout': 45000  # Give it more time to complete
-            }
-            
-            response = requests.post(url, headers=headers, json=data, timeout=50)
-            if response.status_code != 200:
-                self.logger.warning(f"Failed to search slskd for {song['title']}")
+            if not slskd_url or not slskd_api_key:
+                self.logger.warning("slskd configuration missing")
                 return False
             
-            search_response = response.json()
-            search_id = search_response.get('id')
+            # Use shared utility function
+            success = search_and_download_song(
+                slskd_url=slskd_url,
+                slskd_api_key=slskd_api_key,
+                artist=song['artist'],
+                title=song['title'],
+                logger=self.logger,
+                dry_run=False
+            )
             
-            if not search_id:
-                self.logger.warning(f"Failed to get search ID for {song['title']}")
-                return False
+            if success:
+                self.logger.info(f"Successfully queued: {song['artist']} - {song['title']}")
             
-            # Wait for search to complete - wait for actual completion
-            self.logger.info("Waiting for search to complete...")
-            max_wait_time = 120  # Maximum wait time in seconds (2 minutes)
-            wait_interval = 4    # Check every 4 seconds
-            max_attempts = max_wait_time // wait_interval
-            
-            for attempt in range(1, max_attempts + 1):
-                time.sleep(wait_interval)
-                
-                # Get search status
-                status_url = f"{slskd_url}/api/v0/searches/{search_id}"
-                status_response = requests.get(status_url, headers=headers, timeout=30)
-                
-                if status_response.status_code != 200:
-                    self.logger.warning(f"Failed to get search status (attempt {attempt})")
-                    continue
-                
-                status_data = status_response.json()
-                file_count = status_data.get('fileCount', 0)
-                response_count = status_data.get('responseCount', 0)
-                is_complete = status_data.get('isComplete', False)
-                
-                self.logger.info(f"  Search progress: {response_count} users responded, {file_count} files found, complete: {is_complete}")
-                
-                # Wait for actual completion
-                if is_complete:
-                    self.logger.info(f"Search completed after {attempt * wait_interval} seconds with {file_count} files")
-                    break
-                    
-                # Also break if we've waited long enough and have some results
-                if attempt >= 15 and file_count > 0:  # Wait at least 1 minute before considering early exit
-                    self.logger.info(f"Search not marked complete but found {file_count} files after {attempt * wait_interval} seconds, proceeding...")
-                    break
-            else:
-                # This executes if we never broke out of the loop (i.e., we hit max_attempts)
-                self.logger.warning(f"Search did not complete within {max_wait_time} seconds, proceeding with {file_count} files found")
-            
-            if file_count == 0:
-                self.logger.info(f"No files found for: {song['artist']} - {song['title']}")
-                return True  # Not an error, just no results
-            
-            # Get detailed responses - try multiple approaches
-            results = None
-            
-            # First try: Get responses directly
-            responses_url = f"{slskd_url}/api/v0/searches/{search_id}/responses"
-            self.logger.debug(f"Attempting to get search responses from: {responses_url}")
-            
-            responses = requests.get(responses_url, headers=headers, timeout=30)
-            
-            self.logger.debug(f"Search responses request - Status: {responses.status_code}, URL: {responses.url}")
-            
-            if responses.status_code == 200:
-                try:
-                    results = responses.json()
-                    self.logger.info(f"Got responses directly: {len(results) if isinstance(results, list) else 'unknown format'} results")
-                    
-                    # Log the structure we received for debugging
-                    if results:
-                        self.logger.debug(f"Response structure type: {type(results)}")
-                        if isinstance(results, list) and results:
-                            self.logger.debug(f"First result keys: {list(results[0].keys()) if isinstance(results[0], dict) else 'not a dict'}")
-                        elif isinstance(results, dict):
-                            self.logger.debug(f"Result dict keys: {list(results.keys())}")
-                
-                except json.JSONDecodeError as e:
-                    self.logger.warning(f"Failed to parse responses JSON: {e}")
-                    self.logger.debug(f"Raw response text (first 500 chars): {responses.text[:500]}")
-                    results = None
-            else:
-                self.logger.warning(f"Failed to get responses directly: HTTP {responses.status_code}")
-                if responses.text:
-                    self.logger.debug(f"Error response text: {responses.text[:200]}")
-                
-                # Second try: Get search status which might include files
-                try:
-                    self.logger.debug(f"Trying to get search status from: {status_url}")
-                    status_response = requests.get(status_url, headers=headers, timeout=30)
-                    
-                    if status_response.status_code == 200:
-                        status_data = status_response.json()
-                        self.logger.debug(f"Status data keys: {list(status_data.keys())}")
-                        
-                        # Some slskd versions include files in the status response
-                        if 'files' in status_data:
-                            results = status_data['files']
-                            self.logger.info(f"Got results from status endpoint files: {len(results) if isinstance(results, list) else 'unknown'}")
-                        elif 'results' in status_data:
-                            results = status_data['results']
-                            self.logger.info(f"Got results from status endpoint results: {len(results) if isinstance(results, list) else 'unknown'}")
-                        else:
-                            # Check if the status itself contains user response data
-                            self.logger.debug(f"No 'files' or 'results' in status, checking for other response data...")
-                            
-                except Exception as e:
-                    self.logger.warning(f"Failed to get results from status endpoint: {e}")
-            
-            if not results:
-                self.logger.warning(f"No search results available for {song['title']}")
-                # If we found files during search but can't get responses, still consider it successful
-                if file_count > 0:
-                    self.logger.info(f"Search found {file_count} files but couldn't retrieve detailed results")
-                    self.logger.info(f"Successfully queued: {song['artist']} - {song['title']}")
-                    return True
-                else:
-                    self.logger.info(f"No files found for: {song['artist']} - {song['title']}")
-                    return True  # Not an error, just no results
-            
-            # Debug: Log all files found for troubleshooting
-            self.debug_search_results(results, song, 1)
-            
-            # Find the best match with relaxed criteria
-            best_match = self.find_best_song_match(results, song)
-            
-            if best_match:
-                # Queue the best match for download
-                username, filename = best_match
-                self.logger.info(f"Selected match: {os.path.basename(filename)} from {username}")
-                
-                return self.queue_file_for_download(username, filename, song)
-            else:
-                self.logger.warning(f"No suitable match found for: {song['artist']} - {song['title']}")
-                return True  # Not a hard error
+            return success
             
         except Exception as e:
             self.logger.error(f"Error queuing song {song['artist']} - {song['title']}: {e}")

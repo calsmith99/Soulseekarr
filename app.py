@@ -19,6 +19,7 @@ import logging
 import requests
 from urllib.parse import urljoin
 from database import get_db
+import settings
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
@@ -1526,7 +1527,7 @@ def get_connection_settings():
                         settings[service] = {}
                     
                     # Mask sensitive data but indicate it exists
-                    if setting in ['password', 'api_key']:
+                    if setting in ['password', 'api_key', 'token']:
                         settings[service][setting] = '********' if row['value'] else ''
                     else:
                         settings[service][setting] = row['value']
@@ -1773,6 +1774,90 @@ def tidal_oauth_disconnect():
     except Exception as e:
         logger.error(f"Error disconnecting Tidal: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/listenbrainz/save', methods=['POST'])
+def save_listenbrainz_connection():
+    """Save ListenBrainz credentials."""
+    try:
+        data = request.get_json()
+        token = data.get('token', '').strip()
+        username = data.get('username', '').strip()
+        
+        if not token or not username:
+            return jsonify({'success': False, 'error': 'User token and username are required'}), 400
+        
+        # Use settings module to save (updates cache automatically)
+        settings.set_setting('listenbrainz_connection_token', token)
+        settings.set_setting('listenbrainz_connection_username', username)
+        
+        logger.info(f"Saved ListenBrainz credentials for user: {username}")
+        return jsonify({'success': True, 'message': 'ListenBrainz credentials saved successfully'})
+    except Exception as e:
+        logger.error(f"Error saving ListenBrainz credentials: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/listenbrainz/test', methods=['GET'])
+def test_listenbrainz_connection():
+    """Test ListenBrainz connection."""
+    try:
+        config = settings.get_listenbrainz_config()
+        token = config.get('token')
+        username = config.get('username')
+        
+        logger.info(f"Testing ListenBrainz connection - Token present: {bool(token)}, Username: {username}")
+        
+        if not token or not username:
+            return jsonify({'success': False, 'error': 'ListenBrainz not configured. Please save your credentials first.'}), 400
+        
+        # Test by validating token
+        url = f'https://api.listenbrainz.org/1/validate-token'
+        headers = {
+            'Authorization': f'Token {token}'
+        }
+        
+        logger.info(f"Making request to ListenBrainz API to validate token")
+        response = requests.get(url, headers=headers, timeout=10)
+        logger.info(f"ListenBrainz API response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            logger.info(f"ListenBrainz API response: {data}")
+            
+            if data.get('valid'):
+                token_username = data.get('user_name', username)
+                return jsonify({
+                    'success': True, 
+                    'message': f"Connected to ListenBrainz as {token_username}"
+                })
+            else:
+                return jsonify({'success': False, 'error': 'Invalid ListenBrainz token'}), 400
+        else:
+            error_text = response.text[:200] if response.text else 'No response body'
+            logger.error(f"ListenBrainz API returned {response.status_code}: {error_text}")
+            return jsonify({'success': False, 'error': f'ListenBrainz API returned {response.status_code}'}), 400
+            
+    except Exception as e:
+        logger.error(f"Error testing ListenBrainz connection: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/listenbrainz/status')
+def listenbrainz_status():
+    """Get ListenBrainz connection status."""
+    try:
+        config = settings.get_listenbrainz_config()
+        token = config.get('token')
+        username = config.get('username')
+        
+        if token and username:
+            return jsonify({
+                'connected': True,
+                'username': username
+            })
+        else:
+            return jsonify({'connected': False})
+    except Exception as e:
+        logger.error(f"Error checking ListenBrainz status: {e}")
+        return jsonify({'connected': False, 'error': str(e)}), 500
 
 @app.route('/api/slskd/downloads')
 def get_slskd_downloads():

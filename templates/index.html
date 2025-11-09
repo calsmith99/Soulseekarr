@@ -945,6 +945,25 @@
                                             </div>
                                         </div>
                                     </div>
+
+                                    <!-- ListenBrainz Connection -->
+                                    <div class="connection-group">
+                                        <h3 class="connection-title">ListenBrainz</h3>
+                                        <div class="connection-form">
+                                            <div class="form-group">
+                                                <label for="listenbrainz-token">User Token</label>
+                                                <input type="password" id="listenbrainz-token" placeholder="Your ListenBrainz User Token">
+                                                <small>Get your user token from <a href="https://listenbrainz.org/settings/" target="_blank">ListenBrainz Settings</a></small>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="listenbrainz-username">Username</label>
+                                                <input type="text" id="listenbrainz-username" placeholder="Your ListenBrainz username">
+                                            </div>
+                                            <button class="btn btn-primary" onclick="window.soulSeekarrApp.saveConnection('listenbrainz')">Save</button>
+                                            <button class="btn btn-secondary" onclick="window.soulSeekarrApp.testConnection('listenbrainz')">Test Connection</button>
+                                        </div>
+                                        <div class="connection-status" id="listenbrainz-status"></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1631,12 +1650,18 @@
                     document.getElementById('slskd-api-key').value = settings.slskd.api_key || '';
                 }
                 
+                // Populate ListenBrainz settings
+                if (settings.listenbrainz) {
+                    document.getElementById('listenbrainz-token').value = settings.listenbrainz.token || '';
+                    document.getElementById('listenbrainz-username').value = settings.listenbrainz.username || '';
+                }
+                
                 // Add event listeners for masked fields
                 this.setupMaskedFieldHandlers();
             }
 
             setupMaskedFieldHandlers() {
-                const maskedFields = ['navidrome-password', 'lidarr-api-key', 'slskd-api-key'];
+                const maskedFields = ['navidrome-password', 'lidarr-api-key', 'slskd-api-key', 'listenbrainz-token'];
                 
                 maskedFields.forEach(fieldId => {
                     const field = document.getElementById(fieldId);
@@ -1685,6 +1710,20 @@
                         const tidalData = await tidalResponse.json();
                         this.updateOAuthStatus('tidal', tidalData.connected, tidalData.user);
                     }
+                    
+                    // Check ListenBrainz status
+                    const listenbrainzResponse = await fetch('/api/listenbrainz/status');
+                    if (listenbrainzResponse.ok) {
+                        const listenbrainzData = await listenbrainzResponse.json();
+                        const statusElement = document.getElementById('listenbrainz-status');
+                        if (listenbrainzData.connected) {
+                            statusElement.className = 'connection-status success';
+                            statusElement.innerHTML = `✅ Connected as ${listenbrainzData.username}`;
+                        } else {
+                            statusElement.className = 'connection-status';
+                            statusElement.innerHTML = '';
+                        }
+                    }
                 } catch (error) {
                     console.error('Error loading OAuth status:', error);
                 }
@@ -1720,12 +1759,19 @@
                 statusElement.innerHTML = '🔄 Testing connection...';
                 
                 try {
-                    const formData = this.getConnectionFormData(service);
-                    const response = await fetch(`/api/settings/test-connection/${service}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
+                    let response;
+                    
+                    if (service === 'listenbrainz') {
+                        // Use the special ListenBrainz test endpoint
+                        response = await fetch('/api/listenbrainz/test');
+                    } else {
+                        const formData = this.getConnectionFormData(service);
+                        response = await fetch(`/api/settings/test-connection/${service}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(formData)
+                        });
+                    }
                     
                     const result = await response.json();
                     
@@ -1745,11 +1791,22 @@
             async saveConnection(service) {
                 try {
                     const formData = this.getConnectionFormData(service);
-                    const response = await fetch(`/api/settings/connections/${service}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(formData)
-                    });
+                    let response;
+                    
+                    if (service === 'listenbrainz') {
+                        // Use the special ListenBrainz save endpoint
+                        response = await fetch('/api/listenbrainz/save', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(formData)
+                        });
+                    } else {
+                        response = await fetch(`/api/settings/connections/${service}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(formData)
+                        });
+                    }
                     
                     const result = await response.json();
                     
@@ -1782,6 +1839,11 @@
                         return {
                             url: document.getElementById('slskd-url').value,
                             api_key: document.getElementById('slskd-api-key').value
+                        };
+                    case 'listenbrainz':
+                        return {
+                            token: document.getElementById('listenbrainz-token').value,
+                            username: document.getElementById('listenbrainz-username').value
                         };
                     default:
                         return {};

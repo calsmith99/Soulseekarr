@@ -234,6 +234,40 @@ def get_tidal_country_code() -> str:
     """Get Tidal country code."""
     return get_setting('tidal_connection_country_code', os.environ.get('TIDAL_COUNTRY_CODE', 'US'))
 
+# ListenBrainz settings
+def get_listenbrainz_token() -> str:
+    """Get ListenBrainz user token."""
+    return get_setting('listenbrainz_connection_token', os.environ.get('LISTENBRAINZ_TOKEN', ''))
+
+def get_listenbrainz_username() -> str:
+    """Get ListenBrainz username."""
+    return get_setting('listenbrainz_connection_username', os.environ.get('LISTENBRAINZ_USERNAME', ''))
+
+def get_listenbrainz_config() -> Dict[str, str]:
+    """Get ListenBrainz configuration."""
+    return {
+        'token': get_listenbrainz_token(),
+        'username': get_listenbrainz_username()
+    }
+
+# Directory settings
+
+# Last.fm settings
+def get_lastfm_api_key() -> str:
+    """Get Last.fm API key."""
+    return get_setting('lastfm_connection_api_key', os.environ.get('LASTFM_API_KEY', ''))
+
+def get_lastfm_username() -> str:
+    """Get Last.fm username."""
+    return get_setting('lastfm_connection_username', os.environ.get('LASTFM_USERNAME', ''))
+
+def get_lastfm_config() -> Dict[str, str]:
+    """Get Last.fm configuration."""
+    return {
+        'api_key': get_lastfm_api_key(),
+        'username': get_lastfm_username()
+    }
+
 # Other common settings
 def get_target_uid() -> int:
     """Get target UID for file operations."""
