@@ -1,5 +1,9 @@
 # SoulSeekarr .gitignore
 
+#Mac specific
+.DS_Store
+._*
+
 # Database files
 work/*.db
 work/*.db-shm

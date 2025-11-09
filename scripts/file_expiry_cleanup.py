@@ -30,6 +30,9 @@ import logging
 from pathlib import Path
 from datetime import datetime, timedelta
 import requests
+import hashlib
+import random
+import string
 from time import sleep
 
 # Add parent directory to path so we can import action_logger
@@ -37,7 +40,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 # Try to import settings
 try:
-    from settings import get_navidrome_config
+    from settings import get_navidrome_config, get_incomplete_directory, get_not_owned_directory
     SETTINGS_AVAILABLE = True
 except ImportError:
     SETTINGS_AVAILABLE = False
@@ -65,13 +68,27 @@ class FileExpiryCleanup:
             self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
             self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
         
-        # Use mounted volume paths
-        self.incomplete_dir = '/media/Incomplete'
-        self.not_owned_dir = '/media/Not_Owned'
+        # Get directory paths from settings module or environment variables
+        if SETTINGS_AVAILABLE:
+            try:
+                self.incomplete_dir = get_incomplete_directory()
+                self.not_owned_dir = get_not_owned_directory()
+            except Exception as e:
+                print(f"Warning: Could not load directories from settings: {e}")
+                self.incomplete_dir = os.environ.get('INCOMPLETE_DIRECTORY', '/media/Incomplete')
+                self.not_owned_dir = os.environ.get('NOT_OWNED_DIRECTORY', '/media/Not_Owned')
+        else:
+            self.incomplete_dir = os.environ.get('INCOMPLETE_DIRECTORY', '/media/Incomplete')
+            self.not_owned_dir = os.environ.get('NOT_OWNED_DIRECTORY', '/media/Not_Owned')
         
         # Get cleanup days from environment or parameter
         self.cleanup_days = cleanup_days or int(os.environ.get('CLEANUP_DAYS', '30'))
-        self.dry_run = True  # Hardcoded to True for testing
+        
+        # Set dry run mode - respect parameter, fall back to environment variable
+        if dry_run:
+            self.dry_run = True
+        else:
+            self.dry_run = os.environ.get('DRY_RUN', 'false').lower() == 'true'
         
         # Setup logging
         self.setup_logging()
@@ -88,8 +105,11 @@ class FileExpiryCleanup:
         
         # Navidrome session
         self.navidrome_token = None
+        self.subsonic_salt = None
+        self.subsonic_token = None
         self.starred_albums = set()
         self.starred_tracks = set()
+        self.starred_content_loaded = False  # Track if we successfully loaded starred content
         
         # Album expiry tracking for UI cache
         self.album_expiry_data = {}
@@ -158,34 +178,40 @@ class FileExpiryCleanup:
                         f"Incomplete: {self.incomplete_dir}, Not owned: {self.not_owned_dir}")
     
     def authenticate_navidrome(self):
-        """Authenticate with Navidrome and get access token"""
+        """Authenticate with Navidrome and generate Subsonic API credentials"""
         try:
-            # Use base URL for authentication
-            auth_url = f"{self.navidrome_url}/auth/login"
-            auth_data = {
-                "username": self.navidrome_username,
-                "password": self.navidrome_password
+            self.logger.info("Authenticating with Navidrome...")
+            
+            # Generate Subsonic API token and salt
+            self.subsonic_salt = ''.join(random.choices(string.ascii_letters + string.digits, k=6))
+            token_string = self.navidrome_password + self.subsonic_salt
+            self.subsonic_token = hashlib.md5(token_string.encode()).hexdigest()
+            
+            # Test the credentials with a simple ping
+            test_url = f"{self.navidrome_url}/rest/ping"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'FileExpiryCleanup',
+                'f': 'json'
             }
             
-            if self.dry_run:
-                print("    [DRY RUN] Authenticating with Navidrome (for starred content check)")
-                self.logger.info("DRY RUN: Authenticating with Navidrome for starred content check")
-            else:
-                self.logger.info("Authenticating with Navidrome...")
-            
-            response = requests.post(auth_url, json=auth_data, timeout=30)
+            response = requests.get(test_url, params=params, timeout=10)
             
             if response.status_code == 200:
-                auth_response = response.json()
-                self.navidrome_token = auth_response.get('token')
+                data = response.json()
+                subsonic_response = data.get('subsonic-response', {})
                 
-                if self.navidrome_token:
+                if subsonic_response.get('status') == 'ok':
                     msg = "Successfully authenticated with Navidrome"
                     print(f"    ✓ {msg}")
                     self.logger.info(msg)
                     return True
                 else:
-                    msg = "Authentication response missing token"
+                    error = subsonic_response.get('error', {})
+                    msg = f"Navidrome authentication failed: {error.get('message', 'Unknown error')}"
                     print(f"    ⚠️  {msg}")
                     self.logger.error(msg)
                     return False
@@ -203,57 +229,79 @@ class FileExpiryCleanup:
             return False
     
     def get_starred_content(self):
-        """Get all starred albums and tracks from Navidrome"""
-        if not self.navidrome_token:
-            self.logger.error("No Navidrome token available")
+        """Get all starred albums and tracks from Navidrome using Subsonic API"""
+        if not self.subsonic_token or not self.subsonic_salt:
+            self.logger.error("No Navidrome Subsonic credentials available")
             return False
         
         try:
-            headers = {'Authorization': f'Bearer {self.navidrome_token}'}
+            # Use Subsonic API to get starred content
+            starred_url = f"{self.navidrome_url}/rest/getStarred2"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'FileExpiryCleanup',
+                'f': 'json'
+            }
             
-            if self.dry_run:
-                print("    [DRY RUN] Fetching starred content from Navidrome (for protection)")
-                self.logger.info("DRY RUN: Fetching starred content for protection")
+            self.logger.info(f"Fetching starred content from: {starred_url}")
+            response = requests.get(starred_url, params=params, timeout=30)
             
-            # Use base URL for main API calls
-            # Get starred albums
-            albums_url = f"{self.navidrome_url}/api/album"
-            albums_response = requests.get(albums_url, 
-                                         headers=headers, 
-                                         params={'starred': 'true'}, 
-                                         timeout=30)
+            self.logger.info(f"Starred content API response status: {response.status_code}")
             
-            if albums_response.status_code == 200:
-                starred_albums_data = albums_response.json()
-                for album in starred_albums_data:
-                    album_name = album.get('name', '').lower()
-                    artist_name = album.get('artist', '').lower()
-                    album_key = f"{artist_name} - {album_name}"
-                    self.starred_albums.add(album_key)
+            if response.status_code == 200:
+                data = response.json()
+                subsonic_response = data.get('subsonic-response', {})
                 
-                self.logger.info(f"Found {len(self.starred_albums)} starred albums")
-                print(f"    ✓ Found {len(self.starred_albums)} starred albums")
-            
-            # Get starred tracks
-            tracks_url = f"{self.navidrome_url}/api/song"
-            tracks_response = requests.get(tracks_url, 
-                                         headers=headers, 
-                                         params={'starred': 'true'}, 
-                                         timeout=30)
-            
-            if tracks_response.status_code == 200:
-                starred_tracks_data = tracks_response.json()
-                for track in starred_tracks_data:
-                    track_title = track.get('title', '').lower()
-                    artist_name = track.get('artist', '').lower()
-                    album_name = track.get('album', '').lower()
-                    track_key = f"{artist_name} - {album_name} - {track_title}"
-                    self.starred_tracks.add(track_key)
-                
-                self.logger.info(f"Found {len(self.starred_tracks)} starred tracks")
-                print(f"    ✓ Found {len(self.starred_tracks)} starred tracks")
-            
-            return True
+                if subsonic_response.get('status') == 'ok':
+                    starred_info = subsonic_response.get('starred2', {})
+                    
+                    # Get starred albums
+                    starred_albums_data = starred_info.get('album', [])
+                    if not isinstance(starred_albums_data, list):
+                        starred_albums_data = [starred_albums_data] if starred_albums_data else []
+                    
+                    self.logger.info(f"Starred2 API returned {len(starred_albums_data)} albums")
+                    
+                    for album in starred_albums_data:
+                        album_name = album.get('name', '').lower()
+                        artist_name = album.get('artist', '').lower()
+                        album_key = f"{artist_name} - {album_name}"
+                        self.starred_albums.add(album_key)
+                    
+                    self.logger.info(f"Found {len(self.starred_albums)} starred albums")
+                    print(f"    ✓ Found {len(self.starred_albums)} starred albums")
+                    
+                    # Get starred tracks/songs
+                    starred_tracks_data = starred_info.get('song', [])
+                    if not isinstance(starred_tracks_data, list):
+                        starred_tracks_data = [starred_tracks_data] if starred_tracks_data else []
+                    
+                    self.logger.info(f"Starred2 API returned {len(starred_tracks_data)} songs")
+                    
+                    for track in starred_tracks_data:
+                        track_title = track.get('title', '').lower()
+                        artist_name = track.get('artist', '').lower()
+                        album_name = track.get('album', '').lower()
+                        track_key = f"{artist_name} - {album_name} - {track_title}"
+                        self.starred_tracks.add(track_key)
+                    
+                    self.logger.info(f"Found {len(self.starred_tracks)} starred tracks")
+                    print(f"    ✓ Found {len(self.starred_tracks)} starred songs")
+                    
+                    # Mark that we successfully loaded starred content
+                    self.starred_content_loaded = True
+                    return True
+                else:
+                    error = subsonic_response.get('error', {})
+                    msg = f"Subsonic API error: {error.get('message', 'Unknown error')}"
+                    self.logger.error(msg)
+                    return False
+            else:
+                self.logger.error(f"Failed to fetch starred content. Status: {response.status_code}, Response: {response.text[:200]}")
+                return False
             
         except Exception as e:
             msg = f"Error getting starred content from Navidrome: {e}"
@@ -362,19 +410,31 @@ class FileExpiryCleanup:
     def is_content_starred(self, file_path):
         """Check if the file or its album is starred in Navidrome"""
         try:
+            # If we couldn't load starred content, be cautious and treat everything as starred
+            if not self.starred_content_loaded:
+                self.logger.warning(f"Starred content not loaded - treating file as starred for safety: {file_path}")
+                return True
+            
             artist, album, track = self.extract_music_info_from_path(file_path)
             
             if not artist:
-                return False  # Can't determine if starred without artist info
+                # Can't determine if starred without artist info - be safe
+                self.logger.debug(f"No artist info extracted - treating as starred for safety: {file_path}")
+                return True
+            
+            # Normalize strings to lowercase for comparison (starred content is already lowercase)
+            artist_lower = artist.lower()
+            album_lower = album.lower()
+            track_lower = track.lower()
             
             # Check if album is starred
-            album_key = f"{artist} - {album}"
+            album_key = f"{artist_lower} - {album_lower}"
             if album_key in self.starred_albums:
                 self.logger.debug(f"Album is starred: {album_key}")
                 return True
             
             # Check if individual track is starred
-            track_key = f"{artist} - {album} - {track}"
+            track_key = f"{artist_lower} - {album_lower} - {track_lower}"
             if track_key in self.starred_tracks:
                 self.logger.debug(f"Track is starred: {track_key}")
                 return True
@@ -383,7 +443,8 @@ class FileExpiryCleanup:
             
         except Exception as e:
             self.logger.error(f"Error checking if content is starred for {file_path}: {e}")
-            return False  # Assume not starred on error
+            # On error, assume starred to be safe (don't delete)
+            return True
     
     def track_album_expiry(self, file_path):
         """Track album expiry data for UI display"""
@@ -646,6 +707,15 @@ class FileExpiryCleanup:
         
         if not auth_success:
             print("❌ Failed to authenticate with Navidrome - aborting cleanup")
+            print("   Cannot proceed without verifying starred content")
+            self.logger.error("Aborting cleanup - failed to authenticate with Navidrome")
+            
+            log_action("script_error", "File Expiry Cleanup aborted", {
+                "reason": "navidrome_authentication_failed",
+                "incomplete_dir": self.incomplete_dir,
+                "not_owned_dir": self.not_owned_dir
+            })
+            
             return False
         
         # Step 2: Get starred content
@@ -654,7 +724,20 @@ class FileExpiryCleanup:
         starred_success = self.get_starred_content()
         
         if not starred_success:
-            print("⚠️  Failed to fetch starred content - proceeding with caution")
+            print("⚠️  Failed to fetch starred content")
+            if not self.dry_run:
+                print("❌ Aborting cleanup to avoid deleting starred content")
+                print("   Run with --dry-run to see what would be deleted")
+                self.logger.error("Aborting cleanup - could not verify starred content and not in dry run mode")
+                return False
+            else:
+                print("   Continuing in dry run mode - no files will be deleted")
+                self.logger.warning("Continuing in dry run mode despite starred content fetch failure")
+        else:
+            # Print summary of starred content
+            print(f"    ✓ Protection enabled for:")
+            print(f"      📀 {len(self.starred_albums)} starred albums")
+            print(f"      🎵 {len(self.starred_tracks)} starred songs")
         
         # Step 3: Clean music directories
         print()

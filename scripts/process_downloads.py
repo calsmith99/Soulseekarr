@@ -38,7 +38,13 @@ except ImportError:
 # Add parent directory to path to import settings
 try:
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from settings import get_lidarr_config
+    from settings import (
+        get_lidarr_config,
+        get_owned_directory,
+        get_not_owned_directory,
+        get_incomplete_directory,
+        get_downloads_completed_directory
+    )
     SETTINGS_AVAILABLE = True
 except ImportError:
     SETTINGS_AVAILABLE = False
@@ -170,11 +176,29 @@ class DownloadsProcessor:
     def setup_paths(self):
         """Setup directory paths"""
         logger.info("Setting up directory paths...")
-        # Use Docker container paths that match the mounted directories
-        self.downloads_dir = Path('/downloads/completed')
-        self.music_dir = Path('/media/Owned')  # Main music library for complete albums
-        self.incomplete_dir = Path('/media/Incomplete')  # Incomplete albums
-        self.not_owned_dir = Path('/media/Not_Owned')  # Alternative directory if needed
+        
+        # Get directories from settings with fallback to defaults
+        if SETTINGS_AVAILABLE:
+            try:
+                self.downloads_dir = Path(get_downloads_completed_directory())
+                self.music_dir = Path(get_owned_directory())
+                self.incomplete_dir = Path(get_incomplete_directory())
+                self.not_owned_dir = Path(get_not_owned_directory())
+                logger.info("Using directory paths from settings")
+            except Exception as e:
+                logger.warning(f"Could not load directories from settings: {e}")
+                logger.info("Falling back to default paths")
+                self.downloads_dir = Path('/downloads/completed')
+                self.music_dir = Path('/media/Owned')
+                self.incomplete_dir = Path('/media/Incomplete')
+                self.not_owned_dir = Path('/media/Not_Owned')
+        else:
+            # Use Docker container paths that match the mounted directories
+            self.downloads_dir = Path('/downloads/completed')
+            self.music_dir = Path('/media/Owned')  # Main music library for complete albums
+            self.incomplete_dir = Path('/media/Incomplete')  # Incomplete albums
+            self.not_owned_dir = Path('/media/Not_Owned')  # Alternative directory if needed
+        
         self.work_dir = Path('/data/work')  # Application data mount
         
         # Ensure work directory exists

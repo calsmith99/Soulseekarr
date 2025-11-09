@@ -258,3 +258,24 @@ def get_slskd_downloads_incomplete_path() -> str:
 def get_slskd_downloads_path() -> str:
     """Get slskd downloads base path."""
     return get_setting('slskd_downloads_path', os.environ.get('SLSKD_DOWNLOADS_PATH', ''))
+
+# Music directory settings
+def get_music_directory() -> str:
+    """Get main music directory (Not_Owned)."""
+    return get_setting('music_directory', os.environ.get('MUSIC_DIRECTORY', '/media/Not_Owned'))
+
+def get_not_owned_directory() -> str:
+    """Get Not_Owned music directory."""
+    return get_setting('not_owned_directory', os.environ.get('NOT_OWNED_DIRECTORY', '/media/Not_Owned'))
+
+def get_owned_directory() -> str:
+    """Get Owned music directory."""
+    return get_setting('owned_directory', os.environ.get('OWNED_DIRECTORY', '/media/Owned'))
+
+def get_incomplete_directory() -> str:
+    """Get Incomplete music directory."""
+    return get_setting('incomplete_directory', os.environ.get('INCOMPLETE_DIRECTORY', '/media/Incomplete'))
+
+def get_downloads_completed_directory() -> str:
+    """Get completed downloads directory."""
+    return get_setting('downloads_completed_directory', os.environ.get('DOWNLOADS_COMPLETED', '/downloads/completed'))
