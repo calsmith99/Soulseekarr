@@ -41,10 +41,9 @@ desktop.ini
 .env
 config.env
 
-# Cache files
+# Cache files (except album_expiry - now in database)
 work/artist_albums.json
 work/artist_search.json
-work/album_expiry_cache.json
 work/folders.json
 work/lidarr_artists.json
 work/process_downloads_history.json
