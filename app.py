@@ -25,8 +25,11 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
 
 # Configure logging
-logging.basicConfig(level=logging.WARNING)  # Changed from INFO to WARNING to reduce spam
+logging.basicConfig(level=logging.INFO)  # Balanced logging level
 logger = logging.getLogger(__name__)
+
+# Disable Werkzeug access logging to reduce noise
+logging.getLogger('werkzeug').setLevel(logging.WARNING)
 
 # Global variables to track script execution
 running_scripts = {}
@@ -193,6 +196,7 @@ def get_script_status(script_id):
         # Parse progress from output for long-running scripts
         if status.get('running') and script_id in script_outputs:
             output_lines = script_outputs[script_id]
+            logger.info(f"Checking progress for {script_id}, found {len(output_lines)} output lines")
             progress_info = parse_progress(output_lines, script_id)
             if progress_info:
                 status['progress'] = progress_info
@@ -202,22 +206,75 @@ def get_script_status(script_id):
 def parse_progress(output_lines, script_id):
     """Parse progress information from script output."""
     # Look for progress patterns in recent output lines
+    main_progress = None
+    sub_progress = None
+    
     for line in reversed(output_lines[-50:]):  # Check last 50 lines
-        # Pattern: [123/456] Processing: Artist Name
-        if '[' in line and '/' in line and '] Processing:' in line:
+        # Strip timestamp prefix if present (e.g., "[19:43:50] PROGRESS: ...")
+        clean_line = line
+        if line.startswith('[') and '] ' in line:
+            clean_line = line.split('] ', 1)[1] if '] ' in line else line
+        
+        # Main progress pattern: PROGRESS: [123/456] 67% - Processing: Artist - Album
+        if clean_line.startswith('PROGRESS: [') and '%' in clean_line and ' - Processing:' in clean_line:
+            try:
+                # Extract [current/total] percentage
+                bracket_part = clean_line.split('[')[1].split(']')[0]
+                current, total = bracket_part.split('/')
+                percentage_part = clean_line.split('] ')[1].split('%')[0]
+                percentage = int(percentage_part)
+                
+                # Extract current item being processed
+                processing_part = clean_line.split(' - Processing: ')[1] if ' - Processing: ' in clean_line else 'Processing...'
+                
+                main_progress = {
+                    'current': int(current),
+                    'total': int(total),
+                    'percentage': percentage,
+                    'current_item': processing_part.strip()
+                }
+                break
+            except (IndexError, ValueError):
+                continue
+        
+        # Sub-progress pattern: PROGRESS_SUB: Getting track listing for Album Name...
+        elif clean_line.startswith('PROGRESS_SUB: ') and not sub_progress:
+            try:
+                sub_progress = {
+                    'message': clean_line.replace('PROGRESS_SUB: ', '').strip()
+                }
+            except:
+                continue
+        
+        # Legacy pattern: [123/456] Processing: Artist Name
+        elif '[' in clean_line and '/' in clean_line and '] Processing:' in clean_line and not main_progress:
             try:
                 # Extract numbers like [123/456]
-                parts = line.split('[')[1].split(']')[0].split('/')
+                parts = clean_line.split('[')[1].split(']')[0].split('/')
                 current = int(parts[0])
                 total = int(parts[1])
                 percentage = int((current / total) * 100)
-                return {
+                main_progress = {
                     'current': current,
                     'total': total,
-                    'percentage': percentage
+                    'percentage': percentage,
+                    'current_item': 'Processing...'
                 }
+                break
             except (IndexError, ValueError):
                 continue
+    
+    # Return combined progress information
+    if main_progress or sub_progress:
+        result = {}
+        if main_progress:
+            result.update(main_progress)
+        if sub_progress:
+            result['sub_progress'] = sub_progress
+        
+        # Temporary debug log
+        logger.info(f"Progress parsed for {script_id}: {result}")
+        return result
     
     return None
 
@@ -242,7 +299,7 @@ def scan_scripts_folder():
             logger.warning(f"Scripts directory not found: {scripts_dir}")
             return discovered_scripts
         
-        logger.info(f"Using scripts directory: {scripts_dir}")
+        logger.debug(f"Using scripts directory: {scripts_dir}")
         
         for filename in os.listdir(scripts_dir):
             # Skip system files, hidden files, and Python cache files
@@ -268,7 +325,7 @@ def scan_scripts_folder():
                     'tags': metadata.get('tags', [])
                 }
                 
-        logger.info(f"Discovered {len(discovered_scripts)} scripts in {scripts_dir}")
+        logger.debug(f"Discovered {len(discovered_scripts)} scripts in {scripts_dir}")
         
     except Exception as e:
         logger.error(f"Error scanning scripts folder: {e}")
@@ -399,7 +456,7 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
             }
             script_outputs[script_id] = []
 
-        logger.info(f"Starting script: {script_path}")
+        logger.debug(f"Starting script: {script_path}")
         
         # Handle Python scripts differently from shell scripts
         if script_path.startswith('python'):
@@ -479,6 +536,11 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
                 
                 with script_lock:
                     script_outputs[script_id].append(output_line)
+                    
+                    # Temporary debug: Log progress lines when captured
+                    if 'PROGRESS:' in output_line or 'PROGRESS_SUB:' in output_line:
+                        logger.info(f"Captured progress line for {script_id}: {output_line.strip()}")
+                    
                     # Keep only last 1000 lines to prevent memory issues
                     if len(script_outputs[script_id]) > 1000:
                         script_outputs[script_id] = script_outputs[script_id][-1000:]
@@ -513,7 +575,7 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
         status = 'success' if success else 'error'
         update_script_execution_history(script_id, start_time, end_time, status)
 
-        logger.info(f"Script {script_id} completed with return code: {return_code}")
+        logger.debug(f"Script {script_id} completed with return code: {return_code}")
 
     except Exception as e:
         end_time = datetime.now()
@@ -734,7 +796,7 @@ def stop_script(script_id):
 
 @app.route('/status/<script_id>')
 def get_script_status_api(script_id):
-    """Get the status of a script (no logging to reduce spam)."""
+    """Get the status of a script."""
     script_config = find_script_config(script_id)
     if script_config is None:
         return jsonify({'error': 'Script not found'}), 404

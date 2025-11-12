@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Smart Queue Downloads - Intelligent music download manager
+Queue Lidarr Monitored - Intelligent music download manager
 
 This script provides a comprehensive approach to downloading missing music:
 1. Fetches wanted albums from Lidarr
@@ -9,7 +9,7 @@ This script provides a comprehensive approach to downloading missing music:
 4. Checks what tracks are already in download queue
 5. Downloads only the truly missing tracks
 
-Name: Smart Queue Downloads
+Name: Queue Lidarr Monitored
 Author: SoulSeekarr
 Version: 1.0
 Section: commands
@@ -78,7 +78,7 @@ def setup_logging():
     log_dir.mkdir(exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_file = log_dir / f"smart_queue_downloads_{timestamp}.log"
+    log_file = log_dir / f"queue_lidarr_monitored_{timestamp}.log"
     
     logging.basicConfig(
         level=logging.INFO,
@@ -89,7 +89,7 @@ def setup_logging():
         ]
     )
     
-    logging.info("🚀 STARTING SMART QUEUE DOWNLOADS")
+    logging.info("🚀 STARTING QUEUE LIDARR MONITORED")
     logging.info(f"📝 Log file: {log_file}")
     logging.info("=" * 80)
     
@@ -186,6 +186,7 @@ def check_dependencies():
 def get_wanted_albums() -> List[Dict]:
     """Get all wanted albums from Lidarr"""
     logging.info("\n🔍 Fetching wanted albums from Lidarr...")
+    logging.info("PROGRESS_SUB: Connecting to Lidarr...")
     
     try:
         url = f"{CONFIG['lidarr_url']}/api/v1/wanted/missing"
@@ -1028,6 +1029,10 @@ def process_albums(albums: List[Dict], dry_run: bool = False):
         
         STATS['albums_checked'] += 1
         
+        # Output progress information for UI
+        progress_percentage = int((i / len(albums)) * 100)
+        logging.info(f"PROGRESS: [{i}/{len(albums)}] {progress_percentage}% - Processing: {artist_name} - {album_title}")
+        
         logging.info(f"\n📀 Album {i}/{len(albums)}: {album_title}")
         logging.info(f"   🎤 Artist: {artist_name}")
         logging.info(f"   📅 Release: {release_date}")
@@ -1038,6 +1043,7 @@ def process_albums(albums: List[Dict], dry_run: bool = False):
             continue
         
         # Get complete track listing
+        logging.info(f"PROGRESS_SUB: Getting track listing for {album_title}...")
         missing_tracks, total_tracks = get_complete_track_listing(album_id, artist_name, album_title)
         
         if total_tracks == 0:
@@ -1053,6 +1059,7 @@ def process_albums(albums: List[Dict], dry_run: bool = False):
         STATS['tracks_total'] += len(missing_tracks)
         
         # Check owned tracks
+        logging.info(f"PROGRESS_SUB: Checking owned tracks for {album_title}...")
         tracks_not_owned = check_owned_tracks(missing_tracks, artist_name, album_title)
         
         if not tracks_not_owned:
@@ -1061,6 +1068,7 @@ def process_albums(albums: List[Dict], dry_run: bool = False):
             continue
         
         # Check download queue
+        logging.info(f"PROGRESS_SUB: Checking download queue for {album_title}...")
         tracks_to_queue = check_download_queue(tracks_not_owned)
         
         if not tracks_to_queue:
@@ -1069,6 +1077,7 @@ def process_albums(albums: List[Dict], dry_run: bool = False):
             continue
         
         # Queue for download
+        logging.info(f"PROGRESS_SUB: Queuing {len(tracks_to_queue)} tracks for {album_title}...")
         if queue_tracks_for_download(tracks_to_queue, artist_name, album_title, dry_run):
             STATS['albums_queued'] += 1
         else:
@@ -1114,7 +1123,7 @@ def main():
     global interrupted
     
     # Set up argument parsing
-    parser = argparse.ArgumentParser(description='Smart Queue Downloads - Intelligent music download manager')
+    parser = argparse.ArgumentParser(description='Queue Lidarr Monitored - Intelligent music download manager')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be done without queuing downloads')
     parser.add_argument('--debug', action='store_true', help='Enable debug logging for detailed output')
     
@@ -1150,6 +1159,7 @@ def main():
     logging.info("")
     
     # Get wanted albums
+    logging.info("PROGRESS: [1/3] 33% - Fetching wanted albums from Lidarr")
     albums = get_wanted_albums()
     
     if not albums:
@@ -1157,9 +1167,11 @@ def main():
         return
     
     # Process albums
+    logging.info("PROGRESS: [2/3] 67% - Processing albums")
     process_albums(albums, dry_run)
     
     # Print summary
+    logging.info("PROGRESS: [3/3] 100% - Generating final summary")
     if not interrupted:
         print_summary()
         
@@ -1167,7 +1179,7 @@ def main():
             logging.info("\n💡 This was a dry run - no downloads were queued")
             logging.info("   Run without --dry-run to actually queue downloads")
         else:
-            logging.info("\n✅ Smart download processing complete!")
+            logging.info("\n✅ Queue Lidarr Monitored processing complete!")
             logging.info("   🌐 Check slskd web interface for download progress")
 
 if __name__ == "__main__":
