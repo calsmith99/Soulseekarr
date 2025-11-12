@@ -89,10 +89,6 @@ def setup_logging():
         ]
     )
     
-    # Suppress verbose HTTP connection logging from urllib3/requests
-    logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
-    logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARNING)
-    
     logging.info("🚀 STARTING QUEUE LIDARR MONITORED")
     logging.info(f"📝 Log file: {log_file}")
     logging.info("=" * 80)
@@ -434,137 +430,60 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
         
         downloads_data = response.json()
         
-        # Collect all files in download queue (both active and completed)
-        queued_files = []
-        # Include both active downloads and completed ones to avoid re-downloading
-        all_download_states = [
-            'Queued', 'Requested', 'Initializing', 'InProgress', 'Remotely Queued',
-            'Completed', 'Succeeded'  # Also check successfully completed downloads
-        ]
-        
+        # Collect queued filenames
+        queued_files = set()
         for user_group in downloads_data:
-            username = user_group.get('username', 'unknown')
             directories = user_group.get('directories', [])
-            
             for directory in directories:
-                directory_name = directory.get('directory', '').lower()
                 files = directory.get('files', [])
-                
                 for file_transfer in files:
-                    filename = file_transfer.get('filename', '')
+                    filename = file_transfer.get('filename', '').lower()
                     state = file_transfer.get('state', '')
-                    size = file_transfer.get('size', 0)
                     
-                    # Check both active downloads and completed ones
-                    if state in all_download_states:
-                        # Extract just the filename without path
-                        file_basename = filename.split('/')[-1].split('\\')[-1].lower()
-                        
-                        queued_files.append({
-                            'filename': file_basename,
-                            'full_path': filename.lower(),
-                            'directory': directory_name,
-                            'username': username,
-                            'state': state,
-                            'size': size
-                        })
+                    # Include active download states
+                    if state in ['Queued', 'Requested', 'Initializing', 'InProgress']:
+                        file_basename = filename.split('/')[-1].split('\\')[-1]
+                        queued_files.add(file_basename)
         
         if not queued_files:
-            logging.debug("   📋 No downloads found in queue (active or completed)")
             return tracks_to_check
         
-        logging.debug(f"   📋 Found {len(queued_files)} files in download queue (active and completed)")
-        
-        # Check each track against queued files with improved matching
+        # Check each track against queued files
         tracks_not_queued = []
         already_queued = []
         
         for track in tracks_to_check:
             track_title = track['title'].lower().strip()
             track_number = track.get('trackNumber', 0)
-            artist_name = track.get('artist', '').lower().strip()
             
-            # Ensure track_number is an integer
-            try:
-                track_number = int(track_number) if track_number else 0
-            except (ValueError, TypeError):
-                track_number = 0
-            
-            # Normalize track title for better matching
-            normalized_track = ''.join(c for c in track_title if c.isalnum() or c == ' ').strip()
-            normalized_track = ' '.join(normalized_track.split())  # Remove extra spaces
-            
-            # Create various patterns to match against
-            search_patterns = [
-                normalized_track,
-                f"{track_number:02d} {normalized_track}",
-                f"{track_number:02d} - {normalized_track}",
-                f"{track_number:02d}. {normalized_track}",
-                f"track {track_number:02d}",
-                f"{track_number:02d}"
+            # Create possible filename patterns
+            possible_patterns = [
+                track_title,
+                f"{track_number:02d} - {track_title}",
+                f"{track_number:02d}. {track_title}",
+                f"{track_number:02d} {track_title}",
             ]
             
-            # Also try patterns without common words
-            words_to_remove = ['feat', 'featuring', 'ft', 'remix', 'remaster', 'remastered', 'edit']
-            clean_title = normalized_track
-            for word in words_to_remove:
-                clean_title = clean_title.replace(f" {word} ", " ").replace(f" {word}.", "")
-            clean_title = ' '.join(clean_title.split())  # Clean up spaces
-            if clean_title != normalized_track:
-                search_patterns.append(clean_title)
-            
-            # Check if track is already being downloaded
+            # Check if any pattern matches queued files
             track_queued = False
-            matched_file = None
-            
-            for queued_file in queued_files:
-                filename = queued_file['filename']
-                full_path = queued_file['full_path']
-                
-                # Normalize queued filename
-                normalized_filename = ''.join(c for c in filename if c.isalnum() or c == ' ').strip()
-                normalized_filename = ' '.join(normalized_filename.split())
-                
-                # Try various matching strategies
-                for pattern in search_patterns:
-                    if not pattern:  # Skip empty patterns
-                        continue
-                    
-                    # Direct substring match
-                    if pattern in normalized_filename or normalized_filename in pattern:
+            for pattern in possible_patterns:
+                pattern = ''.join(c for c in pattern if c.isalnum() or c in ' -.')
+                for queued_file in queued_files:
+                    queued_clean = ''.join(c for c in queued_file if c.isalnum() or c in ' -.')
+                    if pattern in queued_clean or queued_clean in pattern:
                         track_queued = True
-                        matched_file = queued_file
+                        already_queued.append(track['title'])
                         break
-                    
-                    # Word-based matching (all words from pattern must be in filename)
-                    pattern_words = set(pattern.split())
-                    filename_words = set(normalized_filename.split())
-                    
-                    if pattern_words and pattern_words.issubset(filename_words):
-                        # Additional check: ensure it's likely the same track
-                        if len(pattern_words) >= 2:  # At least 2 words must match
-                            track_queued = True
-                            matched_file = queued_file
-                            break
-                
                 if track_queued:
                     break
             
-            if track_queued and matched_file:
-                already_queued.append({
-                    'track': track['title'],
-                    'matched_file': matched_file['filename'],
-                    'username': matched_file['username'],
-                    'state': matched_file['state']
-                })
-            else:
+            if not track_queued:
                 tracks_not_queued.append(track)
         
         if already_queued:
-            logging.info(f"   ⏭️  {len(already_queued)} tracks already in download queue or completed:")
-            for item in already_queued[:3]:
-                status_emoji = "📥" if item['state'] in ['Queued', 'Requested', 'Initializing', 'InProgress', 'Remotely Queued'] else "✅"
-                logging.info(f"      {status_emoji} {item['track']} → {item['username']} ({item['state']})")
+            logging.info(f"   ⏭️  {len(already_queued)} tracks already in download queue:")
+            for track_title in already_queued[:3]:
+                logging.info(f"      🎵 {track_title}")
             if len(already_queued) > 3:
                 logging.info(f"      ... and {len(already_queued) - 3} more")
             
@@ -574,8 +493,6 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
         
     except Exception as e:
         logging.error(f"   ❌ Error checking download queue: {e}")
-        import traceback
-        logging.debug(f"   🐛 Full traceback: {traceback.format_exc()}")
         return tracks_to_check
 
 def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title: str, dry_run: bool = False) -> bool:
@@ -619,6 +536,7 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
                 break
             
             # Create more specific track search query to avoid remixes
+        for track in tracks:
             track_search_query = f'"{artist_name}" "{track["title"]}" -remix -mix -live -acoustic -edit'
             logging.info(f"      🔍 Searching: \"{track_search_query}\"")
             
@@ -653,12 +571,15 @@ def wait_for_search_to_complete(search_id: str, search_query: str, max_wait_time
                 state = search_data.get('state', 'Unknown')
                 response_count = search_data.get('responseCount', 0)
                 
+                # Debug: log the search progress
+                if attempt == 0 or attempt % 5 == 0:  # Log every 5 attempts
+                    logging.debug(f"      🔍 Search state: {state}, isComplete: {is_complete}, responses: {response_count}")
+                
                 if is_complete:
-                    logging.info(f"      ✅ Search completed after {attempt + 1}s with {response_count} responses")
+                    logging.debug(f"      ✅ Search completed after {attempt + 1}s with {response_count} responses")
                     return True
-                # Only log progress every 10 seconds to reduce spam
-                elif attempt > 0 and attempt % 10 == 0:
-                    logging.info(f"      ⏳ Search still running... state: {state} ({attempt + 1}s)")
+                elif attempt % 3 == 0:  # Log every 3 seconds
+                    logging.debug(f"      ⏳ Search still running... state: {state} ({attempt + 1}s)")
             else:
                 logging.debug(f"      ⚠️ HTTP {response.status_code}: {response.text[:100]}")
             
@@ -667,7 +588,7 @@ def wait_for_search_to_complete(search_id: str, search_query: str, max_wait_time
         
         time.sleep(1)
     
-    logging.info(f"      ⏰ Search timed out after {max_wait_time}s, proceeding anyway")
+    logging.debug(f"      ⏰ Search timed out after {max_wait_time}s, proceeding anyway")
     return True  # Proceed even if we didn't get completion
 
 def queue_album_with_specific_tracks(search_query: str, artist_name: str, album_title: str, missing_tracks: List[Dict]) -> bool:
@@ -1099,79 +1020,72 @@ def process_albums(albums: List[Dict], dry_run: bool = False):
         if interrupted:
             break
         
-        try:
-            album_id = album.get('id')
-            album_title = album.get('title', 'Unknown Album')
-            artist_info = album.get('artist', {})
-            artist_name = artist_info.get('artistName', 'Unknown Artist')
-            release_date = album.get('releaseDate', 'Unknown')[:10]
-            monitored = album.get('monitored', False)
-            
-            STATS['albums_checked'] += 1
-            
-            # Output progress information for UI
-            progress_percentage = int((i / len(albums)) * 100)
-            logging.info(f"PROGRESS: [{i}/{len(albums)}] {progress_percentage}% - Processing: {artist_name} - {album_title}")
-            
-            logging.info(f"\n📀 Album {i}/{len(albums)}: {album_title}")
-            logging.info(f"   🎤 Artist: {artist_name}")
-            logging.info(f"   📅 Release: {release_date}")
-            logging.info(f"   👁️  Monitored: {monitored}")
-            
-            if not monitored:
-                logging.info("   ⏭️  Skipping (not monitored)")
-                continue
-            
-            # Get complete track listing
-            logging.info(f"PROGRESS_SUB: Getting track listing for {album_title}...")
-            missing_tracks, total_tracks = get_complete_track_listing(album_id, artist_name, album_title)
-            
-            if total_tracks == 0:
-                logging.info("   ⚠️  No track information available")
-                continue
-            
-            if not missing_tracks:
-                logging.info(f"   ✅ Complete - all {total_tracks} tracks available")
-                STATS['albums_complete'] += 1
-                continue
-            
-            logging.info(f"   📊 Missing {len(missing_tracks)}/{total_tracks} tracks")
-            STATS['tracks_total'] += len(missing_tracks)
-            
-            # Check owned tracks
-            logging.info(f"PROGRESS_SUB: Checking owned tracks for {album_title}...")
-            tracks_not_owned = check_owned_tracks(missing_tracks, artist_name, album_title)
-            
-            if not tracks_not_owned:
-                logging.info("   ✅ All missing tracks are already owned")
-                STATS['albums_complete'] += 1
-                continue
-            
-            # Check download queue
-            logging.info(f"PROGRESS_SUB: Checking download queue for {album_title}...")
-            tracks_to_queue = check_download_queue(tracks_not_owned)
-            
-            if not tracks_to_queue:
-                logging.info("   ✅ All unowned tracks already in download queue")
-                STATS['albums_complete'] += 1
-                continue
-            
-            # Queue for download
-            logging.info(f"PROGRESS_SUB: Queuing {len(tracks_to_queue)} tracks for {album_title}...")
-            if queue_tracks_for_download(tracks_to_queue, artist_name, album_title, dry_run):
-                STATS['albums_queued'] += 1
-            else:
-                STATS['albums_failed'] += 1
-            
-            # Small delay between albums
-            if not dry_run and i < len(albums):
-                time.sleep(2)
-                
-        except Exception as e:
-            logging.error(f"   ❌ Error processing album {album_title}: {e}")
-            logging.debug(f"   🐛 Full traceback:", exc_info=True)
-            STATS['albums_failed'] += 1
+        album_id = album.get('id')
+        album_title = album.get('title', 'Unknown Album')
+        artist_info = album.get('artist', {})
+        artist_name = artist_info.get('artistName', 'Unknown Artist')
+        release_date = album.get('releaseDate', 'Unknown')[:10]
+        monitored = album.get('monitored', False)
+        
+        STATS['albums_checked'] += 1
+        
+        # Output progress information for UI
+        progress_percentage = int((i / len(albums)) * 100)
+        logging.info(f"PROGRESS: [{i}/{len(albums)}] {progress_percentage}% - Processing: {artist_name} - {album_title}")
+        
+        logging.info(f"\n📀 Album {i}/{len(albums)}: {album_title}")
+        logging.info(f"   🎤 Artist: {artist_name}")
+        logging.info(f"   📅 Release: {release_date}")
+        logging.info(f"   👁️  Monitored: {monitored}")
+        
+        if not monitored:
+            logging.info("   ⏭️  Skipping (not monitored)")
             continue
+        
+        # Get complete track listing
+        logging.info(f"PROGRESS_SUB: Getting track listing for {album_title}...")
+        missing_tracks, total_tracks = get_complete_track_listing(album_id, artist_name, album_title)
+        
+        if total_tracks == 0:
+            logging.info("   ⚠️  No track information available")
+            continue
+        
+        if not missing_tracks:
+            logging.info(f"   ✅ Complete - all {total_tracks} tracks available")
+            STATS['albums_complete'] += 1
+            continue
+        
+        logging.info(f"   📊 Missing {len(missing_tracks)}/{total_tracks} tracks")
+        STATS['tracks_total'] += len(missing_tracks)
+        
+        # Check owned tracks
+        logging.info(f"PROGRESS_SUB: Checking owned tracks for {album_title}...")
+        tracks_not_owned = check_owned_tracks(missing_tracks, artist_name, album_title)
+        
+        if not tracks_not_owned:
+            logging.info("   ✅ All missing tracks are already owned")
+            STATS['albums_complete'] += 1
+            continue
+        
+        # Check download queue
+        logging.info(f"PROGRESS_SUB: Checking download queue for {album_title}...")
+        tracks_to_queue = check_download_queue(tracks_not_owned)
+        
+        if not tracks_to_queue:
+            logging.info("   ✅ All unowned tracks already in download queue")
+            STATS['albums_complete'] += 1
+            continue
+        
+        # Queue for download
+        logging.info(f"PROGRESS_SUB: Queuing {len(tracks_to_queue)} tracks for {album_title}...")
+        if queue_tracks_for_download(tracks_to_queue, artist_name, album_title, dry_run):
+            STATS['albums_queued'] += 1
+        else:
+            STATS['albums_failed'] += 1
+        
+        # Small delay between albums
+        if not dry_run and i < len(albums):
+            time.sleep(2)
 
 def print_summary(interrupted: bool = False):
     """Print processing summary"""

@@ -196,7 +196,6 @@ def get_script_status(script_id):
         # Parse progress from output for long-running scripts
         if status.get('running') and script_id in script_outputs:
             output_lines = script_outputs[script_id]
-            logger.info(f"Checking progress for {script_id}, found {len(output_lines)} output lines")
             progress_info = parse_progress(output_lines, script_id)
             if progress_info:
                 status['progress'] = progress_info
@@ -271,9 +270,6 @@ def parse_progress(output_lines, script_id):
             result.update(main_progress)
         if sub_progress:
             result['sub_progress'] = sub_progress
-        
-        # Temporary debug log
-        logger.info(f"Progress parsed for {script_id}: {result}")
         return result
     
     return None
@@ -536,11 +532,6 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
                 
                 with script_lock:
                     script_outputs[script_id].append(output_line)
-                    
-                    # Temporary debug: Log progress lines when captured
-                    if 'PROGRESS:' in output_line or 'PROGRESS_SUB:' in output_line:
-                        logger.info(f"Captured progress line for {script_id}: {output_line.strip()}")
-                    
                     # Keep only last 1000 lines to prevent memory issues
                     if len(script_outputs[script_id]) > 1000:
                         script_outputs[script_id] = script_outputs[script_id][-1000:]
