@@ -1304,6 +1304,9 @@ class FileOrganiser:
         
         # Walk bottom-up to handle nested empty directories
         for dirpath, dirnames, filenames in os.walk(base_path, topdown=False):
+            # Filter out macOS metadata files when checking if directory is empty
+            actual_files = [f for f in filenames if not f.startswith('._')]
+            
             current_dir = Path(dirpath)
             
             # Skip the root directory

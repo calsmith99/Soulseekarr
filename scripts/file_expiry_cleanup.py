@@ -38,12 +38,18 @@ from time import sleep
 # Add parent directory to path so we can import action_logger
 sys.path.append(str(Path(__file__).parent.parent))
 
-# Try to import settings
+# Try to import settings and database
 try:
     from settings import get_navidrome_config, get_incomplete_directory, get_not_owned_directory
     SETTINGS_AVAILABLE = True
 except ImportError:
     SETTINGS_AVAILABLE = False
+
+try:
+    from database import get_db
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
 
 from action_logger import log_action
 
@@ -270,9 +276,17 @@ class FileExpiryCleanup:
                         artist_name = album.get('artist', '').lower()
                         album_key = f"{artist_name} - {album_name}"
                         self.starred_albums.add(album_key)
+                        # Log first few albums for debugging
+                        if len(self.starred_albums) <= 5:
+                            self.logger.debug(f"Starred album: '{artist_name}' - '{album_name}' -> key: '{album_key}'")
                     
                     self.logger.info(f"Found {len(self.starred_albums)} starred albums")
                     print(f"    ✓ Found {len(self.starred_albums)} starred albums")
+                    
+                    # Sample some starred albums for debugging
+                    if self.starred_albums:
+                        sample_albums = list(self.starred_albums)[:3]
+                        self.logger.debug(f"Sample starred album keys: {sample_albums}")
                     
                     # Get starred tracks/songs
                     starred_tracks_data = starred_info.get('song', [])
@@ -309,6 +323,72 @@ class FileExpiryCleanup:
             self.logger.error(msg)
             self.stats['errors'] += 1
             return False
+    
+    def get_album_art_url(self, artist, album):
+        """Get album cover art URL from Navidrome using Subsonic API"""
+        if not self.subsonic_token or not self.subsonic_salt:
+            return None
+        
+        try:
+            # Search for the album using search3 endpoint
+            search_url = f"{self.navidrome_url}/rest/search3"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'FileExpiryCleanup',
+                'f': 'json',
+                'query': f"{artist} {album}",
+                'albumCount': 5
+            }
+            
+            response = requests.get(search_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                subsonic_response = data.get('subsonic-response', {})
+                
+                if subsonic_response.get('status') == 'ok':
+                    search_results = subsonic_response.get('searchResult3', {})
+                    albums = search_results.get('album', [])
+                    
+                    if not isinstance(albums, list):
+                        albums = [albums] if albums else []
+                    
+                    # Find exact match or best match
+                    album_lower = album.lower()
+                    artist_lower = artist.lower()
+                    
+                    for album_result in albums:
+                        result_album = album_result.get('name', '').lower()
+                        result_artist = album_result.get('artist', '').lower()
+                        
+                        # Check for exact match or close match
+                        if result_album == album_lower and result_artist == artist_lower:
+                            album_id = album_result.get('id')
+                            if album_id:
+                                # Build getCoverArt URL
+                                cover_url = f"{self.navidrome_url}/rest/getCoverArt"
+                                cover_params = {
+                                    'u': self.navidrome_username,
+                                    't': self.subsonic_token,
+                                    's': self.subsonic_salt,
+                                    'v': '1.16.1',
+                                    'c': 'FileExpiryCleanup',
+                                    'id': album_id,
+                                    'size': 300
+                                }
+                                # Build full URL with params
+                                from urllib.parse import urlencode
+                                full_url = f"{cover_url}?{urlencode(cover_params)}"
+                                return full_url
+            
+            return None
+            
+        except Exception as e:
+            self.logger.debug(f"Error getting album art for {artist} - {album}: {e}")
+            return None
     
     def is_file_old_enough(self, file_path):
         """Check if file is older than cleanup_days"""
@@ -432,6 +512,13 @@ class FileExpiryCleanup:
             if album_key in self.starred_albums:
                 self.logger.debug(f"Album is starred: {album_key}")
                 return True
+            else:
+                # Debug: log failed album matches
+                self.logger.debug(f"Album NOT starred - checking '{album_key}' against {len(self.starred_albums)} starred albums")
+                # Show similar album names for debugging
+                for starred_key in self.starred_albums:
+                    if artist_lower in starred_key.lower():
+                        self.logger.debug(f"  Found starred album for artist: '{starred_key}'")
             
             # Check if individual track is starred
             track_key = f"{artist_lower} - {album_lower} - {track_lower}"
@@ -464,6 +551,9 @@ class FileExpiryCleanup:
             # Create album key
             album_key = f"{artist} - {album}"
             
+            # Check if this file/album is starred
+            is_starred = self.is_content_starred(file_path)
+            
             # Get album directory path (Artist/Album)
             path_parts = Path(file_path).parts
             album_dir = None
@@ -490,8 +580,8 @@ class FileExpiryCleanup:
                     'total_size_mb': 0,
                     'directory': album_dir,
                     'will_expire': days_until_expiry <= 0,
-                    'is_starred': False,
-                    'sample_files': []  # Keep a few sample filenames
+                    'is_starred': is_starred,  # Set starred status from the start
+                    'tracks': []  # Track all files in album
                 }
             else:
                 # Update if this file is older
@@ -499,61 +589,91 @@ class FileExpiryCleanup:
                     self.album_expiry_data[album_key]['oldest_file_days'] = days_old
                     self.album_expiry_data[album_key]['days_until_expiry'] = days_until_expiry
                     self.album_expiry_data[album_key]['will_expire'] = days_until_expiry <= 0
+                
+                # Update starred status - if ANY file in album is starred, mark album as starred
+                if is_starred:
+                    self.album_expiry_data[album_key]['is_starred'] = True
             
             # Add file info
             self.album_expiry_data[album_key]['file_count'] += 1
             
-            # Add file size if available
+            # Get file size
             try:
                 file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
                 self.album_expiry_data[album_key]['total_size_mb'] += file_size_mb
             except:
-                pass
+                file_size_mb = 0
             
-            # Keep a few sample filenames (limit to 3 for UI display)
-            if len(self.album_expiry_data[album_key]['sample_files']) < 3:
-                self.album_expiry_data[album_key]['sample_files'].append({
-                    'name': Path(file_path).name,
-                    'days_old': days_old
-                })
+            # Store individual track information
+            self.album_expiry_data[album_key]['tracks'].append({
+                'file_path': str(file_path),
+                'file_name': Path(file_path).name,
+                'track_title': track if track else Path(file_path).stem,
+                'file_size_mb': file_size_mb,
+                'days_old': days_old,
+                'last_modified': datetime.fromtimestamp(file_stat.st_mtime)
+            })
             
         except Exception as e:
             self.logger.error(f"Error tracking album expiry for {file_path}: {e}")
     
     def save_album_expiry_cache(self):
-        """Save album expiry data to cache file for UI"""
+        """Save album expiry data to database."""
         try:
-            # Filter out starred albums and sort by oldest first
-            filtered_albums = {}
+            if not DATABASE_AVAILABLE:
+                self.logger.error("Database not available - cannot save album expiry data")
+                print("❌ Database not available - cannot save album expiry data")
+                return
+            
+            # Log what we're about to save
+            total_albums = len(self.album_expiry_data)
+            total_tracks = sum(len(d.get('tracks', [])) for d in self.album_expiry_data.values())
+            
+            if total_albums == 0:
+                self.logger.info("No albums to save to database")
+                print("💾 No album expiry data to save (no albums found)")
+                return
+            
+            print(f"💾 Saving {total_albums} albums with {total_tracks} tracks to database...")
+            
+            db = get_db()
+            saved_count = 0
+            
             for album_key, data in self.album_expiry_data.items():
-                if not data['is_starred'] and data['will_expire']:
-                    filtered_albums[album_key] = data
+                # Get album art URL from Navidrome
+                album_art_url = self.get_album_art_url(data['artist'], data['album'])
+                
+                album_record = {
+                    'album_key': album_key,
+                    'artist': data['artist'],
+                    'album': data['album'],
+                    'directory': data['directory'],
+                    'album_art_url': album_art_url,
+                    'oldest_file_days': data['oldest_file_days'],
+                    'days_until_expiry': data['days_until_expiry'],
+                    'file_count': data['file_count'],
+                    'total_size_mb': data['total_size_mb'],
+                    'is_starred': data['is_starred'],
+                    'cleanup_days': self.cleanup_days,
+                    'status': 'starred' if data['is_starred'] else 'pending'
+                }
+                album_id = db.upsert_expiring_album(album_record)
+                
+                # Clear existing tracks for this album
+                db.clear_album_tracks(album_id)
+                
+                # Add all tracks
+                for track in data.get('tracks', []):
+                    db.add_album_track(album_id, track)
+                
+                saved_count += 1
             
-            # Sort by oldest file first (highest days_old)
-            sorted_albums = dict(sorted(filtered_albums.items(), 
-                                      key=lambda x: x[1]['oldest_file_days'], 
-                                      reverse=True))
-            
-            # Create cache data structure
-            cache_data = {
-                'generated_at': datetime.now().isoformat(),
-                'cleanup_days': self.cleanup_days,
-                'total_albums': len(sorted_albums),
-                'albums': sorted_albums
-            }
-            
-            # Save to cache file
-            cache_file = Path(__file__).parent.parent / 'work' / 'album_expiry_cache.json'
-            cache_file.parent.mkdir(exist_ok=True)
-            
-            with open(cache_file, 'w') as f:
-                json.dump(cache_data, f, indent=2)
-            
-            self.logger.info(f"Saved album expiry cache with {len(sorted_albums)} expiring albums to {cache_file}")
-            print(f"💾 Cached {len(sorted_albums)} expiring albums for UI display")
+            self.logger.info(f"Saved {saved_count} albums with {total_tracks} tracks to database")
+            print(f"✅ Saved {saved_count} albums with all track details to database")
             
         except Exception as e:
-            self.logger.error(f"Error saving album expiry cache: {e}")
+            self.logger.error(f"Error saving album expiry data to database: {e}")
+            print(f"❌ Error saving to database: {e}")
 
     def delete_file(self, file_path):
         """Delete a file with logging"""
@@ -600,6 +720,19 @@ class FileExpiryCleanup:
             for root, dirs, files in os.walk(directory_path):
                 for file in files:
                     file_path = os.path.join(root, file)
+                    
+                    # Delete macOS metadata files immediately without tracking
+                    if file.startswith('._'):
+                        print(f"    🗑️  Removing macOS metadata file: {file}")
+                        self.logger.info(f"Removing macOS metadata file: {file_path}")
+                        if not self.dry_run:
+                            try:
+                                os.remove(file_path)
+                                self.logger.info(f"Deleted macOS metadata file: {file_path}")
+                            except Exception as e:
+                                self.logger.error(f"Error deleting macOS metadata file {file_path}: {e}")
+                        continue
+                    
                     file_ext = Path(file_path).suffix.lower()
                     
                     # Only process music files
@@ -623,13 +756,6 @@ class FileExpiryCleanup:
                         filename = Path(file_path).name
                         print(f"    ⭐ Skipping starred content: {filename}")
                         self.logger.info(f"Skipping starred content: {file_path}")
-                        
-                        # Mark album as starred in cache
-                        artist, album, track = self.extract_music_info_from_path(file_path)
-                        album_key = f"{artist} - {album}"
-                        if album_key in self.album_expiry_data:
-                            self.album_expiry_data[album_key]['is_starred'] = True
-                        
                         continue
                     
                     # File is old enough and not starred - log and delete it
@@ -651,6 +777,40 @@ class FileExpiryCleanup:
         files_found = self.stats['files_deleted'] + self.stats['files_skipped_starred']
         if files_found > 0:
             self.logger.info(f"Processed {files_processed} files in {directory_path} - Found {files_found} old enough files")
+    
+    def remove_mac_metadata_files(self, root_dir):
+        """Remove macOS metadata files (._* files) recursively"""
+        if not os.path.exists(root_dir):
+            return
+        
+        removed_count = 0
+        try:
+            for root, dirs, files in os.walk(root_dir):
+                for file in files:
+                    # Check if file starts with ._
+                    if file.startswith('._'):
+                        file_path = os.path.join(root, file)
+                        try:
+                            if self.dry_run:
+                                print(f"    [DRY RUN] Would remove macOS metadata file: {file}")
+                                self.logger.info(f"DRY RUN: Would remove macOS metadata file: {file_path}")
+                            else:
+                                os.remove(file_path)
+                                print(f"    🍎 Removed macOS metadata file: {file}")
+                                self.logger.info(f"Removed macOS metadata file: {file_path}")
+                                log_action("mac_metadata_delete", "Removed macOS metadata file", {
+                                    "file": file,
+                                    "path": file_path
+                                })
+                            removed_count += 1
+                        except Exception as e:
+                            self.logger.error(f"Error removing macOS metadata file {file_path}: {e}")
+        except Exception as e:
+            self.logger.error(f"Error scanning for macOS metadata files in {root_dir}: {e}")
+        
+        if removed_count > 0:
+            print(f"    ✓ Removed {removed_count} macOS metadata file{'s' if removed_count != 1 else ''}")
+            self.logger.info(f"Removed {removed_count} macOS metadata files from {root_dir}")
     
     def remove_empty_directories(self, root_dir):
         """Remove empty directories recursively"""
@@ -755,15 +915,21 @@ class FileExpiryCleanup:
         else:
             print(f"    ⚠️  Not owned music directory not found: {self.not_owned_dir}")
         
-        # Step 4: Remove empty directories
+        # Step 4: Remove macOS metadata files
         print()
-        print("📁 Step 4: Removing empty music directories...")
+        print("🍎 Step 4: Removing macOS metadata files...")
+        self.remove_mac_metadata_files(self.incomplete_dir)
+        self.remove_mac_metadata_files(self.not_owned_dir)
+        
+        # Step 5: Remove empty directories
+        print()
+        print("📁 Step 5: Removing empty music directories...")
         self.remove_empty_directories(self.incomplete_dir)
         self.remove_empty_directories(self.not_owned_dir)
         
-        # Step 5: Save album expiry cache for UI
+        # Step 6: Save album expiry cache for UI
         print()
-        print("💾 Step 5: Saving album expiry cache for UI...")
+        print("💾 Step 6: Saving album expiry data to database...")
         self.save_album_expiry_cache()
         
         # Print summary

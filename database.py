@@ -118,20 +118,100 @@ class DatabaseManager:
             )
         """)
         
+        # Expiring albums table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS expiring_albums (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                album_key TEXT NOT NULL UNIQUE,
+                artist TEXT NOT NULL,
+                album TEXT NOT NULL,
+                directory TEXT NOT NULL,
+                oldest_file_days INTEGER NOT NULL,
+                days_until_expiry INTEGER NOT NULL,
+                file_count INTEGER NOT NULL,
+                total_size_mb REAL NOT NULL,
+                is_starred BOOLEAN DEFAULT FALSE,
+                album_art_url TEXT,
+                first_detected TIMESTAMP NOT NULL,
+                last_seen TIMESTAMP NOT NULL,
+                cleanup_days INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                deleted_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Album expiry history table (tracks changes over time)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS album_expiry_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                album_id INTEGER NOT NULL,
+                oldest_file_days INTEGER NOT NULL,
+                days_until_expiry INTEGER NOT NULL,
+                file_count INTEGER NOT NULL,
+                total_size_mb REAL NOT NULL,
+                is_starred BOOLEAN DEFAULT FALSE,
+                status TEXT NOT NULL,
+                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (album_id) REFERENCES expiring_albums (id) ON DELETE CASCADE
+            )
+        """)
+        
+        # Album tracks table (individual files in an album)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS album_tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                album_id INTEGER NOT NULL,
+                file_path TEXT NOT NULL,
+                file_name TEXT NOT NULL,
+                track_title TEXT,
+                file_size_mb REAL NOT NULL,
+                days_old INTEGER NOT NULL,
+                last_modified TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (album_id) REFERENCES expiring_albums (id) ON DELETE CASCADE,
+                UNIQUE(album_id, file_path)
+            )
+        """)
+        
         # Create indexes for better performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_script_id ON script_executions(script_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_start_time ON script_executions(start_time)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_status ON script_executions(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_logs_execution_id ON script_logs(execution_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_logs_timestamp ON script_logs(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_status ON expiring_albums(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_days_until_expiry ON expiring_albums(days_until_expiry)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_last_seen ON expiring_albums(last_seen)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_expiry_history_album_id ON album_expiry_history(album_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_expiry_history_recorded_at ON album_expiry_history(recorded_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_album_id ON album_tracks(album_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_days_old ON album_tracks(days_old)")
         
         # Run migrations if needed
         if current_version == 0:
             # Initial version
             cursor.execute("PRAGMA user_version = 1")
         
+        if current_version < 2:
+            # Migration: Add album_art_url column to expiring_albums
+            logger.info("Running migration to add album_art_url column...")
+            try:
+                cursor.execute("ALTER TABLE expiring_albums ADD COLUMN album_art_url TEXT")
+                cursor.execute("PRAGMA user_version = 2")
+                logger.info("Successfully added album_art_url column")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" in str(e).lower():
+                    # Column already exists, just update version
+                    cursor.execute("PRAGMA user_version = 2")
+                    logger.info("album_art_url column already exists, updating version")
+                else:
+                    raise
+        
         conn.commit()
-        logger.info(f"Database tables created/verified successfully (schema version: {max(1, current_version)})")
+        logger.info(f"Database tables created/verified successfully (schema version: {max(2, current_version)})")
         
         # Clean up any executions that were running when container stopped
         self.cleanup_orphaned_executions(conn)
@@ -480,6 +560,283 @@ class DatabaseManager:
             stats['most_used_scripts'] = [dict(row) for row in cursor.fetchall()]
             
             return stats
+
+    # Expiring Albums Management
+    def upsert_expiring_album(self, album_data: Dict):
+        """Insert or update an expiring album record."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            album_key = album_data['album_key']
+            
+            # Check if album already exists
+            cursor.execute("SELECT id, first_detected FROM expiring_albums WHERE album_key = ?", (album_key,))
+            existing = cursor.fetchone()
+            
+            now = datetime.now()
+            
+            if existing:
+                # Update existing record
+                cursor.execute("""
+                    UPDATE expiring_albums 
+                    SET oldest_file_days = ?,
+                        days_until_expiry = ?,
+                        file_count = ?,
+                        total_size_mb = ?,
+                        is_starred = ?,
+                        last_seen = ?,
+                        cleanup_days = ?,
+                        status = ?,
+                        album_art_url = ?,
+                        updated_at = ?
+                    WHERE album_key = ?
+                """, (
+                    album_data['oldest_file_days'],
+                    album_data['days_until_expiry'],
+                    album_data['file_count'],
+                    album_data['total_size_mb'],
+                    album_data['is_starred'],
+                    now,
+                    album_data['cleanup_days'],
+                    album_data['status'],
+                    album_data.get('album_art_url'),
+                    now,
+                    album_key
+                ))
+                album_id = existing['id']
+            else:
+                # Insert new record
+                cursor.execute("""
+                    INSERT INTO expiring_albums 
+                    (album_key, artist, album, directory, album_art_url, oldest_file_days, days_until_expiry, 
+                     file_count, total_size_mb, is_starred, first_detected, last_seen, 
+                     cleanup_days, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    album_key,
+                    album_data['artist'],
+                    album_data['album'],
+                    album_data['directory'],
+                    album_data.get('album_art_url'),
+                    album_data['oldest_file_days'],
+                    album_data['days_until_expiry'],
+                    album_data['file_count'],
+                    album_data['total_size_mb'],
+                    album_data['is_starred'],
+                    now,
+                    now,
+                    album_data['cleanup_days'],
+                    album_data['status']
+                ))
+                album_id = cursor.lastrowid
+            
+            # Record in history
+            cursor.execute("""
+                INSERT INTO album_expiry_history 
+                (album_id, oldest_file_days, days_until_expiry, file_count, 
+                 total_size_mb, is_starred, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                album_id,
+                album_data['oldest_file_days'],
+                album_data['days_until_expiry'],
+                album_data['file_count'],
+                album_data['total_size_mb'],
+                album_data['is_starred'],
+                album_data['status']
+            ))
+            
+            conn.commit()
+            return album_id
+    
+    def get_expiring_albums(self, status: str = 'pending', include_starred: bool = False) -> List[Dict]:
+        """Get expiring albums from database."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            query = "SELECT * FROM expiring_albums WHERE status = ?"
+            params = [status]
+            
+            if not include_starred:
+                query += " AND is_starred = FALSE"
+            
+            query += " ORDER BY days_until_expiry ASC, oldest_file_days DESC"
+            
+            cursor.execute(query, params)
+            
+            albums = []
+            for row in cursor.fetchall():
+                album = dict(row)
+                album['first_detected'] = datetime.fromisoformat(album['first_detected'])
+                album['last_seen'] = datetime.fromisoformat(album['last_seen'])
+                if album['deleted_at']:
+                    album['deleted_at'] = datetime.fromisoformat(album['deleted_at'])
+                albums.append(album)
+            
+            return albums
+    
+    def get_expiring_albums_summary(self) -> Dict:
+        """Get summary data for expiring albums (for web UI)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get active expiring albums (not starred, not deleted)
+            cursor.execute("""
+                SELECT * FROM expiring_albums 
+                WHERE status = 'pending' AND is_starred = FALSE
+                ORDER BY days_until_expiry ASC
+            """)
+            
+            albums = {}
+            cleanup_days = None
+            
+            for row in cursor.fetchall():
+                album_dict = dict(row)
+                album_key = album_dict['album_key']
+                
+                # Store cleanup_days from first album
+                if cleanup_days is None:
+                    cleanup_days = album_dict['cleanup_days']
+                
+                albums[album_key] = {
+                    'artist': album_dict['artist'],
+                    'album': album_dict['album'],
+                    'directory': album_dict['directory'],
+                    'album_art_url': album_dict.get('album_art_url'),
+                    'oldest_file_days': album_dict['oldest_file_days'],
+                    'days_until_expiry': album_dict['days_until_expiry'],
+                    'file_count': album_dict['file_count'],
+                    'total_size_mb': album_dict['total_size_mb'],
+                    'is_starred': album_dict['is_starred'],
+                    'will_expire': album_dict['days_until_expiry'] <= 0,
+                    'sample_files': []  # Could be enhanced to track specific files
+                }
+            
+            return {
+                'generated_at': datetime.now().isoformat(),
+                'cleanup_days': cleanup_days or 30,
+                'total_albums': len(albums),
+                'albums': albums
+            }
+    
+    def mark_album_deleted(self, album_key: str):
+        """Mark an album as deleted."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE expiring_albums 
+                SET status = 'deleted', deleted_at = ?, updated_at = ?
+                WHERE album_key = ?
+            """, (datetime.now(), datetime.now(), album_key))
+            conn.commit()
+    
+    def mark_album_starred(self, album_key: str, is_starred: bool = True):
+        """Mark an album as starred/unstarred."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE expiring_albums 
+                SET is_starred = ?, status = ?, updated_at = ?
+                WHERE album_key = ?
+            """, (is_starred, 'starred' if is_starred else 'pending', datetime.now(), album_key))
+            conn.commit()
+    
+    def cleanup_old_album_data(self, days: int = 90):
+        """Clean up old album expiry data."""
+        cutoff_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        cutoff_date = cutoff_date.replace(day=cutoff_date.day - days)
+        
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Delete albums that were deleted more than X days ago
+            cursor.execute("""
+                DELETE FROM expiring_albums 
+                WHERE status = 'deleted' AND deleted_at < ?
+            """, (cutoff_date,))
+            
+            deleted_count = cursor.rowcount
+            
+            # Clean up very old history entries
+            cursor.execute("""
+                DELETE FROM album_expiry_history 
+                WHERE recorded_at < ?
+            """, (cutoff_date,))
+            
+            history_deleted = cursor.rowcount
+            
+            conn.commit()
+            
+            if deleted_count > 0 or history_deleted > 0:
+                logger.info(f"Cleaned up {deleted_count} old album records and {history_deleted} history entries")
+    
+    def get_album_expiry_history(self, album_key: str, limit: int = 30) -> List[Dict]:
+        """Get historical data for an album."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT aeh.* 
+                FROM album_expiry_history aeh
+                JOIN expiring_albums ea ON aeh.album_id = ea.id
+                WHERE ea.album_key = ?
+                ORDER BY aeh.recorded_at DESC
+                LIMIT ?
+            """, (album_key, limit))
+            
+            history = []
+            for row in cursor.fetchall():
+                record = dict(row)
+                record['recorded_at'] = datetime.fromisoformat(record['recorded_at'])
+                history.append(record)
+            
+            return history
+
+    def add_album_track(self, album_id: int, track_data: Dict):
+        """Add or update a track for an album."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO album_tracks 
+                (album_id, file_path, file_name, track_title, file_size_mb, days_old, last_modified, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                album_id,
+                track_data['file_path'],
+                track_data['file_name'],
+                track_data.get('track_title'),
+                track_data['file_size_mb'],
+                track_data['days_old'],
+                track_data['last_modified'],
+                datetime.now()
+            ))
+            conn.commit()
+    
+    def get_album_tracks(self, album_key: str) -> List[Dict]:
+        """Get all tracks for an album."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT at.* 
+                FROM album_tracks at
+                JOIN expiring_albums ea ON at.album_id = ea.id
+                WHERE ea.album_key = ?
+                ORDER BY at.file_name ASC
+            """, (album_key,))
+            
+            tracks = []
+            for row in cursor.fetchall():
+                track = dict(row)
+                track['last_modified'] = datetime.fromisoformat(track['last_modified'])
+                tracks.append(track)
+            
+            return tracks
+    
+    def clear_album_tracks(self, album_id: int):
+        """Clear all tracks for an album (before re-scanning)."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM album_tracks WHERE album_id = ?", (album_id,))
+            conn.commit()
 
 # Global database manager instance
 db = DatabaseManager()

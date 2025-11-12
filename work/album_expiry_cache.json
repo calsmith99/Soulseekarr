@@ -1,0 +1,24 @@
+{
+  "generated_at": "2025-11-09T17:49:06.744636",
+  "cleanup_days": 14,
+  "total_albums": 1,
+  "albums": {
+    "Various Artists - Healing New Age When You Fall Asleep (2019)": {
+      "artist": "Various Artists",
+      "album": "Healing New Age When You Fall Asleep (2019)",
+      "oldest_file_days": 27,
+      "days_until_expiry": -13,
+      "file_count": 1,
+      "total_size_mb": 1.8665800094604492,
+      "directory": "Various Artists/Healing New Age When You Fall Asleep (2019)",
+      "will_expire": true,
+      "is_starred": false,
+      "sample_files": [
+        {
+          "name": "05. Good Your Eyes.m4a",
+          "days_old": 27
+        }
+      ]
+    }
+  }
+}
