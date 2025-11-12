@@ -515,7 +515,8 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
         return True
     
     # Strategy: Search for the album, then queue only the specific tracks we need
-    album_search_query = f"{artist_name} {album_title}"
+    # Create more specific search query to prioritize original versions
+    album_search_query = f'"{artist_name}" "{album_title}" -remix -mix -live -acoustic'
     logging.info(f"   🔍 Searching for album: \"{album_search_query}\"")
     
     success = queue_album_with_specific_tracks(album_search_query, artist_name, album_title, tracks)
@@ -533,8 +534,10 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
             if interrupted:
                 break
             
-            track_search_query = f"{artist_name} {track['title']}"
-            logging.info(f"      🔍 Searching: \"{track['title']}\"")
+            # Create more specific track search query to avoid remixes
+        for track in tracks:
+            track_search_query = f'"{artist_name}" "{track["title"]}" -remix -mix -live -acoustic -edit'
+            logging.info(f"      🔍 Searching: \"{track_search_query}\"")
             
             if queue_single_search(track_search_query, "track", artist_name, album_title, track['title']):
                 success_count += 1
@@ -782,13 +785,36 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
     
     # Define unwanted keywords (case-insensitive)
     unwanted_keywords = [
-        'instrumental', 'karaoke', 'remix', 'radio edit', 'radio version',
-        'acoustic', 'live', 'concert', 'unplugged', 'demo', 'rehearsal',
-        'alternate', 'alternative', 'cover', 'tribute', 'mashup', 'bootleg',
-        'extended', 'club mix', 'dance mix', 'dub', 'edit', 'version',
-        'remaster', 'remastered', 'deluxe', 'bonus', 'special edition',
-        'clean', 'explicit', 'censored', 'uncensored', 'acapella',
-        'stems', 'multitrack', 'isolated', 'backing track'
+        # Basic unwanted versions
+        'instrumental', 'karaoke', 'acapella', 'a cappella',
+        
+        # Remix variations - comprehensive list
+        'remix', 'remixed', 'remixes', 'rmx', 'mix)', 'mixed', 
+        'rework', 'reworked', 'edit)', 'edited', 'version)', 
+        'club mix', 'dance mix', 'radio mix', 'extended mix',
+        'dub mix', 'house mix', 'techno mix', 'trance mix',
+        
+        # Live and acoustic versions  
+        'live', 'concert', 'unplugged', 'acoustic', 'stripped',
+        
+        # Demo and alternate versions
+        'demo', 'rehearsal', 'alternate', 'alternative', 'alt)',
+        'rough', 'unfinished', 'work in progress', 'wip)',
+        
+        # Radio and commercial edits
+        'radio edit', 'radio version', 'clean version', 'clean)', 
+        'explicit', 'censored', 'uncensored', 'radio friendly',
+        
+        # Covers and tributes
+        'cover', 'tribute', 'covers', 'mashup', 'bootleg',
+        'performed by', 'sung by', 'version by',
+        
+        # Technical/production versions
+        'stems', 'multitrack', 'isolated', 'backing track', 
+        'minus one', '-1)', 'without vocals', 'vocal removed',
+        
+        # Special editions (less strict - only obvious ones)
+        'bonus track', 'b-side', 'single edit'
     ]
     
     # Preferred quality indicators
@@ -818,18 +844,36 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
             # Calculate quality score
             quality_score = 0
             
-            # Check for unwanted keywords in filename and path
+            # Check for unwanted keywords in filename and path - more comprehensive check
             unwanted_found = False
             filename_clean = filename.replace('_', ' ').replace('-', ' ')
+            folder_path_clean = folder_path.replace('_', ' ').replace('-', ' ')
             
+            # Check for explicit unwanted patterns
             for unwanted in unwanted_keywords:
-                if unwanted in filename_clean or unwanted in folder_path:
+                # Check both filename and folder path
+                if (unwanted in filename_clean or unwanted in folder_path_clean):
                     # Special handling - allow "remaster" for older albums but penalize it
                     if unwanted in ['remaster', 'remastered']:
                         quality_score -= 10
                     else:
                         unwanted_found = True
                         break
+            
+            # Additional pattern checks for remix variations that might be missed
+            remix_patterns = [
+                r'\(.*remix.*\)', r'\[.*remix.*\]',  # (any remix) or [any remix]
+                r'\(.*mix\)', r'\[.*mix\]',          # (any mix) or [any mix] 
+                r'\(.*edit\)', r'\[.*edit\]',        # (any edit) or [any edit]
+                r'\brmx\b', r'\bvs\.?\b',            # rmx or vs. (versus mixes)
+                r'\bfeat\.\s+.*remix', r'\bft\.\s+.*remix'  # feat. remix or ft. remix
+            ]
+            
+            import re
+            for pattern in remix_patterns:
+                if re.search(pattern, filename_clean, re.IGNORECASE):
+                    unwanted_found = True
+                    break
             
             if unwanted_found:
                 logging.debug(f"      ❌ Skipping unwanted version: {file_basename}")
@@ -839,6 +883,20 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
             for quality in quality_indicators:
                 if quality in filename_clean or quality in folder_path:
                     quality_score += 20
+            
+            # Heavily favor explicit "original" indicators
+            original_indicators = [
+                'original', 'studio version', 'album version', 'single version',
+                'official', 'master', 'main version', 'standard'
+            ]
+            
+            for indicator in original_indicators:
+                if indicator in filename_clean or indicator in folder_path_clean:
+                    quality_score += 30  # Strong bonus for original indicators
+                    
+            # Prefer files/folders that explicitly avoid unwanted terms
+            if not any(term in filename_clean for term in ['remix', 'mix', 'live', 'acoustic', 'edit']):
+                quality_score += 15  # Bonus for clean titles
             
             # Prefer FLAC over MP3
             if filename.endswith('.flac'):

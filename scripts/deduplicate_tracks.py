@@ -208,6 +208,16 @@ def find_music_files(directory):
     for root, dirs, files in os.walk(directory):
         for filename in files:
             filepath = Path(root) / filename
+            
+            # Delete macOS metadata files immediately
+            if filename.startswith('._'):
+                logging.info(f"🗑️  Removing macOS metadata file: {filename}")
+                try:
+                    filepath.unlink()
+                except Exception as e:
+                    logging.warning(f"Could not delete metadata file {filename}: {e}")
+                continue
+                
             if filepath.suffix.lower() in SUPPORTED_FORMATS:
                 music_files.append(filepath)
     

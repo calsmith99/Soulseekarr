@@ -53,7 +53,13 @@ from slskd_utils import search_and_download_song
 
 # Try to import settings
 try:
-    from settings import get_navidrome_config, get_lidarr_config, get_spotify_config
+    from settings import (
+        get_navidrome_config, 
+        get_lidarr_config, 
+        get_slskd_config,
+        get_spotify_client_id,
+        get_spotify_client_secret
+    )
     SETTINGS_AVAILABLE = True
 except ImportError:
     SETTINGS_AVAILABLE = False
@@ -78,40 +84,71 @@ class SpotifyPlaylistMonitor:
         # Try to get configuration from settings module first
         if SETTINGS_AVAILABLE:
             try:
-                spotify_config = get_spotify_config()
-                navidrome_config = get_navidrome_config()
-                lidarr_config = get_lidarr_config()
+                # Get Spotify config
+                self.spotify_client_id = get_spotify_client_id()
+                self.spotify_client_secret = get_spotify_client_secret()
                 
-                self.spotify_client_id = spotify_config.get('client_id')
-                self.spotify_client_secret = spotify_config.get('client_secret')
+                # Get Navidrome config
+                navidrome_config = get_navidrome_config()
                 self.navidrome_url = navidrome_config.get('url')
                 self.navidrome_username = navidrome_config.get('username')
                 self.navidrome_password = navidrome_config.get('password')
+                
+                # Get Lidarr config
+                lidarr_config = get_lidarr_config()
                 self.lidarr_url = lidarr_config.get('url')
                 self.lidarr_api_key = lidarr_config.get('api_key')
+                
+                # Get slskd config
+                slskd_config = get_slskd_config()
+                self.slskd_url = slskd_config.get('url')
+                self.slskd_api_key = slskd_config.get('api_key')
             except Exception as e:
                 print(f"Warning: Could not load from settings module: {e}")
-                spotify_config = None
-                navidrome_config = None
-                lidarr_config = None
+                # Set to None to trigger fallback
+                self.spotify_client_id = None
+                self.spotify_client_secret = None
+                self.navidrome_url = None
+                self.navidrome_username = None
+                self.navidrome_password = None
+                self.lidarr_url = None
+                self.lidarr_api_key = None
+                self.slskd_url = None
+                self.slskd_api_key = None
         else:
-            spotify_config = None
-            navidrome_config = None
-            lidarr_config = None
+            # Set to None to trigger fallback
+            self.spotify_client_id = None
+            self.spotify_client_secret = None
+            self.navidrome_url = None
+            self.navidrome_username = None
+            self.navidrome_password = None
+            self.lidarr_url = None
+            self.lidarr_api_key = None
+            self.slskd_url = None
+            self.slskd_api_key = None
         
         # Fall back to environment variables if settings not available
-        if not spotify_config or not all([self.spotify_client_id, self.spotify_client_secret]):
+        if not self.spotify_client_id:
             self.spotify_client_id = os.environ.get('SPOTIFY_CLIENT_ID')
+        if not self.spotify_client_secret:
             self.spotify_client_secret = os.environ.get('SPOTIFY_CLIENT_SECRET')
         
-        if not navidrome_config or not all([self.navidrome_url, self.navidrome_username, self.navidrome_password]):
+        if not self.navidrome_url:
             self.navidrome_url = os.environ.get('NAVIDROME_URL')
+        if not self.navidrome_username:
             self.navidrome_username = os.environ.get('NAVIDROME_USERNAME')
+        if not self.navidrome_password:
             self.navidrome_password = os.environ.get('NAVIDROME_PASSWORD')
         
-        if not lidarr_config or not all([self.lidarr_url, self.lidarr_api_key]):
+        if not self.lidarr_url:
             self.lidarr_url = os.environ.get('LIDARR_URL')
+        if not self.lidarr_api_key:
             self.lidarr_api_key = os.environ.get('LIDARR_API_KEY')
+        
+        if not self.slskd_url:
+            self.slskd_url = os.environ.get('SLSKD_URL')
+        if not self.slskd_api_key:
+            self.slskd_api_key = os.environ.get('SLSKD_API_KEY')
 
         # Initialize basic attributes first
         self.logger = None
@@ -961,6 +998,16 @@ class SpotifyPlaylistMonitor:
             # Search through the downloads directory recursively
             for root, dirs, files in os.walk(downloads_dir):
                 for file in files:
+                    file_path = os.path.join(root, file)
+                    
+                    # Delete macOS metadata files immediately
+                    if file.startswith('._'):
+                        try:
+                            os.remove(file_path)
+                        except Exception as e:
+                            pass  # Silently ignore errors for metadata files
+                        continue
+                    
                     # Check if it's an audio file
                     if not any(file.lower().endswith(ext) for ext in audio_extensions):
                         continue
@@ -983,15 +1030,12 @@ class SpotifyPlaylistMonitor:
     def is_song_currently_downloading(self, song):
         """Check if a song is currently being downloaded in slskd"""
         try:
-            slskd_url = os.getenv('SLSKD_URL')
-            slskd_api_key = os.getenv('SLSKD_API_KEY')
-            
-            if not slskd_url or not slskd_api_key:
+            if not self.slskd_url or not self.slskd_api_key:
                 return False
             
             # Get current downloads from slskd
-            url = f"{slskd_url}/api/v0/transfers/downloads"
-            headers = {'X-API-Key': slskd_api_key}
+            url = f"{self.slskd_url}/api/v0/transfers/downloads"
+            headers = {'X-API-Key': self.slskd_api_key}
             
             response = requests.get(url, headers=headers, timeout=10)
             
@@ -1725,8 +1769,11 @@ class SpotifyPlaylistMonitor:
                     else:
                         print(f"    [DRY RUN] Would add artist to Lidarr: {artist_name}")
                 else:
-                    self.logger.warning(f"Failed to add artist {artist_name} to Lidarr")
-                    self.stats['artists_failed'] += 1
+                    if not self.dry_run:
+                        self.logger.warning(f"Failed to add artist {artist_name} to Lidarr")
+                        self.stats['artists_failed'] += 1
+                    else:
+                        print(f"    [DRY RUN] Failed to process artist: {artist_name}")
                     
                 return success
             else:
@@ -1881,7 +1928,17 @@ class SpotifyPlaylistMonitor:
             return False
     
     def manage_navidrome_playlist(self):
-        """Manage the Navidrome playlist - ensure it exists, avoid duplicates, and queue missing songs"""
+        """
+        Manage the Navidrome playlist with the following workflow:
+        1. Ensure the playlist exists (create if needed)
+        2. Get current playlist contents to avoid duplicates
+        3. Categorize Spotify playlist songs into:
+           - Already in Navidrome playlist (skip)
+           - In library but not in playlist (add to playlist)
+           - Not in library at all (queue for download via slskd)
+        4. Add found songs to the Navidrome playlist
+        5. Queue missing songs for download
+        """
         try:
             # Get the playlist name from the Spotify playlist
             if not hasattr(self, 'current_playlist_name') or not self.current_playlist_name:
@@ -2019,12 +2076,9 @@ class SpotifyPlaylistMonitor:
             if not songs_to_queue:
                 return 0
             
-            # Check if slskd environment variables are available
-            slskd_url = os.getenv('SLSKD_URL')
-            slskd_api_key = os.getenv('SLSKD_API_KEY')
-            
-            if not slskd_url or not slskd_api_key:
-                self.logger.warning("SLSKD_URL or SLSKD_API_KEY not set - skipping song download queue")
+            # Check if slskd is configured
+            if not self.slskd_url or not self.slskd_api_key:
+                self.logger.warning("slskd not configured - skipping song download queue")
                 print("⚠️  slskd not configured - songs will not be queued for download")
                 return 0
             
@@ -2094,11 +2148,11 @@ class SpotifyPlaylistMonitor:
     def check_slskd_connection(self):
         """Check slskd connection and login status"""
         try:
-            slskd_url = os.getenv('SLSKD_URL')
-            slskd_api_key = os.getenv('SLSKD_API_KEY')
+            if not self.slskd_url or not self.slskd_api_key:
+                return False
             
-            url = f"{slskd_url}/api/v0/application"
-            headers = {'X-API-Key': slskd_api_key}
+            url = f"{self.slskd_url}/api/v0/application"
+            headers = {'X-API-Key': self.slskd_api_key}
             
             response = requests.get(url, headers=headers, timeout=30)
             
@@ -2118,17 +2172,14 @@ class SpotifyPlaylistMonitor:
     def queue_song_in_slskd(self, song):
         """Queue a single song for download in slskd using shared utility."""
         try:
-            slskd_url = os.getenv('SLSKD_URL')
-            slskd_api_key = os.getenv('SLSKD_API_KEY')
-            
-            if not slskd_url or not slskd_api_key:
+            if not self.slskd_url or not self.slskd_api_key:
                 self.logger.warning("slskd configuration missing")
                 return False
             
             # Use shared utility function
             success = search_and_download_song(
-                slskd_url=slskd_url,
-                slskd_api_key=slskd_api_key,
+                slskd_url=self.slskd_url,
+                slskd_api_key=self.slskd_api_key,
                 artist=song['artist'],
                 title=song['title'],
                 logger=self.logger,
@@ -2388,17 +2439,18 @@ class SpotifyPlaylistMonitor:
     def queue_file_for_download(self, username, filename, song):
         """Queue a specific file for download"""
         try:
-            slskd_url = os.getenv('SLSKD_URL')
-            slskd_api_key = os.getenv('SLSKD_API_KEY')
+            if not self.slskd_url or not self.slskd_api_key:
+                self.logger.warning("slskd configuration missing")
+                return False
             
             # Find the actual file size from the search results
             file_size = getattr(self, '_current_file_size', 0)
             
             # Queue the file for download
-            enqueue_url = f"{slskd_url}/api/v0/transfers/downloads/{username}"
+            enqueue_url = f"{self.slskd_url}/api/v0/transfers/downloads/{username}"
             enqueue_headers = {
                 'Content-Type': 'application/json',
-                'X-API-Key': slskd_api_key
+                'X-API-Key': self.slskd_api_key
             }
             
             # Create the file data structure with actual size
@@ -2495,11 +2547,20 @@ class SpotifyPlaylistMonitor:
     def monitor_missing_songs(self):
         """Add artists from missing songs to Lidarr for monitoring future releases"""
         try:
-            print(f"� Processing artists from {len(self.missing_songs)} missing songs...")
+            print(f"👥 Processing artists from {len(self.missing_songs)} missing songs...")
             self.logger.info(f"Processing artists from {len(self.missing_songs)} missing songs")
+            
+            # Log some examples of missing songs for debugging
+            if self.missing_songs:
+                print(f"📝 Example missing songs:")
+                for song in self.missing_songs[:5]:  # Show first 5
+                    print(f"   • {song['artists'][0]} - {song['title']}")
+                if len(self.missing_songs) > 5:
+                    print(f"   ... and {len(self.missing_songs) - 5} more")
             
             all_artists = set()
             artists_monitored = set()
+            artists_already_exist = set()
             
             # Collect all unique artists from missing songs
             for song in self.missing_songs:
@@ -2509,7 +2570,24 @@ class SpotifyPlaylistMonitor:
             print(f"🎭 Adding {len(all_artists)} unique artists to Lidarr for future release monitoring...")
             self.logger.info(f"Adding {len(all_artists)} unique artists to Lidarr for future release monitoring")
             
+            # Log which artists we're about to add
+            if all_artists:
+                print(f"📝 Artists to monitor:")
+                for i, artist in enumerate(sorted(list(all_artists))[:10], 1):  # Show first 10
+                    print(f"   {i}. {artist}")
+                if len(all_artists) > 10:
+                    print(f"   ... and {len(all_artists) - 10} more")
+            
             for artist in all_artists:
+                # Check if artist already exists before trying to add
+                if self.lidarr_client and self.lidarr_client.artist_exists(artist):
+                    artists_already_exist.add(artist)
+                    if self.dry_run:
+                        print(f"    ⏭️  Artist already monitored (would skip): {artist}")
+                    else:
+                        self.logger.debug(f"Artist already monitored: {artist}")
+                    continue
+                
                 artist_success = self.add_artist_to_lidarr(artist)
                 if artist_success:
                     artists_monitored.add(artist)
@@ -2517,7 +2595,9 @@ class SpotifyPlaylistMonitor:
                     self.failed_artists.append(artist)
                     self.stats['artists_failed'] += 1
             
-            print(f"    ✓ Successfully added {len(artists_monitored)} artists for future release monitoring")
+            if artists_already_exist:
+                print(f"    ⏭️  {len(artists_already_exist)} artists already monitored (skipped)")
+            print(f"    ✓ Successfully added {len(artists_monitored)} new artists for future release monitoring")
             if self.failed_artists:
                 print(f"    ❌ Failed to add {len(self.failed_artists)} artists")
             
@@ -2584,15 +2664,15 @@ class SpotifyPlaylistMonitor:
             print("❌ Failed to find missing songs - aborting")
             return False
         
-        # Step 6: Ensure playlist exists and add found songs
+        # Step 6: Manage Navidrome playlist - add found songs and queue missing ones
         print()
-        print("� Step 7: Adding missing artists to Lidarr for monitoring...")
+        print("📋 Step 6: Managing Navidrome playlist...")
         if not self.manage_navidrome_playlist():
             print("⚠️  Failed to manage Navidrome playlist (continuing with artist monitoring)")
         
         # Step 7: Add missing artists to Lidarr for monitoring
         print()
-        print("� Step 6: Adding missing artists to Lidarr for monitoring...")
+        print("👥 Step 7: Adding missing artists to Lidarr for monitoring...")
         if not self.monitor_missing_songs():
             print("❌ Failed to add missing artists for monitoring")
             return False
@@ -2604,8 +2684,9 @@ class SpotifyPlaylistMonitor:
         print(f"   🎵 Playlist songs: {self.stats['playlist_songs']}")
         print(f"   ✅ Songs in library: {self.stats['songs_in_library']}")
         print(f"   ❌ Songs missing: {self.stats['songs_missing']}")
-        print(f"   � Songs added to playlist: {self.stats['songs_added_to_playlist']}")
-        print(f"   �👥 Artists added for monitoring: {self.stats['artists_added']}")
+        print(f"   📋 Songs added to playlist: {self.stats['songs_added_to_playlist']}")
+        print(f"   📥 Songs queued for download: {self.stats['songs_queued_for_download']}")
+        print(f"   👥 Artists added for monitoring: {self.stats['artists_added']}")
         print(f"   ❌ Artists failed to add: {self.stats['artists_failed']}")
         print(f"   ⚠️  Errors: {self.stats['errors']}")
         

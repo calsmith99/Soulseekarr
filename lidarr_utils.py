@@ -247,12 +247,12 @@ class LidarrClient:
             return None
 
     def get_artists(self) -> List[Dict[str, Any]]:
-        """Get all artists from Lidarr"""
+        """Get all artists from Lidarr
+        
+        Note: Still queries Lidarr even in dry run mode to check for existing artists.
+        Only the add/modify operations are skipped in dry run, not reads.
+        """
         try:
-            if self.dry_run:
-                self.logger.debug("DRY RUN: Returning empty artists list")
-                return []
-            
             headers = self._get_headers()
             url = f"{self.lidarr_url}/api/v1/artist"
             response = requests.get(url, headers=headers, timeout=30)
@@ -350,12 +350,12 @@ class LidarrClient:
         try:
             if self.dry_run:
                 mb_info = f" (MusicBrainz: {musicbrainz_data['name']})" if musicbrainz_data else ""
-                self.logger.info(f"DRY RUN: Would add artist with future monitoring: {artist_name}{mb_info}")
+                self.logger.debug(f"DRY RUN: Would add artist with future monitoring: {artist_name}{mb_info}")
                 return True
             
             # Check if artist already exists
             if self.artist_exists(artist_name):
-                self.logger.info(f"Artist '{artist_name}' already exists in Lidarr")
+                self.logger.debug(f"Artist '{artist_name}' already exists in Lidarr")
                 return True
             
             # Get Lidarr configuration
@@ -430,12 +430,12 @@ class LidarrClient:
         try:
             if self.dry_run:
                 mb_info = f" (MusicBrainz: {musicbrainz_data['name']})" if musicbrainz_data else ""
-                self.logger.info(f"DRY RUN: Would add artist with ALL albums monitoring: {artist_name}{mb_info}")
+                self.logger.debug(f"DRY RUN: Would add artist with ALL albums monitoring: {artist_name}{mb_info}")
                 return True
             
             # Check if artist already exists
             if self.artist_exists(artist_name):
-                self.logger.info(f"Artist '{artist_name}' already exists in Lidarr")
+                self.logger.debug(f"Artist '{artist_name}' already exists in Lidarr")
                 return True
             
             # Get Lidarr configuration
@@ -551,9 +551,12 @@ class LidarrClient:
             True if successful, False otherwise
         """
         try:
-            # Check if artist already exists
+            # Check if artist already exists (even in dry run mode)
             if self.artist_exists(artist_name):
-                self.logger.info(f"Artist '{artist_name}' already exists in Lidarr")
+                if self.dry_run:
+                    self.logger.debug(f"Artist '{artist_name}' already exists in Lidarr (would skip)")
+                else:
+                    self.logger.debug(f"Artist '{artist_name}' already exists in Lidarr")
                 return True
             
             # Search MusicBrainz for artist metadata
