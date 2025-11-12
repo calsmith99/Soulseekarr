@@ -990,6 +990,16 @@ def clear_completed_downloads():
                 total_dirs += 1
             for file in files:
                 file_path = os.path.join(root, file)
+                
+                # Delete macOS metadata files immediately
+                if file.startswith('._'):
+                    logging.debug(f"Removing macOS metadata file: {file}")
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        pass  # Silently ignore errors
+                    continue
+                    
                 if os.path.isfile(file_path):
                     total_files += 1
                     total_size += os.path.getsize(file_path)
@@ -1018,7 +1028,9 @@ def clear_completed_downloads():
                 try:
                     os.remove(file_path)
                 except Exception as e:
-                    logging.warning(f"      ⚠️  Could not remove {file}: {e}")
+                    # Only warn for non-metadata files
+                    if not file.startswith('._'):
+                        logging.warning(f"      ⚠️  Could not remove {file}: {e}")
             
             # Remove directories (but not the root completed path)
             for dir in dirs:
@@ -1130,6 +1142,15 @@ def clear_incomplete_downloads():
         for root, dirs, files in os.walk(incomplete_path):
             for file in files:
                 file_path = os.path.join(root, file)
+                
+                # Delete macOS metadata files immediately
+                if file.startswith('._'):
+                    try:
+                        os.remove(file_path)
+                    except Exception as e:
+                        pass  # Silently ignore errors
+                    continue
+                    
                 if os.path.isfile(file_path):
                     total_files += 1
                     total_size += os.path.getsize(file_path)
@@ -1150,7 +1171,9 @@ def clear_incomplete_downloads():
                 try:
                     os.remove(file_path)
                 except Exception as e:
-                    logging.warning(f"      ⚠️  Could not remove {file}: {e}")
+                    # Only warn for non-metadata files
+                    if not file.startswith('._'):
+                        logging.warning(f"      ⚠️  Could not remove {file}: {e}")
             
             # Remove empty directories
             for dir in dirs:
@@ -1204,7 +1227,8 @@ def check_completed_downloads(artist_name, album_title):
             for pattern in search_patterns:
                 if pattern in folder_name or folder_name in pattern:
                     # Count audio files in this folder (consistent with download filtering)
-                    audio_files = [f for f in files if f.lower().endswith(('.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aiff', '.ape', '.wv'))]
+                    # Filter out macOS metadata files
+                    audio_files = [f for f in files if not f.startswith('._') and f.lower().endswith(('.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aiff', '.ape', '.wv'))]
                     if len(audio_files) >= 3:  # Likely an album
                         logging.info(f"   📁 Found in completed downloads: {os.path.basename(root)}")
                         logging.info(f"      🎵 Contains {len(audio_files)} audio files")

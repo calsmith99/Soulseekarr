@@ -2086,6 +2086,13 @@
                 const generatedDate = new Date(data.generated_at).toLocaleString();
                 const totalAlbums = data.total_albums || 0;
                 
+                // Debug logging
+                console.log('Expiring albums data:', {
+                    cleanup_days: data.cleanup_days,
+                    total_albums: totalAlbums,
+                    generated_at: generatedDate
+                });
+                
                 if (totalAlbums === 0) {
                     infoContainer.innerHTML = `
                         <div class="albums-empty">
@@ -2104,6 +2111,10 @@
                     ...album
                 }));
                 
+                // Sort by days until expiry (most urgent first) BEFORE categorizing
+                albumsArray.sort((a, b) => a.days_until_expiry - b.days_until_expiry);
+                
+                // Now filter into categories - they'll maintain sort order
                 const expiredAlbums = albumsArray.filter(a => a.days_until_expiry < 0);
                 const expiringToday = albumsArray.filter(a => a.days_until_expiry === 0);
                 const expiringSoon = albumsArray.filter(a => a.days_until_expiry > 0);
@@ -2133,9 +2144,6 @@
                         </div>
                     </div>
                 `;
-                
-                // Sort by days until expiry (most urgent first)
-                albumsArray.sort((a, b) => a.days_until_expiry - b.days_until_expiry);
                 
                 // Render sections
                 let albumsHtml = '';
@@ -2175,15 +2183,36 @@
                 const expiryLabel = this.getExpiryLabel(album.days_until_expiry, album.oldest_file_days);
                 const albumKey = `${album.artist} - ${album.album}`;
                 
+                // Ensure cleanupDays has a valid value
+                if (!cleanupDays || cleanupDays <= 0) {
+                    console.warn('Invalid cleanupDays value:', cleanupDays, 'for album:', album.artist, '-', album.album);
+                    cleanupDays = 30; // Fallback to default
+                }
+                
                 // Calculate progress percentage - inverted so it fills as expiry approaches
                 // 0% = just added (cleanupDays remaining), 100% = expired/expiring (<=1 day remaining)
                 let progressPercent;
-                if (album.days_until_expiry <= 1) {
-                    progressPercent = 100; // Full bar when <=1 day remaining
+                if (album.days_until_expiry <= 0) {
+                    progressPercent = 100; // Full bar when expired
+                } else if (album.days_until_expiry >= cleanupDays) {
+                    progressPercent = 0; // Empty bar when just added
                 } else {
-                    // Scale from 0% at cleanupDays to 100% at 1 day
-                    progressPercent = ((cleanupDays - album.days_until_expiry) / (cleanupDays - 1)) * 100;
+                    // Scale from 0% at cleanupDays to 100% at 0 days
+                    // Formula: (totalDays - remainingDays) / totalDays * 100
+                    progressPercent = ((cleanupDays - album.days_until_expiry) / cleanupDays) * 100;
                     progressPercent = Math.max(0, Math.min(100, progressPercent));
+                }
+                
+                // Debug logging for first few albums
+                if (Math.random() < 0.05) { // Log ~5% of albums to avoid spam
+                    console.log('Album progress calculation:', {
+                        album: albumKey,
+                        cleanupDays: cleanupDays,
+                        days_until_expiry: album.days_until_expiry,
+                        oldest_file_days: album.oldest_file_days,
+                        progressPercent: progressPercent,
+                        calculation: `(${cleanupDays} - ${album.days_until_expiry}) / ${cleanupDays} * 100 = ${progressPercent}%`
+                    });
                 }
                 
                 // Build album cover HTML - use artwork if available, fallback to icon
@@ -2200,8 +2229,8 @@
                                 ${expiryLabel}
                             </div>
                         </div>
-                        <div class="album-progress-bar">
-                            <div class="album-progress-fill ${expiryClass}" style="width: ${progressPercent}%"></div>
+                        <div class="album-progress-bar" style="background-color: rgba(0, 0, 0, 0.2);">
+                            <div class="album-progress-fill ${expiryClass}" style="width: ${progressPercent}%; height: 100%; background: linear-gradient(90deg, var(--warning-color), #FF6F00);"></div>
                         </div>
                         <div class="album-info">
                             <div class="album-name">${this.escapeHtml(album.album)}</div>

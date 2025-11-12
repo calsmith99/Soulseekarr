@@ -625,6 +625,17 @@ class FileExpiryCleanup:
                 print("❌ Database not available - cannot save album expiry data")
                 return
             
+            # Log what we're about to save
+            total_albums = len(self.album_expiry_data)
+            total_tracks = sum(len(d.get('tracks', [])) for d in self.album_expiry_data.values())
+            
+            if total_albums == 0:
+                self.logger.info("No albums to save to database")
+                print("💾 No album expiry data to save (no albums found)")
+                return
+            
+            print(f"💾 Saving {total_albums} albums with {total_tracks} tracks to database...")
+            
             db = get_db()
             saved_count = 0
             
@@ -657,8 +668,8 @@ class FileExpiryCleanup:
                 
                 saved_count += 1
             
-            self.logger.info(f"Saved {saved_count} albums with {sum(len(d.get('tracks', [])) for d in self.album_expiry_data.values())} tracks to database")
-            print(f"💾 Saved {saved_count} albums with all track details to database")
+            self.logger.info(f"Saved {saved_count} albums with {total_tracks} tracks to database")
+            print(f"✅ Saved {saved_count} albums with all track details to database")
             
         except Exception as e:
             self.logger.error(f"Error saving album expiry data to database: {e}")
@@ -709,6 +720,19 @@ class FileExpiryCleanup:
             for root, dirs, files in os.walk(directory_path):
                 for file in files:
                     file_path = os.path.join(root, file)
+                    
+                    # Delete macOS metadata files immediately without tracking
+                    if file.startswith('._'):
+                        print(f"    🗑️  Removing macOS metadata file: {file}")
+                        self.logger.info(f"Removing macOS metadata file: {file_path}")
+                        if not self.dry_run:
+                            try:
+                                os.remove(file_path)
+                                self.logger.info(f"Deleted macOS metadata file: {file_path}")
+                            except Exception as e:
+                                self.logger.error(f"Error deleting macOS metadata file {file_path}: {e}")
+                        continue
+                    
                     file_ext = Path(file_path).suffix.lower()
                     
                     # Only process music files
