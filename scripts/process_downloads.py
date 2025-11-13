@@ -138,23 +138,19 @@ logger.info("All imports successful, proceeding with script initialization...")
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class DownloadsProcessor:
-    def __init__(self, dry_run=False, skip_metadata_fix=True):
+    def __init__(self, dry_run=False, skip_metadata_fix=False):
         logger.info("Initializing DownloadsProcessor...")
         
         # Check for environment variable dry run override
         env_dry_run = os.environ.get('DRY_RUN', '').lower() == 'true'
         self.dry_run = dry_run or env_dry_run
         
-        # Check for environment variable metadata fix override (default to True now)
+        # Check for environment variable metadata fix override
         env_skip_metadata = os.environ.get('SKIP_METADATA_FIX', '').lower() == 'true'
         self.skip_metadata_fix = skip_metadata_fix or env_skip_metadata
         
         logger.info(f"Dry run mode: {self.dry_run}")
         logger.info(f"Skip metadata fix: {self.skip_metadata_fix}")
-        
-        # Initialize failed tracks tracking
-        self.failed_tracks = []
-        self.processing_errors = []
         
         # Check for required dependencies
         if not REQUESTS_AVAILABLE:
@@ -1608,7 +1604,7 @@ class DownloadsProcessor:
             
             # If track title is available and no album name match, search by track
             if track_title and track_title.strip():
-                self.logger.debug(f"Album name matching failed, searching by track title: '{track_title}'")
+                self.logger.info(f"Album name matching failed, searching by track title: '{track_title}'")
                 
                 for album_data in albums:
                     album_title = album_data.get('title', '')
@@ -1662,7 +1658,7 @@ class DownloadsProcessor:
         # Step 2: Find the album for that artist (with optional track-based search)
         album_data = search_album_for_artist(artist_data, album, track_title)
         if not album_data:
-            self.logger.debug(f"Album not found for artist '{artist_data.get('artistName', artist)}': {album}")
+            self.logger.warning(f"Album not found for artist '{artist_data.get('artistName', artist)}': {album}")
             return None
         
         self.logger.info(f"Found album: {artist_data.get('artistName')} - {album_data.get('title')}")
@@ -1732,7 +1728,7 @@ class DownloadsProcessor:
         
         lidarr_album = self.search_lidarr_album(artist, album, track_title)
         if not lidarr_album:
-            self.logger.debug(f"Album not found in Lidarr: {artist} - {album}")
+            self.logger.warning(f"Album not found in Lidarr: {artist} - {album}")
             return False, f"Album not found in Lidarr", None
             
         expected_tracks = self.get_album_tracks(lidarr_album['id'])
@@ -1842,33 +1838,17 @@ class DownloadsProcessor:
                 dest_album_dir.mkdir(parents=True, exist_ok=True)
                 
             moved_files = []
-            failed_files = []
             for file_info in album_files:
                 src_path = file_info['file_path']
                 dest_path = dest_album_dir / src_path.name
                 
-                try:
-                    if self.dry_run:
-                        self.logger.info(f"[DRY RUN] Would move: {src_path} -> {dest_path}")
-                    else:
-                        shutil.move(str(src_path), str(dest_path))
-                        self.logger.info(f"Moved: {src_path} -> {dest_path}")
-                        
-                    moved_files.append(str(dest_path))
-                except Exception as e:
-                    error_msg = f"Failed to move {src_path}: {e}"
-                    self.logger.error(error_msg)
-                    failed_files.append({
-                        'file': str(src_path),
-                        'error': str(e),
-                        'album': album_key
-                    })
-                    self.failed_tracks.append({
-                        'file': str(src_path),
-                        'error': str(e),
-                        'album': album_key,
-                        'action': 'move_file'
-                    })
+                if self.dry_run:
+                    self.logger.info(f"[DRY RUN] Would move: {src_path} -> {dest_path}")
+                else:
+                    shutil.move(str(src_path), str(dest_path))
+                    self.logger.info(f"Moved: {src_path} -> {dest_path}")
+                    
+                moved_files.append(str(dest_path))
                 
             # Record action
             action = {
@@ -1878,7 +1858,6 @@ class DownloadsProcessor:
                 'destination': str(destination_dir),
                 'file_count': len(album_files),
                 'files': moved_files,
-                'failed_files': failed_files,
                 'dry_run': self.dry_run
             }
             self.action_history.append(action)
@@ -1887,8 +1866,7 @@ class DownloadsProcessor:
             if not self.dry_run:
                 self.cleanup_empty_dirs(album_files[0]['file_path'].parent)
                 
-            # Return True only if no files failed
-            return len(failed_files) == 0
+            return True
             
         except Exception as e:
             self.logger.error(f"Error moving album {album_key}: {e}")
@@ -1982,22 +1960,9 @@ class DownloadsProcessor:
                         fixed_count += 1
                     else:
                         failed_count += 1
-                        self.failed_tracks.append({
-                            'file': str(music_file),
-                            'error': 'Metadata fix returned False',
-                            'album': 'unknown',
-                            'action': 'fix_metadata'
-                        })
                 except Exception as e:
-                    error_msg = f"Error processing metadata for {music_file}: {e}"
-                    self.logger.error(error_msg)
+                    self.logger.error(f"Error processing metadata for {music_file}: {e}")
                     failed_count += 1
-                    self.failed_tracks.append({
-                        'file': str(music_file),
-                        'error': str(e),
-                        'album': 'unknown',
-                        'action': 'fix_metadata'
-                    })
                     
             self.logger.info(f"Metadata fixing complete: {fixed_count} files fixed, {failed_count} files failed/skipped")
         else:
@@ -2014,16 +1979,13 @@ class DownloadsProcessor:
         compilation_count = 0
         
         for album_key, album_files in albums.items():
-            self.logger.info(f"Processing: {album_key}")
-            self.logger.debug(f"Album has {len(album_files)} files")
+            self.logger.info(f"Processing album: {album_key} ({len(album_files)} files)")
             
             # Extract artist and album from key
             try:
                 artist, album = album_key.split(' - ', 1)
             except ValueError:
-                error_msg = f"Invalid album key format: {album_key}"
-                self.logger.error(error_msg)
-                self.processing_errors.append(error_msg)
+                self.logger.error(f"Invalid album key format: {album_key}")
                 error_count += 1
                 continue
             
@@ -2042,18 +2004,18 @@ class DownloadsProcessor:
             is_compilation_album = any(pattern in album_lower for pattern in ['hits', 'sampler', 'compilation', 'mixtape', 'promo', 'cd01', 'cd02', 'cd03'])
             
             if is_compilation or is_compilation_album:
-                self.logger.info(f"⏭️  Skipping compilation: {album_key}")
+                self.logger.info(f"Skipping compilation album: {album_key}")
                 self.logger.debug(f"Compilation albums have unreliable metadata and require manual handling")
                 compilation_count += 1
                 continue
                 
             # Check completeness
             is_complete, status_msg, lidarr_album_data = self.check_album_completeness(album_files, artist, album)
-            self.logger.debug(f"Album completeness check: {status_msg}")
+            self.logger.info(f"Album completeness check: {status_msg}")
             
             # Skip if not found in Lidarr - leave in downloads folder
             if lidarr_album_data is None:
-                self.logger.info(f"❓ Not in Lidarr: {album_key}")
+                self.logger.info(f"Skipping album not found in Lidarr: {album_key}")
                 self.logger.debug(f"Album will remain in downloads folder for manual review")
                 skipped_count += 1
                 continue
@@ -2062,13 +2024,13 @@ class DownloadsProcessor:
             if is_complete:
                 if self.move_album(album_files, self.music_dir, album_key, lidarr_album_data):
                     complete_count += 1
-                    self.logger.info(f"✅ Complete: {album_key}")
+                    self.logger.info(f"Moved complete album to music library: {album_key}")
                 else:
                     error_count += 1
             else:
                 if self.move_album(album_files, self.incomplete_dir, album_key, lidarr_album_data):
                     incomplete_count += 1
-                    self.logger.info(f"📂 Incomplete: {album_key}")
+                    self.logger.info(f"Moved incomplete album to incomplete directory: {album_key}")
                 else:
                     error_count += 1
                     
@@ -2078,37 +2040,14 @@ class DownloadsProcessor:
         # Summary
         total_processed = complete_count + incomplete_count + error_count
         total_albums = total_processed + skipped_count + compilation_count
-        self.logger.info(f"")
-        self.logger.info(f"=== PROCESSING COMPLETE ===")
+        self.logger.info(f"Processing complete!")
         self.logger.info(f"Total albums found: {total_albums}")
         self.logger.info(f"Albums processed: {total_processed}")
         self.logger.info(f"Complete albums moved to library: {complete_count}")
         self.logger.info(f"Incomplete albums moved to incomplete: {incomplete_count}")
         self.logger.info(f"Albums skipped (not found in Lidarr): {skipped_count}")
         self.logger.info(f"Compilation albums skipped: {compilation_count}")
-        self.logger.info(f"Processing errors: {error_count}")
-        
-        # Failed tracks summary
-        if self.failed_tracks:
-            self.logger.info(f"")
-            self.logger.info(f"=== FAILED TRACKS ({len(self.failed_tracks)}) ===")
-            for i, failed_track in enumerate(self.failed_tracks, 1):
-                self.logger.error(f"{i}. {failed_track['file']}")
-                self.logger.error(f"   Album: {failed_track['album']}")
-                self.logger.error(f"   Action: {failed_track['action']}")
-                self.logger.error(f"   Error: {failed_track['error']}")
-                self.logger.error(f"")
-        else:
-            self.logger.info(f"✅ No failed tracks - all files processed successfully!")
-            
-        # Processing errors summary  
-        if self.processing_errors:
-            self.logger.info(f"")
-            self.logger.info(f"=== PROCESSING ERRORS ({len(self.processing_errors)}) ===")
-            for i, error in enumerate(self.processing_errors, 1):
-                self.logger.error(f"{i}. {error}")
-                
-        self.logger.info(f"")
+        self.logger.info(f"Errors: {error_count}")
         
         # Clean up empty directories from downloads folder
         self.logger.info("Cleaning up empty directories from downloads folder...")
@@ -2124,21 +2063,13 @@ def main():
         parser.add_argument('--dry-run', action='store_true', 
                            help='Run in dry-run mode (no actual file operations)')
         parser.add_argument('--skip-metadata-fix', action='store_true',
-                           help='Skip MusicBrainz metadata fixing step (default: True)')
-        parser.add_argument('--fix-metadata', action='store_true',
-                           help='Enable MusicBrainz metadata fixing (overrides default)')
+                           help='Skip MusicBrainz metadata fixing step')
         
         args = parser.parse_args()
-        
-        # Handle metadata fixing logic - default is to skip unless explicitly enabled
-        skip_metadata_fix = not args.fix_metadata if hasattr(args, 'fix_metadata') else True
-        if args.skip_metadata_fix:
-            skip_metadata_fix = True
-            
-        logger.info(f"Command line arguments parsed: dry_run={args.dry_run}, skip_metadata_fix={skip_metadata_fix}")
+        logger.info(f"Command line arguments parsed: dry_run={args.dry_run}, skip_metadata_fix={args.skip_metadata_fix}")
         
         logger.info("Creating DownloadsProcessor instance...")
-        processor = DownloadsProcessor(dry_run=args.dry_run, skip_metadata_fix=skip_metadata_fix)
+        processor = DownloadsProcessor(dry_run=args.dry_run, skip_metadata_fix=args.skip_metadata_fix)
         
         logger.info("Starting downloads processing...")
         processor.process_downloads()

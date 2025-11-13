@@ -384,58 +384,6 @@
             gap: var(--spacing-sm);
         }
 
-        /* Progress bars */
-        .script-progress {
-            margin-top: var(--spacing-md);
-            display: none; /* Hidden by default, shown when running */
-        }
-
-        .script-progress.show {
-            display: block;
-        }
-
-        .progress-bar-container {
-            background-color: var(--sidebar-background);
-            border-radius: var(--border-radius);
-            height: 20px;
-            position: relative;
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }
-
-        .progress-bar {
-            background: linear-gradient(90deg, var(--primary-color) 0%, var(--primary-hover) 100%);
-            height: 100%;
-            transition: width 0.3s ease;
-            position: relative;
-        }
-
-        .progress-text {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: var(--font-size-sm);
-            font-weight: 500;
-            color: var(--text-primary);
-            text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
-            z-index: 2;
-            white-space: nowrap;
-        }
-
-        .progress-details {
-            margin-top: var(--spacing-xs);
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        .sub-progress {
-            margin-top: var(--spacing-xs);
-            font-size: 12px;
-            color: var(--info-color);
-            font-style: italic;
-        }
-
         /* Queue items */
         .queue-item {
             padding: var(--spacing-md);
@@ -1645,14 +1593,6 @@
                                     Stop
                                 </button>
                             </div>
-                            <div class="script-progress" id="progress-${scriptId}">
-                                <div class="progress-bar-container">
-                                    <div class="progress-bar" id="progress-bar-${scriptId}" style="width: 0%"></div>
-                                    <div class="progress-text" id="progress-text-${scriptId}">0%</div>
-                                </div>
-                                <div class="progress-details" id="progress-details-${scriptId}"></div>
-                                <div class="sub-progress" id="sub-progress-${scriptId}"></div>
-                            </div>
                         </div>
                     `;
                 }).join('');
@@ -1756,11 +1696,6 @@
                 const statusElement = document.getElementById(`status-${scriptId}`);
                 const runBtns = document.querySelectorAll(`[data-script-id="${scriptId}"].run-btn`);
                 const stopBtn = document.querySelector(`[data-script-id="${scriptId}"].stop-btn`);
-                const progressContainer = document.getElementById(`progress-${scriptId}`);
-                const progressBar = document.getElementById(`progress-bar-${scriptId}`);
-                const progressText = document.getElementById(`progress-text-${scriptId}`);
-                const progressDetails = document.getElementById(`progress-details-${scriptId}`);
-                const subProgress = document.getElementById(`sub-progress-${scriptId}`);
 
                 if (statusElement) {
                     const statusClass = `status-badge status-${this.getScriptStatus(status)}`;
@@ -1778,41 +1713,8 @@
                     stopBtn.disabled = !status.running;
                 }
 
-                // Handle progress bar
-                if (progressContainer) {
-                    if (status.running && status.progress) {
-                        // Show progress bar
-                        progressContainer.classList.add('show');
-                        
-                        const progress = status.progress;
-                        const percentage = progress.percentage || 0;
-                        
-                        if (progressBar) {
-                            progressBar.style.width = `${percentage}%`;
-                        }
-                        
-                        if (progressText) {
-                            progressText.textContent = `${percentage}%`;
-                        }
-                        
-                        if (progressDetails && progress.current && progress.total) {
-                            let detailText = `${progress.current} / ${progress.total}`;
-                            if (progress.current_item) {
-                                detailText += ` - ${progress.current_item}`;
-                            }
-                            progressDetails.textContent = detailText;
-                        }
-                        
-                        if (subProgress && progress.sub_progress && progress.sub_progress.message) {
-                            subProgress.textContent = progress.sub_progress.message;
-                        } else if (subProgress) {
-                            subProgress.textContent = '';
-                        }
-                    } else {
-                        // Hide progress bar when not running or no progress info
-                        progressContainer.classList.remove('show');
-                    }
-                }
+                // Reload execution queue to get updated data from database
+                this.loadExecutionQueue();
             }
 
             getScriptStatus(status) {
@@ -1913,7 +1815,7 @@
             startStatusUpdates() {
                 this.statusUpdateInterval = setInterval(() => {
                     this.updateAllStatuses();
-                }, 2000); // 2 seconds - balanced between responsiveness and performance
+                }, 2000);
             }
 
             async updateAllStatuses() {
