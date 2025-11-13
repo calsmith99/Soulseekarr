@@ -102,6 +102,17 @@ except ImportError as e:
     sys.exit(1)
 
 try:
+    logger.info("Importing tqdm for progress bars...")
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+    logger.info("Successfully imported tqdm")
+except ImportError as e:
+    logger.warning("'tqdm' package not found. Install with: pip install tqdm")
+    logger.warning("Progress bars will not be displayed")
+    TQDM_AVAILABLE = False
+    tqdm = None
+
+try:
     logger.info("Importing mutagen...")
     from mutagen import File as MutagenFile
     from mutagen.id3 import ID3NoHeaderError
@@ -1954,7 +1965,13 @@ class DownloadsProcessor:
             fixed_count = 0
             failed_count = 0
             
-            for music_file in music_files:
+            # Create progress bar for metadata fixing
+            if TQDM_AVAILABLE:
+                music_file_iter = tqdm(music_files, desc="Fixing metadata", unit="file", ncols=100)
+            else:
+                music_file_iter = music_files
+            
+            for music_file in music_file_iter:
                 try:
                     if self.fix_metadata_with_musicbrainz(music_file):
                         fixed_count += 1
@@ -1978,7 +1995,13 @@ class DownloadsProcessor:
         skipped_count = 0
         compilation_count = 0
         
-        for album_key, album_files in albums.items():
+        # Create progress bar for album processing
+        if TQDM_AVAILABLE:
+            albums_iter = tqdm(albums.items(), desc="Processing albums", unit="album", ncols=100)
+        else:
+            albums_iter = albums.items()
+        
+        for album_key, album_files in albums_iter:
             self.logger.info(f"Processing album: {album_key} ({len(album_files)} files)")
             
             # Extract artist and album from key

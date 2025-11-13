@@ -39,6 +39,14 @@ try:
 except ImportError:
     MutagenFile = None
 
+# Try to import tqdm for progress bars
+try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+    tqdm = None
+
 # Add parent directory to path to import settings
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from settings import (
@@ -102,101 +110,109 @@ class FileOrganiser:
                 
             logger.info(f"Checking folder structure in: {base_dir}")
             
-            for file_path in base_dir.rglob('*'):
-                if file_path.is_file() and file_path.suffix.lower() in AUDIO_EXTENSIONS:
-                    checked += 1
+            # Collect all audio files first for progress bar
+            audio_files = [f for f in base_dir.rglob('*') 
+                          if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS]
+            
+            logger.info(f"Found {len(audio_files)} audio files to check")
+            
+            # Create progress bar
+            if TQDM_AVAILABLE:
+                files_iter = tqdm(audio_files, desc="Checking metadata", unit="file", ncols=100)
+            else:
+                files_iter = audio_files
+            
+            for file_path in files_iter:
+                checked += 1
+                
+                tags = self._extract_musicbrainz_metadata(file_path)
+                if not tags:
+                    logger.debug(f"No metadata found for: {file_path}")
+                    continue
+                
+                # Get current path structure
+                current_artist_dir = file_path.parent.parent.name
+                current_album_dir = file_path.parent.name
+                current_track_name = file_path.stem
+
+                # Get metadata tags
+                artist_tag = tags.get('artist')
+                album_tag = tags.get('album')
+                title_tag = tags.get('title')
+
+                # Check if any tag is missing
+                if not artist_tag or not album_tag:
+                    logger.debug(f"Missing essential metadata for: {file_path}")
+                    continue
+
+                # Sanitize folder names for filesystem
+                safe_artist = self._sanitize_filename(artist_tag)
+                safe_album = self._sanitize_filename(album_tag)
+                safe_title = self._sanitize_filename(title_tag) if title_tag else file_path.stem
+
+                # Check if file is in correct location
+                artist_mismatch = safe_artist != current_artist_dir
+                album_mismatch = safe_album != current_album_dir
+                title_mismatch = title_tag and safe_title != current_track_name
+
+                if artist_mismatch or album_mismatch or title_mismatch:
+                    # Calculate correct path
+                    correct_artist_dir = base_dir / safe_artist
+                    correct_album_dir = correct_artist_dir / safe_album
                     
-                    if checked % 100 == 0:
-                        logger.info(f"Progress: {checked} files checked...")
-                    
-                    tags = self._extract_musicbrainz_metadata(file_path)
-                    if not tags:
-                        logger.debug(f"No metadata found for: {file_path}")
-                        continue
-                    
-                    # Get current path structure
-                    current_artist_dir = file_path.parent.parent.name
-                    current_album_dir = file_path.parent.name
-                    current_track_name = file_path.stem
+                    # Use original filename if no title tag or if we're not renaming files
+                    new_filename = file_path.name  # Keep original filename
+                    correct_file_path = correct_album_dir / new_filename
 
-                    # Get metadata tags
-                    artist_tag = tags.get('artist')
-                    album_tag = tags.get('album')
-                    title_tag = tags.get('title')
+                    mismatch_info = {
+                        'file': str(file_path),
+                        'artist_tag': artist_tag,
+                        'album_tag': album_tag,
+                        'title_tag': title_tag,
+                        'current_artist': current_artist_dir,
+                        'current_album': current_album_dir,
+                        'current_title': current_track_name,
+                        'correct_path': str(correct_file_path),
+                        'artist_mismatch': artist_mismatch,
+                        'album_mismatch': album_mismatch,
+                        'title_mismatch': title_mismatch
+                    }
+                    mismatches.append(mismatch_info)
 
-                    # Check if any tag is missing
-                    if not artist_tag or not album_tag:
-                        logger.debug(f"Missing essential metadata for: {file_path}")
-                        continue
+                    # Move file if not in dry run mode
+                    if not self.dry_run:
+                        try:
+                            # Create target directories
+                            correct_album_dir.mkdir(parents=True, exist_ok=True)
+                            self.fix_permissions(correct_artist_dir)
+                            self.fix_permissions(correct_album_dir)
 
-                    # Sanitize folder names for filesystem
-                    safe_artist = self._sanitize_filename(artist_tag)
-                    safe_album = self._sanitize_filename(album_tag)
-                    safe_title = self._sanitize_filename(title_tag) if title_tag else file_path.stem
+                            # Check if target file already exists
+                            if correct_file_path.exists():
+                                logger.warning(f"Target file already exists, skipping: {correct_file_path}")
+                                continue
 
-                    # Check if file is in correct location
-                    artist_mismatch = safe_artist != current_artist_dir
-                    album_mismatch = safe_album != current_album_dir
-                    title_mismatch = title_tag and safe_title != current_track_name
+                            # Move the file
+                            shutil.move(str(file_path), str(correct_file_path))
+                            self.fix_permissions(correct_file_path)
+                            
+                            logger.info(f"Moved: {file_path.relative_to(base_dir)} -> {correct_file_path.relative_to(base_dir)}")
+                            moved_files += 1
 
-                    if artist_mismatch or album_mismatch or title_mismatch:
-                        # Calculate correct path
-                        correct_artist_dir = base_dir / safe_artist
-                        correct_album_dir = correct_artist_dir / safe_album
-                        
-                        # Use original filename if no title tag or if we're not renaming files
-                        new_filename = file_path.name  # Keep original filename
-                        correct_file_path = correct_album_dir / new_filename
+                            # Record the action
+                            self.record_action(
+                                action_type="moved_for_metadata_compliance",
+                                artist_name=artist_tag,
+                                album_name=album_tag,
+                                source_path=str(file_path),
+                                destination_path=str(correct_file_path)
+                            )
 
-                        mismatch_info = {
-                            'file': str(file_path),
-                            'artist_tag': artist_tag,
-                            'album_tag': album_tag,
-                            'title_tag': title_tag,
-                            'current_artist': current_artist_dir,
-                            'current_album': current_album_dir,
-                            'current_title': current_track_name,
-                            'correct_path': str(correct_file_path),
-                            'artist_mismatch': artist_mismatch,
-                            'album_mismatch': album_mismatch,
-                            'title_mismatch': title_mismatch
-                        }
-                        mismatches.append(mismatch_info)
-
-                        # Move file if not in dry run mode
-                        if not self.dry_run:
-                            try:
-                                # Create target directories
-                                correct_album_dir.mkdir(parents=True, exist_ok=True)
-                                self.fix_permissions(correct_artist_dir)
-                                self.fix_permissions(correct_album_dir)
-
-                                # Check if target file already exists
-                                if correct_file_path.exists():
-                                    logger.warning(f"Target file already exists, skipping: {correct_file_path}")
-                                    continue
-
-                                # Move the file
-                                shutil.move(str(file_path), str(correct_file_path))
-                                self.fix_permissions(correct_file_path)
-                                
-                                logger.info(f"Moved: {file_path.relative_to(base_dir)} -> {correct_file_path.relative_to(base_dir)}")
-                                moved_files += 1
-
-                                # Record the action
-                                self.record_action(
-                                    action_type="moved_for_metadata_compliance",
-                                    artist_name=artist_tag,
-                                    album_name=album_tag,
-                                    source_path=str(file_path),
-                                    destination_path=str(correct_file_path)
-                                )
-
-                            except Exception as e:
-                                logger.error(f"Failed to move {file_path}: {e}")
-                                errors += 1
-                        else:
-                            logger.info(f"[DRY RUN] Would move: {file_path.relative_to(base_dir)} -> {correct_file_path.relative_to(base_dir)}")
+                        except Exception as e:
+                            logger.error(f"Failed to move {file_path}: {e}")
+                            errors += 1
+                    else:
+                        logger.info(f"[DRY RUN] Would move: {file_path.relative_to(base_dir)} -> {correct_file_path.relative_to(base_dir)}")
 
         # Clean up empty directories after moves
         if not self.dry_run and moved_files > 0:
@@ -741,12 +757,15 @@ class FileOrganiser:
         owned_albums = self.find_album_folders(self.owned_dir)
         logger.info(f"Found {len(owned_albums)} albums in Owned directory")
         
-        for i, album_path in enumerate(owned_albums, 1):
+        # Create progress bar for owned albums
+        if TQDM_AVAILABLE:
+            owned_albums_iter = tqdm(owned_albums, desc="Checking owned albums", unit="album", ncols=100)
+        else:
+            owned_albums_iter = owned_albums
+        
+        for album_path in owned_albums_iter:
             try:
                 self.stats['owned_albums_checked'] += 1
-                
-                if i % 50 == 0:
-                    logger.info(f"Progress: {i}/{len(owned_albums)} owned albums checked...")
                 
                 artist_name, album_name, track_count = self.parse_album_info(album_path)
                 
@@ -1370,13 +1389,16 @@ class FileOrganiser:
         album_folders = self.find_album_folders(self.music_dir)
         logger.info(f"Found {len(album_folders)} album folders in Not_Owned to check\n")
         
+        # Create progress bar for album checking
+        if TQDM_AVAILABLE:
+            album_folders_iter = tqdm(album_folders, desc="Organizing albums", unit="album", ncols=100)
+        else:
+            album_folders_iter = album_folders
+        
         # Check each album
-        for i, album_path in enumerate(album_folders, 1):
+        for album_path in album_folders_iter:
             try:
                 self.stats['albums_checked'] += 1
-                
-                if i % 50 == 0:
-                    logger.info(f"Progress: {i}/{len(album_folders)} albums checked...")
                 
                 # Parse album information
                 artist_name, album_name, track_count = self.parse_album_info(album_path)
@@ -1427,10 +1449,14 @@ class FileOrganiser:
             incomplete_albums = self.find_album_folders(self.incomplete_dir)
             logger.info(f"Found {len(incomplete_albums)} albums in incomplete directory to check\n")
             
-            for i, album_path in enumerate(incomplete_albums, 1):
+            # Create progress bar for incomplete albums
+            if TQDM_AVAILABLE:
+                incomplete_albums_iter = tqdm(incomplete_albums, desc="Checking incomplete", unit="album", ncols=100)
+            else:
+                incomplete_albums_iter = incomplete_albums
+            
+            for album_path in incomplete_albums_iter:
                 try:
-                    if i % 50 == 0:
-                        logger.info(f"Progress: {i}/{len(incomplete_albums)} incomplete albums checked...")
                     
                     # Parse album information
                     artist_name, album_name, track_count = self.parse_album_info(album_path)
@@ -1492,11 +1518,15 @@ class FileOrganiser:
         
         logger.info(f"Total: {len(all_folders)} album folders to process\n")
         
+        # Create progress bar for duplicate removal
+        if TQDM_AVAILABLE:
+            all_folders_iter = tqdm(all_folders, desc="Removing duplicates", unit="album", ncols=100)
+        else:
+            all_folders_iter = all_folders
+        
         # Process each folder for duplicates
-        for i, album_path in enumerate(all_folders, 1):
+        for album_path in all_folders_iter:
             try:
-                if i % 50 == 0:
-                    logger.info(f"Progress: {i}/{len(all_folders)} folders processed...")
                 
                 # Only remove duplicates, don't check completeness
                 duplicates_removed = self.remove_duplicate_tracks(album_path)

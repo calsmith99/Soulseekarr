@@ -757,23 +757,96 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
             return False
         
         # Filter files to only include tracks we actually need
+        # For each missing track, find the BEST matching file (not all matching files)
         needed_files = []
-        missing_track_titles = [track['title'].lower() for track in missing_tracks]
         
-        for file_info in user_files:
-            file_path = file_info['filename']
-            file_basename = file_path.split('/')[-1].lower()
+        for track in missing_tracks:
+            track_title = track['title'].lower()
+            track_number = track.get('trackNumber', 0)
             
-            # Check if this file matches any of our missing tracks
-            for track_title in missing_track_titles:
+            # Find all files that match this track
+            matching_files = []
+            
+            for file_info in user_files:
+                file_path = file_info['filename']
+                file_basename = file_path.split('/')[-1].lower()
+                
                 track_clean = track_title.replace(' ', '').replace('-', '')
                 file_clean = file_basename.replace(' ', '').replace('-', '').replace('_', '')
                 
-                # Match if track title is in filename
-                if track_clean in file_clean or any(word in file_clean for word in track_title.split() if len(word) > 3):
-                    needed_files.append(file_info)
-                    logging.debug(f"      📥 Queuing: {file_basename}")
-                    break
+                # Check if this file matches the track
+                is_match = False
+                
+                # Try exact match first
+                if track_clean in file_clean:
+                    is_match = True
+                # Try word-based match for longer titles
+                elif len(track_title.split()) >= 3:
+                    track_words = [w for w in track_title.split() if len(w) > 3]
+                    if all(w in file_clean for w in track_words):
+                        is_match = True
+                
+                if is_match:
+                    # Score this file to help select the best version
+                    quality_score = 0
+                    
+                    # Unwanted version patterns - these should be avoided
+                    unwanted_patterns = [
+                        'remix', 'mix)', 'live', 'acoustic', 'instrumental', 
+                        'karaoke', 'edit)', 'demo', 'cover', 'tribute'
+                    ]
+                    
+                    has_unwanted = any(pattern in file_basename for pattern in unwanted_patterns)
+                    if has_unwanted:
+                        quality_score -= 50  # Heavy penalty for unwanted versions
+                    
+                    # Prefer FLAC over MP3
+                    if file_path.lower().endswith('.flac'):
+                        quality_score += 30
+                    elif file_path.lower().endswith('.mp3'):
+                        if '320' in file_basename:
+                            quality_score += 20
+                        elif '192' in file_basename:
+                            quality_score += 10
+                    
+                    # Bonus for having track number in filename
+                    if f"{track_number:02d}" in file_basename or f"{track_number:01d}" in file_basename:
+                        quality_score += 15
+                    
+                    # Bonus for "original" or "album version" indicators
+                    if 'original' in file_basename or 'album version' in file_basename:
+                        quality_score += 25
+                    
+                    # Size-based scoring (prefer reasonable sizes)
+                    size_mb = file_info['size'] / (1024 * 1024)
+                    if 3 <= size_mb <= 50:
+                        quality_score += 10
+                    
+                    matching_files.append({
+                        'file_info': file_info,
+                        'quality_score': quality_score,
+                        'basename': file_basename
+                    })
+            
+            # Select the best matching file for this track
+            if matching_files:
+                # Sort by quality score (descending)
+                matching_files.sort(key=lambda x: x['quality_score'], reverse=True)
+                
+                # Log if we're filtering out multiple versions
+                if len(matching_files) > 1:
+                    best = matching_files[0]
+                    logging.debug(f"      🎯 Track '{track['title']}': Found {len(matching_files)} versions")
+                    logging.debug(f"         ✅ Selected: {best['basename']} (score: {best['quality_score']})")
+                    for alt in matching_files[1:3]:  # Show top alternatives
+                        logging.debug(f"         ⏭️  Skipped: {alt['basename']} (score: {alt['quality_score']})")
+                else:
+                    logging.debug(f"      📥 Queuing: {matching_files[0]['basename']}")
+                
+                # Add only the best matching file
+                needed_files.append(matching_files[0]['file_info'])
+            else:
+                logging.debug(f"      ⚠️  No match found for track: {track['title']}")
         
         # If we couldn't match specific tracks, queue all audio files (safer approach)
         if not needed_files:

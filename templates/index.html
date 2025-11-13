@@ -62,6 +62,10 @@
             line-height: 1.5;
         }
 
+        body.modal-open {
+            overflow: hidden;
+        }
+
         /* Layout */
         .app {
             display: flex;
@@ -1836,6 +1840,7 @@
                 this.updatePauseButton();
                 document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
                 document.getElementById('log-modal').classList.add('open');
+                document.body.classList.add('modal-open');
                 this.loadLogs(scriptId);
                 this.startLogUpdates();
             }
@@ -1849,6 +1854,7 @@
                 this.updatePauseButton();
                 document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
                 document.getElementById('log-modal').classList.add('open');
+                document.body.classList.add('modal-open');
                 this.loadLogs(scriptId);
                 this.startLogUpdates();
             }
@@ -1860,6 +1866,7 @@
                 this.isLogsPaused = false;
                 this.lastScrollPosition = 0;
                 document.getElementById('log-modal').classList.remove('open');
+                document.body.classList.remove('modal-open');
                 this.stopLogUpdates();
             }
 
@@ -2286,6 +2293,7 @@
             async openTracksModal(albumKey, artist, album) {
                 document.getElementById('tracks-modal-title').textContent = `${artist} - ${album}`;
                 document.getElementById('tracks-modal').classList.add('open');
+                document.body.classList.add('modal-open');
                 document.getElementById('tracks-loading').style.display = 'flex';
                 document.getElementById('tracks-content').innerHTML = '';
                 
@@ -2399,6 +2407,7 @@
 
             closeTracksModal() {
                 document.getElementById('tracks-modal').classList.remove('open');
+                document.body.classList.remove('modal-open');
             }
 
             // Settings Methods
