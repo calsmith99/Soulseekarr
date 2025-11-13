@@ -2068,10 +2068,10 @@
                 this.isLogsPaused = false;
                 this.lastScrollPosition = 0;
                 this.updatePauseButton();
-                document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
+                document.getElementById('modal-title').textContent = `${scriptName} - Logs (Execution #${executionId})`;
                 document.getElementById('log-modal').classList.add('open');
                 document.body.classList.add('modal-open');
-                this.loadLogs(scriptId);
+                this.loadLogs(scriptId, executionId);
                 this.startLogUpdates();
             }
 
@@ -2086,9 +2086,14 @@
                 this.stopLogUpdates();
             }
 
-            async loadLogs(scriptId) {
+            async loadLogs(scriptId, executionId = null) {
                 try {
-                    const response = await fetch(`/logs/${scriptId}`);
+                    let url = `/logs/${scriptId}`;
+                    if (executionId) {
+                        url += `?execution_id=${executionId}`;
+                    }
+                    
+                    const response = await fetch(url);
                     if (response.ok) {
                         const data = await response.json();
                         this.displayLogs(data);
@@ -2233,7 +2238,7 @@
                 
                 this.logUpdateInterval = setInterval(() => {
                     if (this.isLogModalOpen && this.currentLogScript && !this.isLogsPaused) {
-                        this.loadLogs(this.currentLogScript);
+                        this.loadLogs(this.currentLogScript, this.currentExecutionId);
                     }
                 }, 1000); // Update logs every second
             }
@@ -2247,7 +2252,7 @@
 
             refreshLogs() {
                 if (this.currentLogScript) {
-                    this.loadLogs(this.currentLogScript);
+                    this.loadLogs(this.currentLogScript, this.currentExecutionId);
                 }
             }
 
@@ -2261,7 +2266,7 @@
                 } else {
                     // Resume auto-updating and auto-scrolling
                     if (this.currentLogScript) {
-                        this.loadLogs(this.currentLogScript);
+                        this.loadLogs(this.currentLogScript, this.currentExecutionId);
                     }
                 }
                 

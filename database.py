@@ -413,6 +413,25 @@ class DatabaseManager:
             
             return list(reversed(logs))  # Return in chronological order
     
+    def get_execution_logs(self, execution_id: int, limit: int = 10000) -> List[str]:
+        """Get logs for a specific execution."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT content, timestamp
+                FROM script_logs
+                WHERE execution_id = ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+            """, (execution_id, limit))
+            
+            logs = []
+            for row in cursor.fetchall():
+                timestamp = datetime.fromisoformat(row['timestamp']).strftime('%H:%M:%S')
+                logs.append(f"[{timestamp}] {row['content']}")
+            
+            return logs
+    
     def clear_script_logs(self, script_id: str):
         """Clear all logs for a script."""
         with self.get_connection() as conn:

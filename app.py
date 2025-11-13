@@ -1270,6 +1270,24 @@ def get_script_logs(script_id):
     if script_config is None:
         return jsonify({'error': 'Script not found'}), 404
     
+    # Check if execution_id is provided as query parameter
+    execution_id = request.args.get('execution_id', type=int)
+    
+    if execution_id:
+        # Get logs for specific execution
+        try:
+            execution_logs = db.get_execution_logs(execution_id)
+            if execution_logs:
+                return jsonify({
+                    'logs': execution_logs,
+                    'script_id': script_id,
+                    'script_name': script_config.get('name', script_id),
+                    'execution_id': execution_id,
+                    'source': 'database'
+                })
+        except Exception as e:
+            logger.error(f"Error getting execution logs from database: {e}")
+    
     # Try to get logs from database first, fall back to memory
     try:
         db_logs = db.get_script_logs(script_id, limit=1000)
