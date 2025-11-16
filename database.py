@@ -7,6 +7,7 @@ Handles SQLite database operations for execution history, logs, and persistent s
 import sqlite3
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 from contextlib import contextmanager
@@ -134,7 +135,6 @@ class DatabaseManager:
                 album_art_url TEXT,
                 first_detected TIMESTAMP NOT NULL,
                 last_seen TIMESTAMP NOT NULL,
-                cleanup_days INTEGER NOT NULL,
                 status TEXT DEFAULT 'pending',
                 deleted_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -176,7 +176,7 @@ class DatabaseManager:
             )
         """)
         
-        # Create indexes for better performance
+        # Create indexes for better performance (excluding new columns initially)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_script_id ON script_executions(script_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_start_time ON script_executions(start_time)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_status ON script_executions(status)")
@@ -189,6 +189,7 @@ class DatabaseManager:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_expiry_history_recorded_at ON album_expiry_history(recorded_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_album_id ON album_tracks(album_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_days_old ON album_tracks(days_old)")
+        # Note: Indexes for new columns (is_starred, navidrome_id) are created in migration section
         
         # Run migrations if needed
         if current_version == 0:
@@ -209,9 +210,125 @@ class DatabaseManager:
                     logger.info("album_art_url column already exists, updating version")
                 else:
                     raise
+        if current_version < 3:
+            # Migration: Add track-level starred tracking and metadata
+            logger.info("Running migration to add track starred tracking...")
+            try:
+                # Add columns one by one with better error handling
+                columns_to_add = [
+                    "ALTER TABLE album_tracks ADD COLUMN is_starred BOOLEAN DEFAULT FALSE",
+                    "ALTER TABLE album_tracks ADD COLUMN navidrome_id TEXT",
+                    "ALTER TABLE album_tracks ADD COLUMN track_number INTEGER", 
+                    "ALTER TABLE album_tracks ADD COLUMN track_artist TEXT"
+                ]
+                
+                for sql in columns_to_add:
+                    try:
+                        cursor.execute(sql)
+                    except sqlite3.OperationalError as e:
+                        if "duplicate column" not in str(e).lower():
+                            raise  # Re-raise if not a duplicate column error
+                
+                # Create indexes
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_is_starred ON album_tracks(is_starred)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_navidrome_id ON album_tracks(navidrome_id)")
+                
+                # Update schema version
+                cursor.execute("PRAGMA user_version = 3")
+                conn.commit()  # Commit immediately after migration
+                
+                logger.info("Successfully added track starred tracking and metadata columns")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" in str(e).lower():
+                    # Columns already exist, just update version
+                    cursor.execute("PRAGMA user_version = 3")
+                    conn.commit()
+                    logger.info("Track starred tracking columns already exist, updating version")
+                else:
+                    logger.error(f"Migration failed: {e}")
+                    raise
+        
+        if current_version < 4:
+            # Migration: Remove cleanup_days column - policy is now frontend responsibility
+            logger.info("Running migration to remove cleanup_days column...")
+            try:
+                # SQLite doesn't support DROP COLUMN directly, so we recreate the table
+                # First, create the new table structure without cleanup_days
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS expiring_albums_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        album_key TEXT NOT NULL UNIQUE,
+                        artist TEXT NOT NULL,
+                        album TEXT NOT NULL,
+                        directory TEXT NOT NULL,
+                        oldest_file_days INTEGER NOT NULL,
+                        days_until_expiry INTEGER NOT NULL,
+                        file_count INTEGER NOT NULL,
+                        total_size_mb REAL NOT NULL,
+                        is_starred BOOLEAN DEFAULT FALSE,
+                        album_art_url TEXT,
+                        first_detected TIMESTAMP NOT NULL,
+                        last_seen TIMESTAMP NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        deleted_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Copy data from old table to new (excluding cleanup_days)
+                cursor.execute("""
+                    INSERT INTO expiring_albums_new 
+                    (id, album_key, artist, album, directory, oldest_file_days, days_until_expiry,
+                     file_count, total_size_mb, is_starred, album_art_url, first_detected, last_seen,
+                     status, deleted_at, created_at, updated_at)
+                    SELECT id, album_key, artist, album, directory, oldest_file_days, days_until_expiry,
+                           file_count, total_size_mb, is_starred, album_art_url, first_detected, last_seen,
+                           status, deleted_at, created_at, updated_at
+                    FROM expiring_albums
+                """)
+                
+                # Drop old table and rename new one
+                cursor.execute("DROP TABLE expiring_albums")
+                cursor.execute("ALTER TABLE expiring_albums_new RENAME TO expiring_albums")
+                
+                # Recreate indexes
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_status ON expiring_albums(status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_days_until_expiry ON expiring_albums(days_until_expiry)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_last_seen ON expiring_albums(last_seen)")
+                
+                # Update schema version
+                cursor.execute("PRAGMA user_version = 4")
+                conn.commit()  # Commit immediately after migration
+                
+                logger.info("Successfully removed cleanup_days column - policy now determined by frontend")
+            except Exception as e:
+                logger.error(f"Migration to remove cleanup_days failed: {e}")
+                # Try to continue - if tables exist without cleanup_days, that's fine
+                cursor.execute("PRAGMA user_version = 4")
+                conn.commit()
+                logger.info("Set schema version to 4, assuming cleanup_days already removed")
         
         conn.commit()
-        logger.info(f"Database tables created/verified successfully (schema version: {max(2, current_version)})")
+        
+        # Verify final schema version
+        cursor.execute("PRAGMA user_version")
+        final_version = cursor.fetchone()[0]
+        logger.info(f"Database tables created/verified successfully (schema version: {final_version})")
+        
+        # Verify critical columns exist
+        try:
+            cursor.execute("PRAGMA table_info(album_tracks)")
+            columns = [row[1] for row in cursor.fetchall()]
+            required_columns = ['is_starred', 'navidrome_id', 'track_number', 'track_artist']
+            missing_columns = [col for col in required_columns if col not in columns]
+            
+            if missing_columns:
+                logger.warning(f"Missing columns in album_tracks table: {missing_columns}")
+            else:
+                logger.info("All required columns verified in album_tracks table")
+        except Exception as e:
+            logger.warning(f"Could not verify table schema: {e}")
         
         # Clean up any executions that were running when container stopped
         self.cleanup_orphaned_executions(conn)
@@ -413,6 +530,25 @@ class DatabaseManager:
             
             return list(reversed(logs))  # Return in chronological order
     
+    def get_execution_logs(self, execution_id: int, limit: int = 10000) -> List[str]:
+        """Get logs for a specific execution."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT content, timestamp
+                FROM script_logs
+                WHERE execution_id = ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+            """, (execution_id, limit))
+            
+            logs = []
+            for row in cursor.fetchall():
+                timestamp = datetime.fromisoformat(row['timestamp']).strftime('%H:%M:%S')
+                logs.append(f"[{timestamp}] {row['content']}")
+            
+            return logs
+    
     def clear_script_logs(self, script_id: str):
         """Clear all logs for a script."""
         with self.get_connection() as conn:
@@ -576,7 +712,7 @@ class DatabaseManager:
             now = datetime.now()
             
             if existing:
-                # Update existing record
+                # Update existing record (preserving first_detected)
                 cursor.execute("""
                     UPDATE expiring_albums 
                     SET oldest_file_days = ?,
@@ -585,7 +721,6 @@ class DatabaseManager:
                         total_size_mb = ?,
                         is_starred = ?,
                         last_seen = ?,
-                        cleanup_days = ?,
                         status = ?,
                         album_art_url = ?,
                         updated_at = ?
@@ -597,7 +732,6 @@ class DatabaseManager:
                     album_data['total_size_mb'],
                     album_data['is_starred'],
                     now,
-                    album_data['cleanup_days'],
                     album_data['status'],
                     album_data.get('album_art_url'),
                     now,
@@ -609,9 +743,8 @@ class DatabaseManager:
                 cursor.execute("""
                     INSERT INTO expiring_albums 
                     (album_key, artist, album, directory, album_art_url, oldest_file_days, days_until_expiry, 
-                     file_count, total_size_mb, is_starred, first_detected, last_seen, 
-                     cleanup_days, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     file_count, total_size_mb, is_starred, first_detected, last_seen, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     album_key,
                     album_data['artist'],
@@ -625,7 +758,6 @@ class DatabaseManager:
                     album_data['is_starred'],
                     now,
                     now,
-                    album_data['cleanup_days'],
                     album_data['status']
                 ))
                 album_id = cursor.lastrowid
@@ -688,15 +820,10 @@ class DatabaseManager:
             """)
             
             albums = {}
-            cleanup_days = None
             
             for row in cursor.fetchall():
                 album_dict = dict(row)
                 album_key = album_dict['album_key']
-                
-                # Store cleanup_days from first album
-                if cleanup_days is None:
-                    cleanup_days = album_dict['cleanup_days']
                 
                 albums[album_key] = {
                     'artist': album_dict['artist'],
@@ -714,7 +841,6 @@ class DatabaseManager:
             
             return {
                 'generated_at': datetime.now().isoformat(),
-                'cleanup_days': cleanup_days or 30,
                 'total_albums': len(albums),
                 'albums': albums
             }
@@ -797,16 +923,21 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT OR REPLACE INTO album_tracks 
-                (album_id, file_path, file_name, track_title, file_size_mb, days_old, last_modified, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (album_id, file_path, file_name, track_title, track_number, track_artist, 
+                 file_size_mb, days_old, last_modified, is_starred, navidrome_id, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 album_id,
                 track_data['file_path'],
                 track_data['file_name'],
                 track_data.get('track_title'),
+                track_data.get('track_number'),
+                track_data.get('track_artist'),
                 track_data['file_size_mb'],
                 track_data['days_old'],
                 track_data['last_modified'],
+                track_data.get('is_starred', False),
+                track_data.get('navidrome_id'),
                 datetime.now()
             ))
             conn.commit()
@@ -837,10 +968,94 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM album_tracks WHERE album_id = ?", (album_id,))
             conn.commit()
+    
+    def update_track_starred_status(self, file_path: str, is_starred: bool, navidrome_id: str = None):
+        """Update the starred status of a specific track."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            if navidrome_id:
+                # Update by Navidrome ID if available
+                cursor.execute("""
+                    UPDATE album_tracks 
+                    SET is_starred = ?, navidrome_id = ?, updated_at = ?
+                    WHERE navidrome_id = ? OR file_path = ?
+                """, (is_starred, navidrome_id, datetime.now(), navidrome_id, file_path))
+            else:
+                # Update by file path
+                cursor.execute("""
+                    UPDATE album_tracks 
+                    SET is_starred = ?, updated_at = ?
+                    WHERE file_path = ?
+                """, (is_starred, datetime.now(), file_path))
+            
+            conn.commit()
+            return cursor.rowcount > 0
+    
+    def get_starred_tracks(self) -> List[Dict]:
+        """Get all starred tracks."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT at.*, ea.artist, ea.album, ea.directory
+                FROM album_tracks at
+                JOIN expiring_albums ea ON at.album_id = ea.id
+                WHERE at.is_starred = TRUE
+                ORDER BY ea.artist, ea.album, at.track_number, at.file_name
+            """)
+            
+            tracks = []
+            for row in cursor.fetchall():
+                track = dict(row)
+                track['last_modified'] = datetime.fromisoformat(track['last_modified'])
+                tracks.append(track)
+            
+            return tracks
+    
+    def bulk_update_starred_tracks(self, starred_tracks: List[Dict]):
+        """Bulk update starred status for multiple tracks.
+        
+        Args:
+            starred_tracks: List of dicts with 'file_path' and 'is_starred' keys
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # First, reset all tracks to unstarred
+            cursor.execute("UPDATE album_tracks SET is_starred = FALSE, updated_at = ?", (datetime.now(),))
+            
+            # Then set starred tracks
+            for track in starred_tracks:
+                if track.get('is_starred', False):
+                    cursor.execute("""
+                        UPDATE album_tracks 
+                        SET is_starred = TRUE, 
+                            navidrome_id = ?,
+                            updated_at = ?
+                        WHERE file_path = ?
+                    """, (
+                        track.get('navidrome_id'),
+                        datetime.now(),
+                        track['file_path']
+                    ))
+            
+            conn.commit()
+            logger.info(f"Bulk updated starred status for {len(starred_tracks)} tracks")
 
 # Global database manager instance
-db = DatabaseManager()
+_db_instance = None
+_db_lock = threading.Lock()
 
 def get_db() -> DatabaseManager:
-    """Get the global database manager instance."""
-    return db
+    """Get the global database manager instance with lazy initialization."""
+    global _db_instance
+    
+    if _db_instance is None:
+        with _db_lock:
+            # Double-check pattern
+            if _db_instance is None:
+                logger.info("Initializing database manager...")
+                _db_instance = DatabaseManager()
+                logger.info("Database manager initialization complete")
+    
+    return _db_instance

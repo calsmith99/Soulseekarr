@@ -18,7 +18,6 @@ from werkzeug.serving import make_server
 import logging
 import requests
 from urllib.parse import urljoin
-from database import get_db
 import settings
 
 app = Flask(__name__)
@@ -27,6 +26,12 @@ app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
 # Configure logging
 logging.basicConfig(level=logging.INFO)  # Balanced logging level
 logger = logging.getLogger(__name__)
+
+# Initialize database early and ensure migrations complete
+logger.info("Initializing database with migrations...")
+from database import get_db
+db = get_db()  # This will trigger lazy initialization and complete migrations
+logger.info("Database initialization complete")
 
 # Disable Werkzeug access logging to reduce noise
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
@@ -1269,6 +1274,24 @@ def get_script_logs(script_id):
     script_config = find_script_config(script_id)
     if script_config is None:
         return jsonify({'error': 'Script not found'}), 404
+    
+    # Check if execution_id is provided as query parameter
+    execution_id = request.args.get('execution_id', type=int)
+    
+    if execution_id:
+        # Get logs for specific execution
+        try:
+            execution_logs = db.get_execution_logs(execution_id)
+            if execution_logs:
+                return jsonify({
+                    'logs': execution_logs,
+                    'script_id': script_id,
+                    'script_name': script_config.get('name', script_id),
+                    'execution_id': execution_id,
+                    'source': 'database'
+                })
+        except Exception as e:
+            logger.error(f"Error getting execution logs from database: {e}")
     
     # Try to get logs from database first, fall back to memory
     try:

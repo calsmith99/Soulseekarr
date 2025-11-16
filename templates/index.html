@@ -388,6 +388,45 @@
             gap: var(--spacing-sm);
         }
 
+        .script-progress {
+            margin-top: var(--spacing-sm);
+            padding-top: var(--spacing-sm);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .script-progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .script-progress-step {
+            font-weight: 500;
+            color: var(--primary-color);
+        }
+
+        .script-progress-bar {
+            width: 100%;
+            height: 6px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .script-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+            transition: width 0.3s ease;
+            border-radius: 3px;
+        }
+
+        .script-progress-fill.complete {
+            background: linear-gradient(90deg, var(--success-color), #27c24c);
+        }
+
         /* Queue items */
         .queue-item {
             padding: var(--spacing-md);
@@ -543,6 +582,68 @@
         .log-stats.paused {
             color: var(--warning-color);
             font-weight: 600;
+        }
+
+        /* Progress Bar Styles */
+        .progress-container {
+            width: 100%;
+            padding: var(--spacing-sm) var(--spacing-md);
+            background-color: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-xs);
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+        }
+
+        .progress-step {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .progress-bar-wrapper {
+            width: 100%;
+            height: 8px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .progress-bar-fill.complete {
+            background: linear-gradient(90deg, var(--success-color), #27c24c);
+        }
+
+        .queue-progress {
+            margin-top: var(--spacing-xs);
+            padding-top: var(--spacing-xs);
+            border-top: 1px solid var(--border-color);
+        }
+
+        .queue-progress-bar {
+            width: 100%;
+            height: 4px;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .queue-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-hover));
+            transition: width 0.3s ease;
+            border-radius: 2px;
         }
 
         .log-controls {
@@ -1384,6 +1485,15 @@
             </div>
             <div class="modal-body">
                 <div class="log-container">
+                    <div class="progress-container" id="log-progress-container" style="display: none;">
+                        <div class="progress-info">
+                            <span class="progress-step" id="progress-step-text">Loading...</span>
+                            <span id="progress-percentage">0%</span>
+                        </div>
+                        <div class="progress-bar-wrapper">
+                            <div class="progress-bar-fill" id="progress-bar-fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
                     <div class="log-header">
                         <div class="log-stats" id="log-stats">Loading...</div>
                         <div class="log-controls">
@@ -1535,8 +1645,27 @@
                             status: item.status,
                             duration_seconds: item.duration_seconds,
                             dry_run: item.dry_run,
-                            execution_id: item.execution_id
+                            execution_id: item.execution_id,
+                            progress: item.progress || null
                         }));
+                        
+                        // For running tasks, fetch their logs to extract progress
+                        const runningTasks = this.executionQueue.filter(item => item.status === 'running');
+                        for (const task of runningTasks) {
+                            try {
+                                const logResponse = await fetch(`/logs/${task.scriptId}`);
+                                if (logResponse.ok) {
+                                    const logData = await logResponse.json();
+                                    const progressInfo = this.parseProgressFromLogs(logData.logs || []);
+                                    if (progressInfo) {
+                                        task.progress = progressInfo;
+                                    }
+                                }
+                            } catch (error) {
+                                // Ignore errors fetching progress
+                            }
+                        }
+                        
                         this.renderQueue();
                     } else {
                         console.error('Failed to load execution queue:', data.error);
@@ -1573,6 +1702,25 @@
 
                 const scriptsHtml = Object.entries(this.scripts).map(([scriptId, script]) => {
                     const status = script.current_status || { running: false };
+                    const isRunning = status.running;
+                    
+                    // Get progress info if script is running
+                    let progressHtml = '';
+                    if (isRunning && script.progress) {
+                        const prog = script.progress;
+                        const fillClass = prog.percentage === 100 ? 'complete' : '';
+                        progressHtml = `
+                            <div class="script-progress">
+                                <div class="script-progress-info">
+                                    <span class="script-progress-step">${prog.description}</span>
+                                    <span>${prog.percentage}%</span>
+                                </div>
+                                <div class="script-progress-bar">
+                                    <div class="script-progress-fill ${fillClass}" style="width: ${prog.percentage}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
                     
                     return `
                         <div class="script-item" data-script-id="${scriptId}">
@@ -1584,6 +1732,7 @@
                                 </div>
                             </div>
                             <div class="script-description">${script.description}</div>
+                            ${progressHtml}
                             <div class="script-actions">
                                 ${script.supports_dry_run ? `
                                     <button class="btn btn-secondary btn-sm run-btn" data-script-id="${scriptId}" data-dry-run="true">
@@ -1717,8 +1866,62 @@
                     stopBtn.disabled = !status.running;
                 }
 
+                // Update progress bar if running
+                const scriptItem = document.querySelector(`[data-script-id="${scriptId}"]`);
+                if (scriptItem && status.running) {
+                    // Fetch logs to get progress
+                    this.updateScriptProgress(scriptId, scriptItem);
+                } else if (scriptItem) {
+                    // Remove progress bar if not running
+                    const existingProgress = scriptItem.querySelector('.script-progress');
+                    if (existingProgress) {
+                        existingProgress.remove();
+                    }
+                }
+
                 // Reload execution queue to get updated data from database
                 this.loadExecutionQueue();
+            }
+
+            async updateScriptProgress(scriptId, scriptItem) {
+                try {
+                    const response = await fetch(`/logs/${scriptId}`);
+                    if (response.ok) {
+                        const logData = await response.json();
+                        const progressInfo = this.parseProgressFromLogs(logData.logs || []);
+                        
+                        if (progressInfo) {
+                            // Update or create progress bar
+                            let progressDiv = scriptItem.querySelector('.script-progress');
+                            
+                            if (!progressDiv) {
+                                // Create new progress bar
+                                const descriptionDiv = scriptItem.querySelector('.script-description');
+                                progressDiv = document.createElement('div');
+                                progressDiv.className = 'script-progress';
+                                descriptionDiv.after(progressDiv);
+                            }
+                            
+                            const fillClass = progressInfo.percentage === 100 ? 'complete' : '';
+                            progressDiv.innerHTML = `
+                                <div class="script-progress-info">
+                                    <span class="script-progress-step">${this.escapeHtml(progressInfo.description)}</span>
+                                    <span>${progressInfo.percentage}%</span>
+                                </div>
+                                <div class="script-progress-bar">
+                                    <div class="script-progress-fill ${fillClass}" style="width: ${progressInfo.percentage}%;"></div>
+                                </div>
+                            `;
+                            
+                            // Store progress in script object for next render
+                            if (this.scripts[scriptId]) {
+                                this.scripts[scriptId].progress = progressInfo;
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // Silently fail - progress is optional
+                }
             }
 
             getScriptStatus(status) {
@@ -1754,8 +1957,20 @@
                     const duration = this.calculateDurationFromSeconds(item.duration_seconds, item.startTime, item.endTime);
                     const isRunning = item.status === 'running';
                     
+                    // Get progress info for running tasks
+                    let progressHtml = '';
+                    if (isRunning && item.progress) {
+                        progressHtml = `
+                            <div class="queue-progress">
+                                <div class="queue-progress-bar">
+                                    <div class="queue-progress-fill" style="width: ${item.progress.percentage || 0}%;"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                    
                     return `
-                        <div class="queue-item" onclick="window.soulSeekarrApp.openLogModalFromQueue('${item.scriptId}', '${item.name}', ${item.execution_id})">>
+                        <div class="queue-item" onclick="window.soulSeekarrApp.openLogModalFromQueue('${item.scriptId}', '${item.name}', ${item.execution_id})">
                             <div class="queue-item-header">
                                 <div class="queue-item-name">${item.name}</div>
                                 <div class="status-badge status-${item.status}">
@@ -1772,6 +1987,7 @@
                                     Duration: ${duration}
                                 </div>
                             </div>
+                            ${progressHtml}
                             <div class="queue-item-actions">
                                 ${isRunning ? 
                                     `<button class="btn btn-danger btn-xs stop-execution-btn" data-execution-id="${item.execution_id}" onclick="event.stopPropagation(); window.soulSeekarrApp.stopExecution(${item.execution_id})">Stop</button>` :
@@ -1852,10 +2068,10 @@
                 this.isLogsPaused = false;
                 this.lastScrollPosition = 0;
                 this.updatePauseButton();
-                document.getElementById('modal-title').textContent = `${scriptName} - Logs`;
+                document.getElementById('modal-title').textContent = `${scriptName} - Logs (Execution #${executionId})`;
                 document.getElementById('log-modal').classList.add('open');
                 document.body.classList.add('modal-open');
-                this.loadLogs(scriptId);
+                this.loadLogs(scriptId, executionId);
                 this.startLogUpdates();
             }
 
@@ -1870,9 +2086,14 @@
                 this.stopLogUpdates();
             }
 
-            async loadLogs(scriptId) {
+            async loadLogs(scriptId, executionId = null) {
                 try {
-                    const response = await fetch(`/logs/${scriptId}`);
+                    let url = `/logs/${scriptId}`;
+                    if (executionId) {
+                        url += `?execution_id=${executionId}`;
+                    }
+                    
+                    const response = await fetch(url);
                     if (response.ok) {
                         const data = await response.json();
                         this.displayLogs(data);
@@ -1895,12 +2116,23 @@
                     logContent.innerHTML = '<div class="log-empty">No logs available</div>';
                     logStats.textContent = 'No logs';
                     logStats.classList.remove('paused');
+                    this.hideProgressBar();
                     return;
                 }
 
                 // Store current scroll position if logs are paused
                 if (this.isLogsPaused) {
                     this.lastScrollPosition = logContent.scrollTop;
+                }
+
+                // Parse for PROGRESS markers
+                const progressInfo = this.parseProgressFromLogs(logData.logs);
+                
+                // Update progress bar if progress info found
+                if (progressInfo) {
+                    this.updateProgressBar(progressInfo);
+                } else {
+                    this.hideProgressBar();
                 }
 
                 const logsHtml = logData.logs.map(line => {
@@ -1927,6 +2159,55 @@
                 } else {
                     // Auto-scroll to bottom when not paused
                     logContent.scrollTop = logContent.scrollHeight;
+                }
+            }
+
+            parseProgressFromLogs(logs) {
+                // Look for PROGRESS: [n/total] percentage% - description pattern
+                // Example: "PROGRESS: [2/5] 40% - Processing Downloads folder"
+                const progressRegex = /PROGRESS:\s*\[(\d+)\/(\d+)\]\s*(\d+)%\s*-\s*(.+)/i;
+                
+                // Search from end of logs to get most recent progress
+                for (let i = logs.length - 1; i >= 0; i--) {
+                    const match = logs[i].match(progressRegex);
+                    if (match) {
+                        return {
+                            current: parseInt(match[1]),
+                            total: parseInt(match[2]),
+                            percentage: parseInt(match[3]),
+                            description: match[4].trim()
+                        };
+                    }
+                }
+                
+                return null;
+            }
+
+            updateProgressBar(progressInfo) {
+                const container = document.getElementById('log-progress-container');
+                const stepText = document.getElementById('progress-step-text');
+                const percentageText = document.getElementById('progress-percentage');
+                const progressFill = document.getElementById('progress-bar-fill');
+                
+                if (!container || !stepText || !percentageText || !progressFill) return;
+                
+                container.style.display = 'block';
+                stepText.textContent = `Step ${progressInfo.current}/${progressInfo.total}: ${progressInfo.description}`;
+                percentageText.textContent = `${progressInfo.percentage}%`;
+                progressFill.style.width = `${progressInfo.percentage}%`;
+                
+                // Add complete class if at 100%
+                if (progressInfo.percentage === 100) {
+                    progressFill.classList.add('complete');
+                } else {
+                    progressFill.classList.remove('complete');
+                }
+            }
+
+            hideProgressBar() {
+                const container = document.getElementById('log-progress-container');
+                if (container) {
+                    container.style.display = 'none';
                 }
             }
 
@@ -1957,7 +2238,7 @@
                 
                 this.logUpdateInterval = setInterval(() => {
                     if (this.isLogModalOpen && this.currentLogScript && !this.isLogsPaused) {
-                        this.loadLogs(this.currentLogScript);
+                        this.loadLogs(this.currentLogScript, this.currentExecutionId);
                     }
                 }, 1000); // Update logs every second
             }
@@ -1971,7 +2252,7 @@
 
             refreshLogs() {
                 if (this.currentLogScript) {
-                    this.loadLogs(this.currentLogScript);
+                    this.loadLogs(this.currentLogScript, this.currentExecutionId);
                 }
             }
 
@@ -1985,7 +2266,7 @@
                 } else {
                     // Resume auto-updating and auto-scrolling
                     if (this.currentLogScript) {
-                        this.loadLogs(this.currentLogScript);
+                        this.loadLogs(this.currentLogScript, this.currentExecutionId);
                     }
                 }
                 
