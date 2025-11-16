@@ -69,6 +69,9 @@ STATS = {
 # Global configuration
 CONFIG = {}
 
+# Global tracking for downloaded tracks to prevent duplicates across searches
+DOWNLOADED_TRACKS = {}  # key: "artist|track_title", value: {"user": username, "filename": filepath}
+
 # Supported audio extensions for owned music detection - focusing on FLAC and MP3 only
 AUDIO_EXTENSIONS = {'.mp3', '.flac'}
 
@@ -418,6 +421,126 @@ def check_owned_tracks(missing_tracks: List[Dict], artist_name: str, album_title
     
     return tracks_not_owned
 
+def check_downloads_folder(tracks_to_check: List[Dict], artist_name: str) -> List[Dict]:
+    """
+    Check which tracks are not already in the downloads folder.
+    Returns tracks that are NOT already downloaded.
+    """
+    try:
+        logging.info(f"🔍 Checking downloads folder for existing tracks by '{artist_name}'...")
+        
+        # Deduplicate tracks by title to avoid processing the same track multiple times
+        seen_titles = set()
+        unique_tracks = []
+        for track in tracks_to_check:
+            track_title = track['title'].lower().strip()
+            if track_title not in seen_titles:
+                seen_titles.add(track_title)
+                unique_tracks.append(track)
+            else:
+                logging.debug(f"   🔄 Skipping duplicate track: {track['title']}")
+        
+        if len(unique_tracks) < len(tracks_to_check):
+            logging.info(f"   🔄 Removed {len(tracks_to_check) - len(unique_tracks)} duplicate tracks, checking {len(unique_tracks)} unique tracks")
+        
+        downloads_path = Path("/downloads/completed")
+        if not downloads_path.exists():
+            logging.info(f"   📁 Downloads folder not found: {downloads_path}, skipping local check")
+            return unique_tracks
+        
+        # Get all audio files in downloads folder
+        downloaded_files = []
+        for audio_ext in ['.mp3', '.flac']:
+            downloaded_files.extend(downloads_path.rglob(f"*{audio_ext}"))
+        
+        if not downloaded_files:
+            logging.info("   📁 No audio files found in downloads folder")
+            return unique_tracks
+        
+        logging.info(f"   📁 Checking {len(unique_tracks)} tracks against {len(downloaded_files)} downloaded files")
+        
+        tracks_not_downloaded = []
+        already_downloaded = []
+        
+        for track in unique_tracks:
+            track_title = track['title'].lower().strip()
+            track_number = track.get('trackNumber', 0)
+            
+            # Ensure track_number is an integer
+            if isinstance(track_number, str):
+                try:
+                    track_number = int(track_number)
+                except (ValueError, TypeError):
+                    track_number = 0
+            
+            logging.info(f"📁 Checking track: {track['title']} by {artist_name}")
+            
+            # Check if track is already downloaded
+            track_downloaded = False
+            matched_file = None
+            
+            for downloaded_file in downloaded_files:
+                file_path_str = str(downloaded_file).lower()
+                file_name_str = downloaded_file.name.lower()
+                
+                # Normalize names for comparison (remove special chars, extra spaces)
+                def normalize_for_comparison(text):
+                    # Keep only alphanumeric and spaces, then normalize spaces
+                    normalized = ''.join(c if c.isalnum() else ' ' for c in text)
+                    return ' '.join(normalized.split())
+                
+                normalized_track = normalize_for_comparison(track_title)
+                normalized_artist = normalize_for_comparison(artist_name)
+                normalized_file_path = normalize_for_comparison(file_path_str)
+                normalized_file_name = normalize_for_comparison(file_name_str)
+                
+                # Create multiple search patterns to check
+                patterns_to_check = [
+                    # Track title in full path
+                    normalized_track in normalized_file_path,
+                    # Track title in filename
+                    normalized_track in normalized_file_name,
+                    # Artist and track in full path
+                    normalized_artist in normalized_file_path and normalized_track in normalized_file_path,
+                    # Track number patterns
+                    f"{track_number:02d} {normalized_track}" in normalized_file_name,
+                    f"{track_number} {normalized_track}" in normalized_file_name,
+                    # Combined artist_track patterns
+                    f"{normalized_artist} {normalized_track}" in normalized_file_path,
+                ]
+                
+                # Check if any pattern matches
+                if any(patterns_to_check):
+                    track_downloaded = True
+                    matched_file = str(downloaded_file.relative_to(downloads_path))
+                    logging.info(f"      ✅ Found match: {matched_file}")
+                    break
+            
+            if not track_downloaded:
+                logging.info(f"      ❌ Not found: {track['title']}")
+                tracks_not_downloaded.append(track)
+            else:
+                already_downloaded.append({
+                    'track': track['title'],
+                    'matched_file': matched_file
+                })
+        
+        if already_downloaded:
+            logging.info(f"   📁 {len(already_downloaded)} tracks already in downloads folder:")
+            for item in already_downloaded[:3]:
+                logging.info(f"      ✅ {item['track']} → {item['matched_file']}")
+            if len(already_downloaded) > 3:
+                logging.info(f"      ... and {len(already_downloaded) - 3} more")
+        
+        if tracks_not_downloaded:
+            logging.info(f"   📁 {len(tracks_not_downloaded)} tracks still need downloading")
+        
+        return tracks_not_downloaded
+        
+    except Exception as e:
+        logging.error(f"   ❌ Error checking downloads folder: {e}")
+        return tracks_to_check
+
 def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
     """
     Check which tracks are not already in the download queue.
@@ -434,12 +557,18 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
         
         downloads_data = response.json()
         
-        # Collect all files in download queue (both active and completed)
+        # Collect all files in download queue
         queued_files = []
-        # Include both active downloads and completed ones to avoid re-downloading
-        all_download_states = [
+        
+        # States that should prevent re-downloading (active or successfully completed)
+        skip_download_states = [
             'Queued', 'Requested', 'Initializing', 'InProgress', 'Remotely Queued',
-            'Completed', 'Succeeded'  # Also check successfully completed downloads
+            'Completed', 'Succeeded'  # Successfully completed downloads
+        ]
+        
+        # States that represent failed downloads that can be retried
+        failed_states = [
+            'TimedOut', 'Cancelled', 'Errored', 'Rejected', 'Failed'
         ]
         
         for user_group in downloads_data:
@@ -455,8 +584,9 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
                     state = file_transfer.get('state', '')
                     size = file_transfer.get('size', 0)
                     
-                    # Check both active downloads and completed ones
-                    if state in all_download_states:
+                    # Only skip downloads that are active or successfully completed
+                    # Allow retries for failed downloads (TimedOut, Cancelled, etc.)
+                    if state in skip_download_states:
                         # Extract just the filename without path
                         file_basename = filename.split('/')[-1].split('\\')[-1].lower()
                         
@@ -468,6 +598,10 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
                             'state': state,
                             'size': size
                         })
+                    elif state in failed_states:
+                        # Log failed downloads that we'll allow to retry
+                        file_basename = filename.split('/')[-1].split('\\')[-1].lower()
+                        logging.debug(f"   🔄 Allowing retry for failed download: {file_basename} ({state})")
         
         if not queued_files:
             logging.debug("   📋 No downloads found in queue (active or completed)")
@@ -561,12 +695,30 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
                 tracks_not_queued.append(track)
         
         if already_queued:
-            logging.info(f"   ⏭️  {len(already_queued)} tracks already in download queue or completed:")
-            for item in already_queued[:3]:
-                status_emoji = "📥" if item['state'] in ['Queued', 'Requested', 'Initializing', 'InProgress', 'Remotely Queued'] else "✅"
-                logging.info(f"      {status_emoji} {item['track']} → {item['username']} ({item['state']})")
-            if len(already_queued) > 3:
-                logging.info(f"      ... and {len(already_queued) - 3} more")
+            # Group by status for better logging
+            status_counts = {}
+            for item in already_queued:
+                status = item['state']
+                if status not in status_counts:
+                    status_counts[status] = []
+                status_counts[status].append(item)
+            
+            logging.info(f"   ⏭️  {len(already_queued)} tracks already in download queue:")
+            
+            # Show breakdown by status
+            for status, items in status_counts.items():
+                if status == 'Queued':
+                    logging.info(f"      � {len(items)} queued (waiting to start)")
+                elif status in ['Requested', 'Initializing', 'InProgress', 'Remotely Queued']:
+                    logging.info(f"      📥 {len(items)} actively downloading ({status})")
+                elif status in ['Completed', 'Succeeded']:
+                    logging.info(f"      ✅ {len(items)} already completed")
+                else:
+                    logging.info(f"      🔄 {len(items)} in status: {status}")
+                
+                # Show a few examples
+                for item in items[:2]:
+                    logging.debug(f"         • {item['track']} → {item['username']}")
             
             STATS['tracks_already_queued'] += len(already_queued)
         
@@ -582,14 +734,42 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
     """Queue tracks for download in slskd using intelligent album-first approach"""
     if not tracks:
         return True
-    
+
     logging.info(f"   🎯 Queuing {len(tracks)} tracks for download")
     
+    # First, check if tracks are already downloaded before searching at all
+    tracks_not_downloaded = check_downloads_folder(tracks, artist_name)
+    
+    if not tracks_not_downloaded:
+        logging.info(f"   ✅ All tracks already in downloads folder, skipping search entirely")
+        return True
+        
+    if len(tracks_not_downloaded) < len(tracks):
+        already_downloaded = len(tracks) - len(tracks_not_downloaded)
+        logging.info(f"   📁 {already_downloaded} tracks already downloaded, processing {len(tracks_not_downloaded)} remaining")
+    
+    # Update tracks to only those we need - this simplifies all downstream logic
+    tracks = tracks_not_downloaded
+    
+    # Second, check download queue for the remaining tracks
+    tracks_not_queued = check_download_queue(tracks)
+    
+    if not tracks_not_queued:
+        logging.info(f"   ✅ All remaining tracks already in download queue, skipping search entirely")
+        return True
+        
+    if len(tracks_not_queued) < len(tracks):
+        already_queued = len(tracks) - len(tracks_not_queued)
+        logging.info(f"   📋 {already_queued} tracks already in queue, processing {len(tracks_not_queued)} remaining")
+    
+    # Update tracks again to only those we actually need to search for
+    tracks = tracks_not_queued
+
     # Show tracks being queued
     for i, track in enumerate(tracks[:5]):
         disc_info = f" (Disc {track['discNumber']})" if track['discNumber'] > 1 else ""
         logging.info(f"      🎵 Track {track['trackNumber']}{disc_info}: {track['title']}")
-    
+
     if len(tracks) > 5:
         logging.info(f"      ... and {len(tracks) - 5} more tracks")
     
@@ -612,9 +792,10 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
     else:
         logging.info("   ⚠️  Album search failed, trying individual track searches as fallback...")
         
-        # Fallback: Try individual tracks (limit to avoid spam)
+        # tracks array already contains only the tracks we need (after downloads/queue filtering)
+        max_fallback_tracks = min(len(tracks), 5)  # Allow up to 5 tracks in fallback
         success_count = 0
-        for i, track in enumerate(tracks[:3]):  # Limit to 3 tracks as fallback
+        for i, track in enumerate(tracks[:max_fallback_tracks]):
             if interrupted:
                 break
             
@@ -628,8 +809,12 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
             else:
                 logging.info(f"         ❌ Failed")
             
-            if i < min(3, len(tracks)) - 1:
+            if i < min(max_fallback_tracks, len(tracks)) - 1:
                 time.sleep(1)
+        
+        # Log fallback results
+        if len(tracks) > max_fallback_tracks:
+            logging.info(f"   ⚠️  Note: Only tried {max_fallback_tracks} of {len(tracks)} tracks in fallback mode")
         
         STATS['tracks_queued'] += success_count
         STATS['tracks_failed'] += (len(tracks) - success_count)
@@ -712,24 +897,55 @@ def queue_album_with_specific_tracks(search_query: str, artist_name: str, album_
         candidates = find_best_candidates(results, artist_name, album_title)
         
         if not candidates:
-            logging.debug(f"      No suitable album candidates found")
+            logging.info(f"   ❌ No suitable album candidates found from {len(results)} responses")
+            logging.info(f"      📊 Check find_best_candidates output above for filtering details")
+            logging.info(f"      💡 Possible issues:")
+            logging.info(f"         - Unwanted keyword filtering (remix, live, etc.)")
+            logging.info(f"         - Artist/album name matching too strict") 
+            logging.info(f"         - File size requirements")
             return False
         
         # Try the best candidate, but queue only needed tracks
         username, filename = candidates[0]
-        logging.debug(f"      Selected album from: {username}")
+        logging.info(f"      Selected album from: {username}")
+        logging.info(f"      Album file: {filename}")
         
-        return attempt_selective_download(username, filename, results, missing_tracks)
+        return attempt_selective_download(username, filename, results, missing_tracks, artist_name)
         
     except Exception as e:
         logging.debug(f"      Error in album search: {e}")
         return False
 
-def attempt_selective_download(username: str, filename: str, results, missing_tracks: List[Dict]) -> bool:
+def attempt_selective_download(username: str, filename: str, results, missing_tracks: List[Dict], artist_name: str) -> bool:
     """Attempt to download from a specific user, queuing only the needed tracks from the album"""
     try:
+        logging.debug(f"      🔍 Checking {len(missing_tracks)} tracks before downloading...")
+        
+        # First, check if tracks are already in downloads folder
+        tracks_not_downloaded = check_downloads_folder(missing_tracks, artist_name)
+        
+        if not tracks_not_downloaded:
+            logging.info(f"      ✅ All tracks already in downloads folder, skipping")
+            return True
+        
+        if len(tracks_not_downloaded) < len(missing_tracks):
+            already_downloaded = len(missing_tracks) - len(tracks_not_downloaded)
+            logging.info(f"      📁 {already_downloaded} tracks already downloaded, processing {len(tracks_not_downloaded)} remaining")
+        
+        # Second, filter out tracks that are already in the download queue
+        tracks_to_download = check_download_queue(tracks_not_downloaded)
+        
+        if not tracks_to_download:
+            logging.info(f"      ✅ All tracks already in download queue, skipping")
+            return True
+        
+        if len(tracks_to_download) < len(missing_tracks):
+            already_queued = len(missing_tracks) - len(tracks_to_download)
+            logging.info(f"      📋 {already_queued} tracks already in queue, downloading {len(tracks_to_download)} remaining")
+        
         # Get the directory path from the filename
         directory = '/'.join(filename.split('/')[:-1]) if '/' in filename else ''
+        logging.info(f"      📁 Checking album directory: {directory}")
         
         # Get all audio files from this user's album directory
         user_files = []
@@ -753,19 +969,46 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 break
         
         if not user_files:
-            logging.debug(f"      No audio files found in album directory")
+            logging.info(f"      ❌ No audio files found in album directory for {username}")
             return False
+        
+        logging.info(f"      📁 Found {len(user_files)} audio files in album directory:")
+        for i, file_info in enumerate(user_files[:5], 1):
+            file_basename = file_info['filename'].split('/')[-1]
+            size_mb = file_info['size'] / (1024 * 1024)
+            logging.info(f"         {i}. {file_basename} ({size_mb:.1f}MB)")
+        if len(user_files) > 5:
+            logging.info(f"         ... and {len(user_files) - 5} more files")
         
         # Filter files to only include tracks we actually need
         # For each missing track, find the BEST matching file (not all matching files)
         needed_files = []
-        
-        for track in missing_tracks:
+
+        for track in tracks_to_download:  # Use filtered tracks instead of all missing tracks
             track_title = track['title'].lower()
             track_number = track.get('trackNumber', 0)
             
+            logging.info(f"      🎵 Looking for track #{track_number}: '{track['title']}'")
+            
+            # Create a unique key for this track to check against global downloads
+            track_key = f"{artist_name.lower()}|{track_title}"
+            
+            # Skip if we've already downloaded this track from another album in THIS session
+            # Only skip if we're confident it's the same track from the same user
+            if track_key in DOWNLOADED_TRACKS:
+                previous_download = DOWNLOADED_TRACKS[track_key]
+                # Only skip if it's from the same user (to avoid blocking different versions)
+                if previous_download['user'] == username:
+                    logging.info(f"      ⏭️  Skipping '{track['title']}': already downloading from {previous_download['user']} in this session")
+                    logging.debug(f"         Previous file: {previous_download['filename']}")
+                    continue
+                else:
+                    logging.debug(f"      🔍 Found '{track['title']}' from different user ({username} vs {previous_download['user']}), allowing download")
+            
             # Find all files that match this track
             matching_files = []
+            
+            logging.debug(f"         Checking {len(user_files)} files in album directory...")
             
             for file_info in user_files:
                 file_path = file_info['filename']
@@ -777,14 +1020,44 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 # Check if this file matches the track
                 is_match = False
                 
-                # Try exact match first
-                if track_clean in file_clean:
+                # Extract track number from filename if present
+                import re
+                track_num_match = re.search(r'[\s_-](\d{1,2})[\s_-]', file_basename)
+                file_track_number = int(track_num_match.group(1)) if track_num_match else 0
+                
+                # Priority 1: Track number match (most reliable for album downloads)
+                if track_number and file_track_number and track_number == file_track_number:
                     is_match = True
+                    quality_score += 50  # High bonus for track number match
+                    logging.debug(f"         🎯 Track #{track_number} match: {file_basename}")
+                
+                # Priority 2: Title match (for files that include track names)
+                def normalize_for_matching(text):
+                    """Same normalization as find_best_candidates"""
+                    import re
+                    text = text.lower()
+                    # Replace various dash types and punctuation with spaces  
+                    text = re.sub(r'[‐–—-]+', ' ', text)  # Various dash types
+                    text = re.sub(r'[^\w\s]', ' ', text)  # Remove all non-alphanumeric except spaces
+                    # Normalize spaces
+                    text = re.sub(r'\s+', ' ', text).strip()
+                    return text
+                
+                track_normalized = normalize_for_matching(track_title)
+                file_normalized = normalize_for_matching(file_basename)
+                
+                # Try exact match first
+                if track_normalized in file_normalized:
+                    is_match = True
+                    quality_score += 30  # Good bonus for title match
+                    logging.debug(f"         🎯 Title match: '{track_title}' in {file_basename}")
                 # Try word-based match for longer titles
-                elif len(track_title.split()) >= 3:
-                    track_words = [w for w in track_title.split() if len(w) > 3]
-                    if all(w in file_clean for w in track_words):
+                elif len(track_normalized.split()) >= 2:
+                    track_words = [w for w in track_normalized.split() if len(w) > 2]
+                    if track_words and all(w in file_normalized for w in track_words):
                         is_match = True
+                        quality_score += 25  # Moderate bonus for word match
+                        logging.debug(f"         🎯 Word match: {track_words} in {file_basename}")
                 
                 if is_match:
                     # Score this file to help select the best version
@@ -845,6 +1118,13 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 
                 # Add only the best matching file
                 needed_files.append(matching_files[0]['file_info'])
+                
+                # Record this track in global tracking to prevent future duplicates
+                track_key = f"{artist_name.lower()}|{track_title}"
+                DOWNLOADED_TRACKS[track_key] = {
+                    'user': username,
+                    'filename': matching_files[0]['file_info']['filename']
+                }
             else:
                 logging.debug(f"      ⚠️  No match found for track: {track['title']}")
         
@@ -936,6 +1216,27 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
     candidates = []
     audio_extensions = ['.mp3', '.flac']  # Only FLAC and MP3
     
+    # Debug logging
+    logging.info(f"   🔍 find_best_candidates: Processing {len(results)} responses for artist='{artist_name}', album='{album_title}'")
+    if track_title:
+        logging.info(f"      Looking for specific track: '{track_title}'")
+    
+    total_files = 0
+    audio_files = 0
+    filtered_out = 0
+    
+    def normalize_text_for_matching(text):
+        """Normalize text by removing special characters, keeping only alphanumeric and spaces"""
+        import re
+        # Convert to lowercase
+        text = text.lower()
+        # Replace various dash types and punctuation with spaces
+        text = re.sub(r'[‐–—-]+', ' ', text)  # Various dash types
+        text = re.sub(r'[^\w\s]', ' ', text)  # Remove all non-alphanumeric except spaces
+        # Normalize spaces
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    
     # Define unwanted keywords (case-insensitive)
     unwanted_keywords = [
         # Basic unwanted versions
@@ -978,15 +1279,20 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
         files = user_response.get('files', [])
         
         for file_info in files:
+            total_files += 1
             filename = file_info.get('filename', '').lower()
             filesize = file_info.get('size', 0)
             
             # Check if it's an audio file
             if not any(filename.endswith(ext) for ext in audio_extensions):
                 continue
+                
+            audio_files += 1
             
             # Skip very small files (likely samples or low quality)
             if filesize < 1000000:  # Less than 1MB
+                filtered_out += 1
+                logging.debug(f"      ❌ Skipping small file: {filename.split('/')[-1]} ({filesize/1024:.0f}KB)")
                 continue
             
             # Extract path components for analysis
@@ -1029,6 +1335,7 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
                     break
             
             if unwanted_found:
+                filtered_out += 1
                 logging.debug(f"      ❌ Skipping unwanted version: {file_basename}")
                 continue
             
@@ -1062,29 +1369,33 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
                 elif '128' in filename_clean:
                     quality_score -= 10
             
-            # Check for artist/album match in path
+            # Check for artist/album match in path - improved normalization
             artist_match = False
             album_match = False
             
-            artist_clean = artist_name.lower().replace(' ', '')
-            album_clean = album_title.lower().replace(' ', '')
+            artist_normalized = normalize_text_for_matching(artist_name)
+            album_normalized = normalize_text_for_matching(album_title)
             
             for part in path_parts:
-                part_clean = part.lower().replace(' ', '').replace('_', '').replace('-', '')
-                if artist_clean in part_clean or part_clean in artist_clean:
+                part_normalized = normalize_text_for_matching(part)
+                
+                # Check for artist match (both directions to handle partial matches)
+                if artist_normalized in part_normalized or part_normalized in artist_normalized:
                     artist_match = True
                     quality_score += 15
-                if album_clean in part_clean or part_clean in album_clean:
+                    
+                # Check for album match (both directions to handle partial matches)
+                if album_normalized in part_normalized or part_normalized in album_normalized:
                     album_match = True
                     quality_score += 15
             
             # If searching for specific track, check track match
             if track_title:
-                track_clean = track_title.lower().replace(' ', '')
+                track_normalized = normalize_text_for_matching(track_title)
                 track_match = False
-                file_clean = file_basename.replace(' ', '').replace('_', '').replace('-', '')
+                file_normalized = normalize_text_for_matching(file_basename)
                 
-                if track_clean in file_clean or file_clean in track_clean:
+                if track_normalized in file_normalized or file_normalized in track_normalized:
                     track_match = True
                     quality_score += 25
                 else:
@@ -1131,15 +1442,21 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
     # Use deduplicated candidates
     candidates = deduplicated_candidates
     
+    # Summary logging
+    logging.info(f"   📊 Search summary: {total_files} total files, {audio_files} audio files, {filtered_out} filtered out, {len(candidates)} final candidates")
+    
     # Log top candidates for debugging
     if candidates:
-        logging.debug(f"      🎯 Top candidates (after deduplication):")
+        logging.info(f"   🎯 Found {len(candidates)} suitable candidates:")
         for i, candidate in enumerate(candidates[:3], 1):
             score = candidate['quality_score']
             size_mb = candidate['size_mb']
             filename = candidate['filename'].split('/')[-1]  # Just filename
             username = candidate['username']
-            logging.debug(f"         {i}. User: {username}, Score: {score}, Size: {size_mb}MB, File: {filename}")
+            logging.info(f"      {i}. User: {username}, Score: {score}, Size: {size_mb}MB")
+            logging.info(f"         File: {filename}")
+    else:
+        logging.info(f"   ❌ No suitable candidates found after filtering")
     
     # Return username and filename pairs for top candidates
     return [(c['username'], c['filename']) for c in candidates[:3]]
