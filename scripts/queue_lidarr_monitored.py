@@ -75,6 +75,25 @@ DOWNLOADED_TRACKS = {}  # key: "artist|track_title", value: {"user": username, "
 # Supported audio extensions for owned music detection - focusing on FLAC and MP3 only
 AUDIO_EXTENSIONS = {'.mp3', '.flac'}
 
+# File extensions to explicitly exclude (cover art, lyrics, etc.)
+EXCLUDED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp',  # Images/cover art
+                      '.lrc', '.txt', '.cue', '.log', '.m3u', '.pls',    # Lyrics/metadata
+                      '.nfo', '.sfv', '.md5', '.par2', '.zip', '.rar'}   # Other metadata
+
+def is_audio_file_wanted(filename: str) -> bool:
+    """Check if a file should be downloaded (audio only, no cover art/lyrics)"""
+    file_ext = Path(filename).suffix.lower()
+    
+    # Must be an audio file
+    if file_ext not in AUDIO_EXTENSIONS:
+        return False
+    
+    # Must not be explicitly excluded
+    if file_ext in EXCLUDED_EXTENSIONS:
+        return False
+    
+    return True
+
 def setup_logging():
     """Set up logging with timestamps"""
     log_dir = Path("logs")
@@ -949,7 +968,6 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
         
         # Get all audio files from this user's album directory
         user_files = []
-        audio_extensions = ['.mp3', '.flac']  # Only FLAC and MP3
         
         for user_response in results:
             if user_response.get('username') == username:
@@ -960,12 +978,17 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                     # Check if it's in the same album directory
                     user_directory = '/'.join(user_filename.split('/')[:-1]) if '/' in user_filename else ''
                     if user_directory == directory:
-                        # Only include audio files
-                        if any(user_filename.lower().endswith(ext) for ext in audio_extensions):
+                        # Only include wanted audio files (excludes cover art, lyrics, etc.)
+                        if is_audio_file_wanted(user_filename):
                             user_files.append({
                                 "filename": user_filename,
                                 "size": user_filesize
                             })
+                        else:
+                            # Log what we're excluding for debugging
+                            file_ext = Path(user_filename).suffix.lower()
+                            if file_ext in EXCLUDED_EXTENSIONS:
+                                logging.debug(f"      🚫 Excluding non-audio file: {Path(user_filename).name}")
                 break
         
         if not user_files:
@@ -1283,8 +1306,14 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
             filename = file_info.get('filename', '').lower()
             filesize = file_info.get('size', 0)
             
-            # Check if it's an audio file
-            if not any(filename.endswith(ext) for ext in audio_extensions):
+            # Check if it's a wanted audio file (excludes cover art, lyrics, etc.)
+            if not is_audio_file_wanted(filename):
+                # Log what we're excluding if it's a common non-audio file
+                file_ext = Path(filename).suffix.lower()
+                if file_ext in EXCLUDED_EXTENSIONS:
+                    filtered_out += 1
+                    if file_ext in {'.jpg', '.jpeg', '.lrc'}:  # Log common excluded types
+                        logging.debug(f"      🚫 Excluding {file_ext} file: {Path(filename).name}")
                 continue
                 
             audio_files += 1

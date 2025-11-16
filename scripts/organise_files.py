@@ -161,6 +161,7 @@ class FileOrganiser:
             'system_files_removed': 0,
             'empty_dirs_removed': 0,
             'source_dirs_removed': 0,  # Directories cleaned up during file moves
+            'database_entries_removed': 0,  # Database entries for deleted files
             'errors': 0
         }
         
@@ -829,6 +830,69 @@ class FileOrganiser:
             if incomplete_count > 5:
                 logger.info(f"         (showing details for first 5, {incomplete_count-5} more found)")
     
+    def cleanup_deleted_file_entries(self) -> int:
+        """Remove database entries for files that no longer exist on disk."""
+        if not self.db:
+            logger.info("   ⚠️  Database not available - skipping cleanup")
+            return 0
+        
+        logger.info("🗑️  Cleaning up database entries for deleted files")
+        
+        try:
+            # Get all file entries from the database
+            cursor = self.db.execute("SELECT id, file_path FROM files")
+            all_entries = cursor.fetchall()
+            
+            if not all_entries:
+                logger.info("   ✅ No database entries found - nothing to clean")
+                return 0
+            
+            logger.info(f"   📊 Checking {len(all_entries)} database entries for deleted files")
+            
+            deleted_entries = []
+            
+            # Check each file entry
+            for entry_id, file_path in all_entries:
+                if not Path(file_path).exists():
+                    deleted_entries.append((entry_id, file_path))
+            
+            if not deleted_entries:
+                logger.info("   ✅ All database entries point to existing files")
+                return 0
+            
+            logger.info(f"   🗑️  Found {len(deleted_entries)} entries for deleted files")
+            
+            # Remove entries for deleted files
+            deleted_count = 0
+            for entry_id, file_path in deleted_entries:
+                try:
+                    if not self.dry_run:
+                        self.db.execute("DELETE FROM files WHERE id = ?", (entry_id,))
+                    
+                    deleted_count += 1
+                    
+                    # Log first few deletions
+                    if deleted_count <= 5:
+                        logger.info(f"      🗑️  Removed entry: {Path(file_path).name}")
+                    
+                except Exception as e:
+                    logger.warning(f"      ⚠️  Failed to remove entry for {file_path}: {e}")
+            
+            if deleted_count > 5:
+                logger.info(f"      ... and {deleted_count - 5} more entries removed")
+            
+            # Commit changes if not dry run
+            if not self.dry_run:
+                self.db.commit()
+            
+            logger.info(f"   ✅ Database cleanup: {deleted_count}/{len(deleted_entries)} entries removed")
+            self.stats['database_entries_removed'] = deleted_count
+            return deleted_count
+            
+        except Exception as e:
+            logger.error(f"   ❌ Error during database cleanup: {e}")
+            return 0
+    
     def cleanup_system_files_and_directories(self) -> Tuple[int, int]:
         """Remove macOS system files and empty directories with progress tracking."""
         logger.info("🧹 Cleaning up system files and empty directories")
@@ -1246,9 +1310,18 @@ class FileOrganiser:
         logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
         logger.info("")
         
-        # Step 5: Cleanup
+        # Step 5: Database cleanup - remove entries for deleted files
         step_start = datetime.now()
-        logger.info("PROGRESS: [5/5] 100% - Cleanup")
+        logger.info("PROGRESS: [5/6] 83% - Database cleanup")
+        deleted_entries = self.cleanup_deleted_file_entries()
+        
+        step_duration = (datetime.now() - step_start).total_seconds()
+        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        logger.info("")
+        
+        # Step 6: System cleanup
+        step_start = datetime.now()
+        logger.info("PROGRESS: [6/6] 100% - System cleanup")
         system_files_removed, empty_dirs_removed = self.cleanup_system_files_and_directories()
         
         step_duration = (datetime.now() - step_start).total_seconds()
@@ -1269,8 +1342,15 @@ class FileOrganiser:
             logger.info(f"📊 Performance: {albums_per_sec:.1f} albums/second")
         
         # Add cleanup stats
-        if system_files_removed > 0 or empty_dirs_removed > 0:
-            logger.info(f"🧹 Cleanup: {system_files_removed} system files, {empty_dirs_removed} empty directories removed")
+        if system_files_removed > 0 or empty_dirs_removed > 0 or deleted_entries > 0:
+            cleanup_parts = []
+            if deleted_entries > 0:
+                cleanup_parts.append(f"{deleted_entries} database entries")
+            if system_files_removed > 0:
+                cleanup_parts.append(f"{system_files_removed} system files")
+            if empty_dirs_removed > 0:
+                cleanup_parts.append(f"{empty_dirs_removed} empty directories")
+            logger.info(f"🧹 Cleanup: {', '.join(cleanup_parts)} removed")
         
         self.print_summary()
         
