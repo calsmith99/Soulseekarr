@@ -809,6 +809,11 @@ class DatabaseManager:
     
     def get_expiring_albums_summary(self) -> Dict:
         """Get summary data for expiring albums (for web UI)."""
+        import os
+        
+        # Get cleanup policy from environment (matches file_expiry_cleanup.py)
+        cleanup_days = int(os.environ.get('CLEANUP_DAYS', '30'))
+        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
@@ -816,7 +821,6 @@ class DatabaseManager:
             cursor.execute("""
                 SELECT * FROM expiring_albums 
                 WHERE status = 'pending' AND is_starred = FALSE
-                ORDER BY days_until_expiry ASC
             """)
             
             albums = {}
@@ -825,24 +829,42 @@ class DatabaseManager:
                 album_dict = dict(row)
                 album_key = album_dict['album_key']
                 
+                # Calculate days until expiry from first_detected timestamp
+                first_detected = datetime.fromisoformat(album_dict['first_detected'])
+                days_since_detected = (datetime.now() - first_detected).days
+                days_until_expiry = cleanup_days - days_since_detected
+                
                 albums[album_key] = {
                     'artist': album_dict['artist'],
                     'album': album_dict['album'],
                     'directory': album_dict['directory'],
                     'album_art_url': album_dict.get('album_art_url'),
                     'oldest_file_days': album_dict['oldest_file_days'],
-                    'days_until_expiry': album_dict['days_until_expiry'],
+                    'days_until_expiry': days_until_expiry,  # Calculated from first_detected
+                    'days_since_detected': days_since_detected,
+                    'first_detected': album_dict['first_detected'],  # Include for frontend
                     'file_count': album_dict['file_count'],
                     'total_size_mb': album_dict['total_size_mb'],
                     'is_starred': album_dict['is_starred'],
-                    'will_expire': album_dict['days_until_expiry'] <= 0,
+                    'will_expire': days_until_expiry <= 0,
                     'sample_files': []  # Could be enhanced to track specific files
                 }
             
+            # Sort albums by days_until_expiry (most urgent first)
+            albums_list = list(albums.values())
+            albums_list.sort(key=lambda x: x['days_until_expiry'])
+            
+            # Convert back to dict with same keys
+            sorted_albums = {}
+            for album in albums_list:
+                album_key = f"{album['artist']} - {album['album']}"
+                sorted_albums[album_key] = album
+            
             return {
                 'generated_at': datetime.now().isoformat(),
-                'total_albums': len(albums),
-                'albums': albums
+                'cleanup_days': cleanup_days,  # Include for frontend calculations
+                'total_albums': len(sorted_albums),
+                'albums': sorted_albums
             }
     
     def mark_album_deleted(self, album_key: str):

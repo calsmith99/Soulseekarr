@@ -105,8 +105,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Supported audio formats
-AUDIO_EXTENSIONS = {'.mp3', '.flac', '.m4a', '.mp4', '.ogg', '.opus', '.wma', '.aac', '.wav', '.aiff'}
+# Supported audio formats - focusing on FLAC and MP3 only
+AUDIO_EXTENSIONS = {'.mp3', '.flac'}
 
 
 class FileOrganiser:
@@ -160,7 +160,19 @@ class FileOrganiser:
             'owned_missing_tracks': 0,
             'system_files_removed': 0,
             'empty_dirs_removed': 0,
+            'source_dirs_removed': 0,  # Directories cleaned up during file moves
             'errors': 0
+        }
+        
+        # Track albums moved to complete (Not_Owned) directory
+        self.complete_albums_moved = []
+        
+        # Track all file movements for summary
+        self.move_summary = {
+            'to_not_owned': [],      # Complete albums moved to Not_Owned
+            'to_incomplete': [],     # Incomplete albums moved to Incomplete
+            'files_by_destination': {'Not_Owned': 0, 'Incomplete': 0},
+            'albums_by_destination': {'Not_Owned': 0, 'Incomplete': 0}
         }
         
         # Lidarr cache
@@ -172,9 +184,20 @@ class FileOrganiser:
         if DATABASE_AVAILABLE:
             try:
                 self.db = get_db()
-                logger.info("📊 Expiry tracking enabled")
+                # Set database optimization settings for better concurrency
+                with self.db.get_connection() as conn:
+                    # Enable WAL mode for better concurrency
+                    conn.execute("PRAGMA journal_mode = WAL")
+                    # Set longer timeout globally
+                    conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
+                    # Optimize for concurrent access
+                    conn.execute("PRAGMA cache_size = 10000")  # 10MB cache
+                    conn.execute("PRAGMA synchronous = NORMAL")  # Balance safety and speed
+                    conn.commit()
+                logger.info("📊 Expiry tracking enabled with optimized database settings")
             except Exception as e:
                 logger.warning(f"⚠️ Expiry tracking disabled: {e}")
+                self.db = None
         
         # Validate configuration
         if not self.lidarr_url or not self.lidarr_api_key:
@@ -222,13 +245,13 @@ class FileOrganiser:
             for field in ['albumartist', 'artist', 'album', 'title', 'date']:
                 value = None
                 
-                # Try common tag names
+                # Try common tag names for FLAC and MP3
                 tag_variants = {
-                    'albumartist': ['albumartist', 'ALBUMARTIST', 'TPE2', 'TAG:albumartist', 'ALBUM ARTIST'],
-                    'artist': ['artist', 'ARTIST', 'TPE1', 'TAG:artist'],
-                    'album': ['album', 'ALBUM', 'TALB', 'TAG:album'],
-                    'title': ['title', 'TITLE', 'TIT2', 'TAG:title'],
-                    'date': ['date', 'DATE', 'TDRC', 'TYER', 'year', 'YEAR', 'TAG:date']
+                    'albumartist': ['albumartist', 'ALBUMARTIST', 'TPE2'],
+                    'artist': ['artist', 'ARTIST', 'TPE1'],
+                    'album': ['album', 'ALBUM', 'TALB'],
+                    'title': ['title', 'TITLE', 'TIT2'],
+                    'date': ['date', 'DATE', 'TDRC', 'TYER', 'year', 'YEAR']
                 }
                 
                 for tag_key in tag_variants.get(field, [field]):
@@ -258,6 +281,21 @@ class FileOrganiser:
             
             # Remove albumartist from metadata since we've used it to set artist
             metadata.pop('albumartist', None)
+            
+            # Extract track number (optional field)
+            track_value = None
+            track_variants = ['tracknumber', 'TRACKNUMBER', 'TRCK', 'TAG:tracknumber', 'trkn']
+            for tag_key in track_variants:
+                if tag_key in tags:
+                    v = tags[tag_key]
+                    track_value = str(v[0]) if isinstance(v, list) else str(v)
+                    break
+            
+            if track_value and track_value.strip():
+                # Handle track numbers like "1/12" or just "1"
+                track_match = re.match(r'(\d+)', track_value)
+                if track_match:
+                    metadata['tracknumber'] = track_match.group(1)
             
             # Check if we have the essential fields
             essential_fields = ['artist', 'album', 'title']
@@ -559,6 +597,56 @@ class FileOrganiser:
                     if files_moved > 0:
                         self.stats['albums_moved'] += 1
                         self.stats['files_moved'] += files_moved
+                        
+                        # Track albums moved to complete directory
+                        if is_complete and destination == self.music_dir:
+                            album_info = {
+                                'artist': artist,
+                                'album': album_title,
+                                'year': year,
+                                'track_count': track_count,
+                                'files_moved': files_moved
+                            }
+                            self.complete_albums_moved.append(album_info)
+                            self.move_summary['to_not_owned'].append(album_info)
+                            self.move_summary['files_by_destination']['Not_Owned'] += files_moved
+                            self.move_summary['albums_by_destination']['Not_Owned'] += 1
+                        elif not is_complete and destination == self.incomplete_dir:
+                            album_info = {
+                                'artist': artist,
+                                'album': album_title,
+                                'year': year,
+                                'track_count': track_count,
+                                'files_moved': files_moved
+                            }
+                            self.move_summary['to_incomplete'].append(album_info)
+                            self.move_summary['files_by_destination']['Incomplete'] += files_moved
+                            self.move_summary['albums_by_destination']['Incomplete'] += 1
+                else:
+                    # In dry-run mode, track what would be moved to complete
+                    if is_complete and destination == self.music_dir:
+                        album_info = {
+                            'artist': artist,
+                            'album': album_title,
+                            'year': year,
+                            'track_count': track_count,
+                            'files_moved': track_count  # Estimate all tracks would be moved
+                        }
+                        self.complete_albums_moved.append(album_info)
+                        self.move_summary['to_not_owned'].append(album_info)
+                        self.move_summary['files_by_destination']['Not_Owned'] += track_count
+                        self.move_summary['albums_by_destination']['Not_Owned'] += 1
+                    elif not is_complete and destination == self.incomplete_dir:
+                        album_info = {
+                            'artist': artist,
+                            'album': album_title,
+                            'year': year,
+                            'track_count': track_count,
+                            'files_moved': track_count  # Estimate all tracks would be moved
+                        }
+                        self.move_summary['to_incomplete'].append(album_info)
+                        self.move_summary['files_by_destination']['Incomplete'] += track_count
+                        self.move_summary['albums_by_destination']['Incomplete'] += 1
                 
                 # Show detailed info for first few albums or if lots of files moved
                 albums_processed += 1
@@ -571,17 +659,17 @@ class FileOrganiser:
                     if files_moved > 0:
                         logger.info(f"      📦 Moved {files_moved} files")
                 
-                # Track for expiry in new location
-                if self.db and tracks:
+                # Track for expiry in new location (if database is available and working)
+                if self.db and tracks and not self.dry_run:
                     track_tuples = [(Path(t[0]), t[1]) for t in tracks]
                     self.track_album_for_expiry(destination, album_key, track_tuples)
                     
                     # Show expiry info for first few albums or important cases (debug level)
                     if show_detail and not self.dry_run:
-                        try:
+                        def get_expiry_info():
                             with self.db.get_connection() as conn:
                                 # Set timeout to prevent database locks
-                                conn.execute("PRAGMA busy_timeout = 5000")  # 5 seconds
+                                conn.execute("PRAGMA busy_timeout = 15000")  # 15 seconds
                                 cursor = conn.cursor()
                                 cursor.execute("""
                                     SELECT first_detected 
@@ -590,9 +678,10 @@ class FileOrganiser:
                                 expiry_info = cursor.fetchone()
                                 if expiry_info:
                                     logger.debug(f"      📅 First detected: {expiry_info['first_detected']}")
-                        except Exception as e:
-                            logger.debug(f"      ⚠️ Could not get expiry info: {e}")
-                            pass  # Don't let expiry info errors break the main flow
+                                return expiry_info
+                        
+                        # Use retry logic for expiry info lookup
+                        self._execute_with_retry(f"expiry info lookup for {album_key}", get_expiry_info)
                 
                 # Update progress bar with current stats
                 if TQDM_AVAILABLE:
@@ -842,12 +931,50 @@ class FileOrganiser:
         
         return system_files_removed, empty_dirs_removed
     
+    def _execute_with_retry(self, operation_name: str, operation_func, max_retries: int = 3):
+        """
+        Execute database operation with retry logic and exponential backoff.
+        
+        Args:
+            operation_name: Description of the operation for logging
+            operation_func: Function to execute that returns a value or None
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            Result from operation_func or None if all retries failed
+        """
+        import time
+        
+        for attempt in range(max_retries + 1):
+            try:
+                return operation_func()
+            except Exception as e:
+                error_msg = str(e).lower()
+                
+                # Check if it's a database lock error
+                if 'database is locked' in error_msg or 'database locked' in error_msg:
+                    if attempt < max_retries:
+                        # Exponential backoff: 0.5s, 1s, 2s
+                        wait_time = 0.5 * (2 ** attempt)
+                        logger.debug(f"   ⏳ Database locked during {operation_name}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries + 1})")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.warning(f"   ❌ Database lock persisted for {operation_name} after {max_retries} retries")
+                        return None
+                else:
+                    # Non-lock error, don't retry
+                    logger.warning(f"   ⚠️ Failed {operation_name}: {e}")
+                    return None
+        
+        return None
+    
     def track_album_for_expiry(self, directory: Path, album_key: str, tracks: List[Tuple[Path, Dict]]):
         """Track an album for expiry monitoring in the database, preserving first_detected timestamp."""
         if not self.db or not tracks:
             return
         
-        try:
+        def perform_tracking():
             # Parse album info
             artist, album, year = album_key.split('|||', 2)
             
@@ -860,30 +987,7 @@ class FileOrganiser:
                     stat = file_path.stat()
                     total_size += stat.st_size / (1024 * 1024)  # MB
             
-            # Check if album already exists in database to preserve first_detected timestamp
-            existing_album = None
-            try:
-                with self.db.get_connection() as conn:
-                    # Set a timeout to prevent database locks
-                    conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT id, first_detected FROM expiring_albums WHERE album_key = ?", (album_key,))
-                    existing = cursor.fetchone()
-                    if existing:
-                        existing_album = existing
-            except Exception as e:
-                logger.warning(f"   ⚠️ Could not check existing album in database: {e}")
-                # Continue without existing album info
-            
-            if existing_album:
-                logger.debug(f"   📊 Updating existing album: {artist} - {album}")
-                logger.debug(f"      Preserving first_detected timestamp from database")
-            else:
-                logger.debug(f"   📊 Adding new album: {artist} - {album}")
-                logger.debug(f"      Will use current timestamp as first_detected")
-            
-            # Prepare album data - only essential tracking info
-            # Frontend/cleanup scripts will determine expiry policy
+            # Prepare album data
             album_data = {
                 'album_key': album_key,
                 'artist': artist,
@@ -897,12 +1001,8 @@ class FileOrganiser:
                 'status': 'pending'
             }
             
-            # Store in database (upsert will preserve first_detected for existing albums)
-            album_id = self.db.upsert_expiring_album(album_data)
-            
-            # Clear existing track records and add current ones
-            self.db.clear_album_tracks(album_id)
-            
+            # Prepare track data
+            track_data_list = []
             for file_path, metadata in tracks:
                 if file_path.exists():
                     stat = file_path.stat()
@@ -919,11 +1019,84 @@ class FileOrganiser:
                         'is_starred': False,
                         'navidrome_id': None
                     }
-                    
-                    self.db.add_album_track(album_id, track_data)
+                    track_data_list.append(track_data)
             
-        except Exception as e:
-            logger.warning(f"   ⚠️ Failed to track album expiry: {e}")
+            # Single database transaction to reduce lock contention
+            with self.db.get_connection() as conn:
+                # Set aggressive timeout for busy database
+                conn.execute("PRAGMA busy_timeout = 30000")  # 30 seconds
+                conn.execute("PRAGMA journal_mode = WAL")  # Enable WAL mode for better concurrency
+                
+                cursor = conn.cursor()
+                
+                # Check if album exists
+                cursor.execute("SELECT id, first_detected FROM expiring_albums WHERE album_key = ?", (album_key,))
+                existing = cursor.fetchone()
+                
+                now = datetime.now()
+                
+                if existing:
+                    # Update existing album record
+                    cursor.execute("""
+                        UPDATE expiring_albums 
+                        SET oldest_file_days = ?, days_until_expiry = ?, file_count = ?,
+                            total_size_mb = ?, is_starred = ?, last_seen = ?, status = ?,
+                            album_art_url = ?, updated_at = ?
+                        WHERE album_key = ?
+                    """, (
+                        album_data['oldest_file_days'], album_data['days_until_expiry'],
+                        album_data['file_count'], album_data['total_size_mb'],
+                        album_data['is_starred'], now, album_data['status'],
+                        album_data.get('album_art_url'), now, album_key
+                    ))
+                    album_id = existing['id']
+                    logger.debug(f"   📊 Updated existing album: {artist} - {album}")
+                else:
+                    # Insert new album record
+                    cursor.execute("""
+                        INSERT INTO expiring_albums 
+                        (album_key, artist, album, directory, album_art_url, oldest_file_days, 
+                         days_until_expiry, file_count, total_size_mb, is_starred, 
+                         first_detected, last_seen, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        album_key, artist, album, str(directory), album_data.get('album_art_url'),
+                        album_data['oldest_file_days'], album_data['days_until_expiry'],
+                        album_data['file_count'], album_data['total_size_mb'],
+                        album_data['is_starred'], now, now, album_data['status']
+                    ))
+                    album_id = cursor.lastrowid
+                    logger.debug(f"   📊 Added new album: {artist} - {album}")
+                
+                # Clear existing tracks for this album
+                cursor.execute("DELETE FROM album_tracks WHERE album_id = ?", (album_id,))
+                
+                # Batch insert all tracks
+                if track_data_list:
+                    track_values = []
+                    for track_data in track_data_list:
+                        track_values.append((
+                            album_id, track_data['file_path'], track_data['file_name'],
+                            track_data['track_title'], track_data['file_size_mb'],
+                            track_data['days_old'], track_data['last_modified']
+                        ))
+                    
+                    cursor.executemany("""
+                        INSERT INTO album_tracks 
+                        (album_id, file_path, file_name, track_title, file_size_mb, 
+                         days_old, last_modified)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, track_values)
+                
+                conn.commit()
+                return album_id
+        
+        # Execute with retry logic
+        result = self._execute_with_retry(f"expiry tracking for {album_key}", perform_tracking)
+        if result is None:
+            logger.warning(f"   ⚠️ Failed to track album expiry after retries: {album_key}")
+            
+        return result
     
     def print_summary(self) -> None:
         """Print summary statistics."""
@@ -938,62 +1111,89 @@ class FileOrganiser:
         logger.info(f"Incomplete albums:        {self.stats['albums_incomplete']}")
         logger.info(f"Albums moved:             {self.stats['albums_moved']}")
         logger.info(f"Files moved:              {self.stats['files_moved']}")
+        logger.info(f"Source dirs removed:      {self.stats['source_dirs_removed']}")
         logger.info(f"Owned albums checked:     {self.stats['owned_albums_checked']}")
         logger.info(f"Owned missing tracks:     {self.stats['owned_missing_tracks']}")
         logger.info(f"System files removed:     {self.stats['system_files_removed']}")
         logger.info(f"Empty dirs removed:       {self.stats['empty_dirs_removed']}")
         logger.info(f"Errors:                   {self.stats['errors']}")
         
-        # Add expiry tracking summary if available
-        if self.db:
-            try:
-                with self.db.get_connection() as conn:
-                    cursor = conn.cursor()
-                    
-                    # Get basic tracking statistics
-                    cursor.execute("""
-                        SELECT 
-                            COUNT(*) as total_albums,
-                            COUNT(CASE WHEN is_starred = 1 THEN 1 END) as starred,
-                            MIN(first_detected) as earliest_detected,
-                            MAX(first_detected) as latest_detected
-                        FROM expiring_albums 
-                        WHERE status = 'pending'
-                    """)
-                    tracking_stats = cursor.fetchone()
-                    
-                    if tracking_stats and tracking_stats['total_albums'] > 0:
-                        logger.info("=" * 60)
-                        logger.info("📊 EXPIRY TRACKING")
-                        logger.info("=" * 60)
-                        logger.info(f"Albums tracked for expiry: {tracking_stats['total_albums']:,}")
-                        logger.info(f"Starred (protected):       {tracking_stats['starred']:,}")
-                        
-                        if tracking_stats['earliest_detected'] and tracking_stats['latest_detected']:
-                            logger.info(f"First detection range:     {tracking_stats['earliest_detected']} to {tracking_stats['latest_detected']}")
-                        
-                        # Show some recently added albums
-                        logger.info("")
-                        logger.info("📅 Recently tracked albums:")
-                        cursor.execute("""
-                            SELECT artist, album, first_detected, directory
-                            FROM expiring_albums 
-                            WHERE status = 'pending'
-                            ORDER BY first_detected DESC
-                            LIMIT 3
-                        """)
-                        for row in cursor.fetchall():
-                            dir_name = Path(row['directory']).name
-                            logger.info(f"   📁 {row['artist']} - {row['album']}")
-                            logger.info(f"      📅 Added: {row['first_detected']} in {dir_name}")
-                        
-                        logger.info("")
-                        logger.info("💡 Expiry policy will be determined by frontend/cleanup scripts")
-                        logger.info("💡 View detailed expiry info at: /library")
-                        
-            except Exception as e:
-                logger.warning(f"   ⚠️ Could not get tracking summary: {e}")
+        # Show movement summary by destination
+        if any(self.move_summary['files_by_destination'].values()):
+            logger.info("=" * 60)
+            dry_run_prefix = "WOULD BE MOVED" if self.dry_run else "MOVED"
+            logger.info(f"📦 FILES {dry_run_prefix} BY DESTINATION")
+            logger.info("=" * 60)
+            
+            for destination, file_count in self.move_summary['files_by_destination'].items():
+                if file_count > 0:
+                    album_count = self.move_summary['albums_by_destination'][destination]
+                    logger.info(f"📁 {destination}: {album_count} albums, {file_count} files")
         
+        # Show albums moved to Incomplete
+        if self.move_summary['to_incomplete']:
+            logger.info("=" * 60)
+            dry_run_prefix = "WOULD BE MOVED TO" if self.dry_run else "MOVED TO"
+            logger.info(f"⚠️  ALBUMS {dry_run_prefix} INCOMPLETE")
+            logger.info("=" * 60)
+            logger.info(f"Total incomplete albums: {len(self.move_summary['to_incomplete'])}")
+            logger.info("")
+            
+            for i, album in enumerate(self.move_summary['to_incomplete'], 1):
+                year_str = f" [{album['year']}]" if album['year'] != 'Unknown' else ""
+                logger.info(f"{i:2d}. {album['artist']} - {album['album']}{year_str}")
+                files_text = f"{album['files_moved']} files {'would be ' if self.dry_run else ''}moved"
+                logger.info(f"     📊 {album['track_count']} tracks, {files_text}")
+                
+                # Limit display to prevent log spam
+                if i >= 20:
+                    remaining = len(self.move_summary['to_incomplete']) - i
+                    if remaining > 0:
+                        logger.info(f"     ... and {remaining} more albums")
+                    break
+        
+        # Show albums moved to complete directory
+        if self.complete_albums_moved:
+            logger.info("=" * 60)
+            logger.info("� ALBUMS MOVED TO COMPLETE (NOT_OWNED)")
+            logger.info("=" * 60)
+            logger.info(f"Total complete albums: {len(self.complete_albums_moved)}")
+            logger.info("")
+            
+            for i, album in enumerate(self.complete_albums_moved, 1):
+                year_str = f" [{album['year']}]" if album['year'] != 'Unknown' else ""
+                logger.info(f"{i:2d}. {album['artist']} - {album['album']}{year_str}")
+                logger.info(f"     � {album['track_count']} tracks, {album['files_moved']} files moved")
+                
+                # Limit display to prevent log spam
+                if i >= 20:
+                    remaining = len(self.complete_albums_moved) - i
+                    if remaining > 0:
+                        logger.info(f"     ... and {remaining} more albums")
+                    break
+        
+        # Show albums moved to complete directory
+        if self.complete_albums_moved:
+            logger.info("=" * 60)
+            dry_run_prefix = "ALBUMS THAT WOULD BE MOVED TO" if self.dry_run else "ALBUMS MOVED TO"
+            logger.info(f"💿 {dry_run_prefix} COMPLETE (NOT_OWNED)")
+            logger.info("=" * 60)
+            logger.info(f"Total complete albums: {len(self.complete_albums_moved)}")
+            logger.info("")
+            
+            for i, album in enumerate(self.complete_albums_moved, 1):
+                year_str = f" [{album['year']}]" if album['year'] != 'Unknown' else ""
+                logger.info(f"{i:2d}. {album['artist']} - {album['album']}{year_str}")
+                files_text = f"{album['files_moved']} files {'would be ' if self.dry_run else ''}moved"
+                logger.info(f"     📊 {album['track_count']} tracks, {files_text}")
+                
+                # Limit display to prevent log spam
+                if i >= 20:
+                    remaining = len(self.complete_albums_moved) - i
+                    if remaining > 0:
+                        logger.info(f"     ... and {remaining} more albums")
+                    break
+
         logger.info("=" * 60)
         logger.info("✅ Processing complete")
         logger.info(f"📝 Log file: {log_file}")
@@ -1073,6 +1273,14 @@ class FileOrganiser:
             logger.info(f"🧹 Cleanup: {system_files_removed} system files, {empty_dirs_removed} empty directories removed")
         
         self.print_summary()
+        
+        # Clean up database connection to prevent lingering locks
+        if self.db:
+            try:
+                self.db = None
+                logger.debug("🔒 Database connection cleaned up")
+            except Exception as e:
+                logger.debug(f"⚠️ Error cleaning up database: {e}")
     
     # Helper methods
     
@@ -1102,6 +1310,7 @@ class FileOrganiser:
         self._fix_permissions(target_album_dir)
         
         files_moved = 0
+        source_directories_to_check = set()  # Track directories to check for emptiness
         
         for file_path, metadata, source_dir in tracks:
             file_path = Path(file_path)  # Ensure it's a Path object
@@ -1116,15 +1325,32 @@ class FileOrganiser:
                 continue
             
             try:
+                # Track the source directory before moving the file
+                source_parent_dir = file_path.parent
+                
                 shutil.move(str(file_path), str(target_file))
                 self._fix_permissions(target_file)
                 files_moved += 1
+                
+                # Add source directory to list for cleanup check
+                source_directories_to_check.add(source_parent_dir)
+                
             except Exception as e:
                 logger.info(f"      ❌ Failed to move {file_path.name}: {e}")
                 self.stats['errors'] += 1
         
+        # Check and clean up empty source directories after moving files
+        directories_removed = 0
+        for source_dir in source_directories_to_check:
+            directories_removed += self._cleanup_empty_directory_chain(source_dir)
+        
+        # Update statistics
+        self.stats['source_dirs_removed'] += directories_removed
+        
         if files_moved > 0:
             logger.info(f"      📦 Moved {files_moved} files to {target_album_dir}")
+            if directories_removed > 0:
+                logger.info(f"      🗑️  Removed {directories_removed} empty source directories")
         
         return files_moved
     
@@ -1136,6 +1362,60 @@ class FileOrganiser:
         for char in invalid_chars:
             name = name.replace(char, '_')
         return name.strip('. ')
+    
+    def _cleanup_empty_directory_chain(self, directory: Path) -> int:
+        """
+        Check if directory is empty and remove it, then recursively check parent directories.
+        Returns the number of directories removed.
+        """
+        if self.dry_run:
+            return 0
+            
+        directories_removed = 0
+        current_dir = directory
+        
+        # Don't remove base directories (Downloads, Not_Owned, Incomplete, Owned)
+        protected_dirs = {
+            self.downloads_dir,
+            self.music_dir,
+            self.incomplete_dir,
+            self.owned_dir,
+            self.downloads_dir.parent,  # In case these are subdirectories
+            self.music_dir.parent,
+            self.incomplete_dir.parent,
+            self.owned_dir.parent
+        }
+        
+        while current_dir and current_dir not in protected_dirs:
+            try:
+                # Check if directory exists and is empty
+                if not current_dir.exists():
+                    break
+                
+                # Check if directory is empty (no files or subdirectories)
+                if any(current_dir.iterdir()):
+                    break  # Directory is not empty, stop checking parent dirs
+                
+                # Directory is empty, try to remove it
+                current_dir.rmdir()
+                directories_removed += 1
+                logger.debug(f"      🗑️  Removed empty directory: {current_dir}")
+                
+                # Move up to parent directory
+                parent_dir = current_dir.parent
+                if parent_dir == current_dir:  # Reached filesystem root
+                    break
+                current_dir = parent_dir
+                
+            except OSError as e:
+                # Directory not empty or permission denied, stop here
+                logger.debug(f"      ⚠️ Could not remove directory {current_dir}: {e}")
+                break
+            except Exception as e:
+                logger.debug(f"      ❌ Error checking directory {current_dir}: {e}")
+                break
+        
+        return directories_removed
     
     def _fix_permissions(self, path: Path) -> None:
         """Fix file/directory permissions."""

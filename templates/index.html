@@ -2378,7 +2378,9 @@
                 console.log('Expiring albums data:', {
                     cleanup_days: data.cleanup_days,
                     total_albums: totalAlbums,
-                    generated_at: generatedDate
+                    generated_at: generatedDate,
+                    sample_album_keys: Object.keys(data.albums).slice(0, 3),
+                    sample_first_detected: Object.values(data.albums).slice(0, 3).map(a => a.first_detected)
                 });
                 
                 if (totalAlbums === 0) {
@@ -2426,6 +2428,10 @@
                             <div class="albums-stat-label">Total Size</div>
                         </div>
                         <div class="albums-stat">
+                            <div class="albums-stat-value">${data.cleanup_days || '30'}d</div>
+                            <div class="albums-stat-label">Cleanup Policy</div>
+                        </div>
+                        <div class="albums-stat">
                             <div class="albums-stat-label" style="font-size: 12px; color: var(--text-muted);">
                                 Last updated: ${generatedDate}
                             </div>
@@ -2468,7 +2474,7 @@
 
             renderAlbumCard(album, cleanupDays) {
                 const expiryClass = this.getExpiryClass(album.days_until_expiry);
-                const expiryLabel = this.getExpiryLabel(album.days_until_expiry, album.oldest_file_days);
+                const expiryLabel = this.getExpiryLabel(album.days_until_expiry, album.oldest_file_days, album.first_detected);
                 const albumKey = `${album.artist} - ${album.album}`;
                 
                 // Ensure cleanupDays has a valid value
@@ -2491,12 +2497,21 @@
                     progressPercent = Math.max(0, Math.min(100, progressPercent));
                 }
                 
+                // Format first detected date
+                let firstDetectedText = '';
+                if (album.first_detected) {
+                    const firstDetectedDate = new Date(album.first_detected);
+                    firstDetectedText = firstDetectedDate.toLocaleDateString();
+                }
+                
                 // Debug logging for first few albums
                 if (Math.random() < 0.05) { // Log ~5% of albums to avoid spam
                     console.log('Album progress calculation:', {
                         album: albumKey,
                         cleanupDays: cleanupDays,
                         days_until_expiry: album.days_until_expiry,
+                        days_since_detected: album.days_since_detected,
+                        first_detected: album.first_detected,
                         oldest_file_days: album.oldest_file_days,
                         progressPercent: progressPercent,
                         calculation: `(${cleanupDays} - ${album.days_until_expiry}) / ${cleanupDays} * 100 = ${progressPercent}%`
@@ -2530,6 +2545,7 @@
                                 </div>
                                 <div class="album-size">${this.formatSize(album.total_size_mb)}</div>
                             </div>
+                            ${firstDetectedText ? `<div class="album-first-detected" style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Added: ${firstDetectedText}</div>` : ''}
                         </div>
                     </div>
                 `;
@@ -2542,7 +2558,7 @@
                 return '';
             }
 
-            getExpiryLabel(daysUntilExpiry, oldestDays) {
+            getExpiryLabel(daysUntilExpiry, oldestDays, firstDetected = null) {
                 if (daysUntilExpiry < 0) {
                     const daysOverdue = Math.abs(daysUntilExpiry);
                     return `${daysOverdue}d overdue`;
