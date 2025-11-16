@@ -223,7 +223,7 @@ class SpotifyPlaylistMonitor:
             
             # Setup logger
             self.logger = logging.getLogger('spotify_playlist_monitor')
-            self.logger.setLevel(logging.DEBUG)
+            self.logger.setLevel(logging.INFO)
             
             # Clear any existing handlers
             self.logger.handlers.clear()

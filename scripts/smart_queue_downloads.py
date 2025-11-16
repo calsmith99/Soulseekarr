@@ -69,8 +69,8 @@ STATS = {
 # Global configuration
 CONFIG = {}
 
-# Supported audio extensions for owned music detection
-AUDIO_EXTENSIONS = {'.mp3', '.flac', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.ape', '.wv'}
+# Supported audio extensions for owned music detection - focusing on FLAC and MP3 only
+AUDIO_EXTENSIONS = {'.mp3', '.flac'}
 
 def setup_logging():
     """Set up logging with timestamps"""
@@ -653,7 +653,7 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
         
         # Get all audio files from this user's album directory
         user_files = []
-        audio_extensions = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aiff', '.ape', '.wv', '.aac', '.opus']
+        audio_extensions = ['.mp3', '.flac']  # Only FLAC and MP3
         
         for user_response in results:
             if user_response.get('username') == username:
@@ -854,7 +854,7 @@ def queue_best_result(search_id: str, artist_name: str, album_title: str, track_
 def find_best_candidates(results, artist_name: str, album_title: str, track_title: str = None):
     """Find best download candidates from search results, filtering out unwanted versions"""
     candidates = []
-    audio_extensions = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aac', '.opus']
+    audio_extensions = ['.mp3', '.flac']  # Only FLAC and MP3
     
     # Define unwanted keywords (case-insensitive)
     unwanted_keywords = [
@@ -1033,14 +1033,33 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
     # Sort by quality score (descending) and return top candidates
     candidates.sort(key=lambda x: x['quality_score'], reverse=True)
     
+    # Deduplicate by username - only keep the highest scored version per user
+    seen_users = set()
+    deduplicated_candidates = []
+    
+    for candidate in candidates:
+        username = candidate['username']
+        if username not in seen_users:
+            seen_users.add(username)
+            deduplicated_candidates.append(candidate)
+        else:
+            # Log when we skip a duplicate from the same user
+            filename = candidate['filename'].split('/')[-1]
+            score = candidate['quality_score']
+            logging.debug(f"      ⏭️  Skipping duplicate from user '{username}': {filename} (score: {score})")
+    
+    # Use deduplicated candidates
+    candidates = deduplicated_candidates
+    
     # Log top candidates for debugging
     if candidates:
-        logging.debug(f"      🎯 Top candidates:")
+        logging.debug(f"      🎯 Top candidates (after deduplication):")
         for i, candidate in enumerate(candidates[:3], 1):
             score = candidate['quality_score']
             size_mb = candidate['size_mb']
             filename = candidate['filename'].split('/')[-1]  # Just filename
-            logging.debug(f"         {i}. Score: {score}, Size: {size_mb}MB, File: {filename}")
+            username = candidate['username']
+            logging.debug(f"         {i}. User: {username}, Score: {score}, Size: {size_mb}MB, File: {filename}")
     
     # Return username and filename pairs for top candidates
     return [(c['username'], c['filename']) for c in candidates[:3]]
@@ -1207,7 +1226,7 @@ def main():
     
     args = parser.parse_args()
     dry_run = args.dry_run or dry_run_env
-    debug_mode = True  # Enable debug mode by default
+    debug_mode = False  # Set to INFO level by default
     
     # Set up logging
     log_file = setup_logging()

@@ -135,7 +135,7 @@ class FileExpiryCleanup:
         
         # Setup logger
         self.logger = logging.getLogger('file_expiry_cleanup')
-        self.logger.setLevel(logging.DEBUG)
+        self.logger.setLevel(logging.INFO)
         
         # Clear any existing handlers
         self.logger.handlers.clear()

@@ -1313,7 +1313,7 @@ def main():
     
     args = parser.parse_args()
     dry_run = args.dry_run or dry_run_env
-    debug_mode = True  # Enable debug mode by default
+    debug_mode = False  # Set to INFO level by default
     
     # Set up logging
     log_file = setup_logging()
