@@ -715,8 +715,7 @@ class NavidromeStarredAlbumsMonitor:
                 self.logger.warning("No starred albums to process")
                 return False
             
-            print("🎯 Step 3: Finding and monitoring specific starred albums in Lidarr...")
-            self.logger.info("Finding and monitoring specific starred albums in Lidarr")
+            self.logger.info("🎯 Finding and monitoring specific starred albums in Lidarr...")
             
             albums_found = 0
             albums_already_monitored = 0
@@ -729,23 +728,20 @@ class NavidromeStarredAlbumsMonitor:
                     album_name = starred_album.get('name', 'Unknown')
                     album_id = starred_album.get('id')
                     
-                    print(f"🔍 Processing album {i}/{len(self.starred_albums)}: {artist_name} - {album_name}")
-                    self.logger.info(f"Processing starred album {i}/{len(self.starred_albums)}: {artist_name} - {album_name}")
+                    self.logger.info(f"🔍 Processing album {i}/{len(self.starred_albums)}: {artist_name} - {album_name}")
                     
                     # First check if the album is owned
                     is_owned = self.is_album_owned(artist_name, album_name)
                     
                     if is_owned:
                         self.stats['albums_owned'] += 1
-                        print(f"   🏠 Album is owned - handling accordingly")
-                        self.logger.info(f"Album is owned: {artist_name} - {album_name}")
+                        self.logger.info(f"🏠 Album is owned: {artist_name} - {album_name}")
                         
                         # Unstar the owned album from Navidrome
                         if album_id:
                             if self.unstar_album_in_navidrome(album_id):
                                 self.stats['albums_unstarred'] += 1
-                                print(f"   ⭐ Unstarred owned album: {album_name}")
-                                self.logger.info(f"Unstarred owned album: {album_name}")
+                                self.logger.info(f"⭐ Unstarred owned album: {album_name}")
                             else:
                                 print(f"   ❌ Failed to unstar owned album: {album_name}")
                                 self.logger.warning(f"Failed to unstar owned album: {album_name}")
@@ -757,14 +753,12 @@ class NavidromeStarredAlbumsMonitor:
                             if is_monitored:
                                 if self.set_album_monitored(lidarr_album, False):  # Unmonitor
                                     self.stats['albums_unmonitored'] += 1
-                                    print(f"   📵 Unmonitored owned album: {album_name}")
-                                    self.logger.info(f"Unmonitored owned album: {album_name}")
+                                    self.logger.info(f"📵 Unmonitored owned album: {album_name}")
                                 else:
                                     print(f"   ❌ Failed to unmonitor owned album: {album_name}")
                                     self.logger.warning(f"Failed to unmonitor owned album: {album_name}")
                             else:
-                                print(f"   ✅ Owned album already unmonitored: {album_name}")
-                                self.logger.info(f"Owned album already unmonitored: {album_name}")
+                                self.logger.info(f"✅ Owned album already unmonitored: {album_name}")
                         
                         continue  # Skip further processing for owned albums
                     
@@ -780,21 +774,89 @@ class NavidromeStarredAlbumsMonitor:
                         
                         if is_monitored:
                             albums_already_monitored += 1
-                            print(f"   ✅ Already monitored: {album_name}")
-                            self.logger.info(f"Album already monitored: {album_name}")
+                            self.logger.info(f"✅ Already monitored: {album_name}")
                         else:
                             # Set to monitored
                             if self.set_album_monitored(lidarr_album, True):
                                 albums_set_to_monitored += 1
-                                print(f"   🎯 Set to monitored: {album_name}")
-                                self.logger.info(f"Set album to monitored: {album_name}")
+                                self.logger.info(f"🎯 Set to monitored: {album_name}")
                             else:
                                 albums_failed += 1
                                 print(f"   ❌ Failed to monitor: {album_name}")
                                 self.logger.warning(f"Failed to set album to monitored: {album_name}")
                     else:
-                        print(f"   ⚠️  Not found in Lidarr: {album_name}")
+                        # Album not found in Lidarr - check if artist exists
                         self.logger.debug(f"Album not found in Lidarr: {artist_name} - {album_name}")
+                        
+                        # Check if artist exists in Lidarr
+                        if not self.artist_exists_in_lidarr(artist_name):
+                            self.logger.info(f"🎼 Artist '{artist_name}' not in Lidarr, adding now...")
+                            
+                            # Try to get MusicBrainz data for the artist
+                            musicbrainz_data = None
+                            try:
+                                musicbrainz_data = self.search_musicbrainz_artist(artist_name)
+                            except Exception as mb_error:
+                                self.logger.warning(f"MusicBrainz search failed for {artist_name}: {mb_error}")
+                            
+                            # Add the artist to Lidarr
+                            if self.add_artist_to_lidarr(artist_name, musicbrainz_data):
+                                self.logger.info(f"✅ Added artist '{artist_name}' to Lidarr")
+                                
+                                # Wait for Lidarr to process the new artist and fetch albums
+                                self.logger.debug(f"Waiting for Lidarr to process new artist '{artist_name}'...")
+                                time.sleep(3)  # Reasonable delay, we'll verify later
+                                
+                                # Try to find the album with retry logic
+                                lidarr_album = None
+                                max_retries = 3
+                                
+                                for retry in range(max_retries):
+                                    lidarr_album = self.find_album_in_lidarr(starred_album)
+                                    if lidarr_album:
+                                        break
+                                    
+                                    if retry < max_retries - 1:
+                                        self.logger.debug(f"Album not found yet, retry {retry + 1}/{max_retries} in 3 seconds...")
+                                        time.sleep(3)
+                                
+                                if lidarr_album:
+                                    albums_found += 1
+                                    # Check if already monitored
+                                    is_monitored = lidarr_album.get('monitored', False)
+                                    
+                                    # Debug logging to see what's happening
+                                    self.logger.debug(f"Album found after adding artist: {album_name}")
+                                    self.logger.debug(f"Album monitored status: {is_monitored}")
+                                    self.logger.debug(f"Album data: {lidarr_album}")
+                                    
+                                    if is_monitored:
+                                        albums_already_monitored += 1
+                                        self.logger.info(f"✅ Already monitored: {album_name}")
+                                        # Force re-check the monitoring status
+                                        self.logger.debug(f"Double-checking album monitoring status...")
+                                        recheck_album = self.find_album_in_lidarr(starred_album)
+                                        if recheck_album:
+                                            actual_monitored = recheck_album.get('monitored', False)
+                                            self.logger.debug(f"Recheck monitoring status: {actual_monitored}")
+                                    else:
+                                        # Set to monitored
+                                        if self.set_album_monitored(lidarr_album, True):
+                                            albums_set_to_monitored += 1
+                                            self.logger.info(f"🎯 Set to monitored: {album_name}")
+                                        else:
+                                            albums_failed += 1
+                                            print(f"   ❌ Failed to monitor: {album_name}")
+                                            self.logger.warning(f"Failed to set album to monitored: {album_name}")
+                                else:
+                                    print(f"   ⚠️  Album still not found after adding artist: {album_name}")
+                                    self.logger.warning(f"Album still not found in Lidarr after adding artist: {artist_name} - {album_name}")
+                            else:
+                                print(f"   ❌ Failed to add artist: {artist_name}")
+                                self.logger.error(f"Failed to add artist {artist_name} to Lidarr")
+                        else:
+                            print(f"   ⚠️  Not found in Lidarr: {album_name}")
+                            self.logger.debug(f"Artist exists but album not found in Lidarr: {artist_name} - {album_name}")
                     
                     # Small delay between requests
                     if i < len(self.starred_albums):
@@ -811,20 +873,15 @@ class NavidromeStarredAlbumsMonitor:
             self.stats['albums_set_to_monitored'] = albums_set_to_monitored
             self.stats['albums_failed_to_monitor'] = albums_failed
             
-            # Print summary
-            print()
-            print("🎯 Starred Albums Monitoring Summary:")
-            print(f"   📋 Starred albums processed: {len(self.starred_albums)}")
-            print(f"   🏠 Albums owned (unstarred/unmonitored): {self.stats['albums_owned']}")
-            print(f"   ⭐ Albums unstarred: {self.stats['albums_unstarred']}")
-            print(f"   📵 Albums unmonitored: {self.stats['albums_unmonitored']}")
-            print(f"   🔍 Non-owned albums found in Lidarr: {albums_found}")
-            print(f"   ✅ Already monitored: {albums_already_monitored}")
-            print(f"   🎯 Set to monitored: {albums_set_to_monitored}")
-            print(f"   ❌ Failed to monitor: {albums_failed}")
-            print(f"   ⚠️  Not found in Lidarr: {len(self.starred_albums) - albums_found - self.stats['albums_owned']}")
+            # Verification pass to ensure all albums are properly monitored
+            verification_results = self.verify_starred_albums_monitoring()
+            if verification_results:
+                albums_set_to_monitored += verification_results['newly_monitored']
+                albums_already_monitored += verification_results['already_monitored']
+                self.stats['albums_set_to_monitored'] = albums_set_to_monitored
             
-            # Log the summary
+            # Print summary
+            self.logger.info("")
             self.logger.info("🎯 Starred Albums Monitoring Summary:")
             self.logger.info(f"   📋 Starred albums processed: {len(self.starred_albums)}")
             self.logger.info(f"   🏠 Albums owned (unstarred/unmonitored): {self.stats['albums_owned']}")
@@ -841,6 +898,76 @@ class NavidromeStarredAlbumsMonitor:
         except Exception as e:
             self.logger.error(f"Error in monitor_starred_albums_specifically: {e}")
             return False
+
+    def verify_starred_albums_monitoring(self):
+        """Verification pass to ensure all starred albums are properly monitored"""
+        try:
+            self.logger.info("")
+            self.logger.info("🔍 Verification Pass: Double-checking starred album monitoring...")
+            
+            newly_monitored = 0
+            already_monitored = 0
+            not_found = 0
+            failed = 0
+            
+            for i, starred_album in enumerate(self.starred_albums, 1):
+                artist_name = starred_album.get('artist', {}).get('name', '')
+                album_name = starred_album.get('name', '')
+                
+                # Skip owned albums
+                if self.is_album_owned(artist_name, album_name):
+                    continue
+                
+                try:
+                    # Find the album in Lidarr
+                    lidarr_album = self.find_album_in_lidarr(starred_album)
+                    
+                    if lidarr_album:
+                        is_monitored = lidarr_album.get('monitored', False)
+                        
+                        if not is_monitored:
+                            # Try to set to monitored
+                            if self.set_album_monitored(lidarr_album, True):
+                                newly_monitored += 1
+                                self.logger.info(f"🎯 Verification: Set to monitored: {album_name}")
+                            else:
+                                failed += 1
+                                self.logger.warning(f"❌ Verification: Failed to monitor: {album_name}")
+                        else:
+                            already_monitored += 1
+                            self.logger.debug(f"✅ Verification: Already monitored: {album_name}")
+                    else:
+                        not_found += 1
+                        self.logger.debug(f"⚠️ Verification: Not found in Lidarr: {album_name}")
+                        
+                except Exception as e:
+                    failed += 1
+                    self.logger.error(f"Error in verification for {artist_name} - {album_name}: {e}")
+            
+            # Summary of verification pass
+            if newly_monitored > 0 or failed > 0:
+                self.logger.info("📊 Verification Pass Results:")
+                if newly_monitored > 0:
+                    self.logger.info(f"   🎯 Newly monitored: {newly_monitored}")
+                if failed > 0:
+                    self.logger.info(f"   ❌ Failed to monitor: {failed}")
+                if already_monitored > 0:
+                    self.logger.debug(f"   ✅ Already monitored: {already_monitored}")
+                if not_found > 0:
+                    self.logger.debug(f"   ⚠️ Not found: {not_found}")
+            else:
+                self.logger.info("✅ Verification complete: All albums properly monitored")
+            
+            return {
+                'newly_monitored': newly_monitored,
+                'already_monitored': already_monitored,
+                'not_found': not_found,
+                'failed': failed
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in verification pass: {e}")
+            return None
 
     def normalize_artist_name(self, artist_name):
         """Normalize artist name for comparison using reusable utilities"""
@@ -1091,6 +1218,34 @@ class NavidromeStarredAlbumsMonitor:
             self.logger.warning(f"Error searching MusicBrainz for {artist_name}: {e}")
             return None
 
+    def artist_exists_in_lidarr(self, artist_name):
+        """Check if an artist exists in Lidarr"""
+        try:
+            if self.lidarr_client and hasattr(self.lidarr_client, 'artist_exists'):
+                return self.lidarr_client.artist_exists(artist_name)
+            else:
+                # Fallback method - check manually
+                headers = {'X-Api-Key': self.lidarr_api_key}
+                artists_url = f"{self.lidarr_url}/api/v1/artist"
+                response = requests.get(artists_url, headers=headers, timeout=10)
+                
+                if response.status_code == 200:
+                    artists = response.json()
+                    normalized_search = self.normalize_artist_name(artist_name)
+                    
+                    for artist in artists:
+                        normalized_artist = self.normalize_artist_name(artist.get('artistName', ''))
+                        if normalized_artist == normalized_search:
+                            return True
+                    return False
+                else:
+                    self.logger.error(f"Failed to get artists from Lidarr: {response.status_code}")
+                    return False
+                    
+        except Exception as e:
+            self.logger.error(f"Error checking if artist exists in Lidarr: {e}")
+            return False
+
     def add_artist_to_lidarr(self, artist_name, musicbrainz_data=None):
         """Add artist to Lidarr for monitoring using reusable utilities"""
         try:
@@ -1141,22 +1296,37 @@ class NavidromeStarredAlbumsMonitor:
             root_folders = root_response.json()
             root_folder_path = root_folders[0]['path'] if root_folders else '/music'
             
+            # Get metadata profiles
+            metadata_url = f"{self.lidarr_url}/api/v1/metadataprofile"
+            metadata_response = requests.get(metadata_url, headers=headers, timeout=10)
+            
+            if metadata_response.status_code != 200:
+                self.logger.error(f"Failed to get metadata profiles: {metadata_response.status_code}")
+                return False
+            
+            metadata_profiles = metadata_response.json()
+            metadata_profile_id = metadata_profiles[0]['id'] if metadata_profiles else 1
+            
             # Prepare artist data
             artist_data = {
                 'artistName': musicbrainz_data['name'] if musicbrainz_data else artist_name,
                 'foreignArtistId': musicbrainz_data['musicbrainz_id'] if musicbrainz_data else None,
                 'qualityProfileId': quality_profile_id,
+                'metadataProfileId': metadata_profile_id,
                 'rootFolderPath': root_folder_path,
                 'monitored': True,
                 'albumFolder': True,
                 'addOptions': {
-                    'monitor': 'future',  # Only monitor future releases
+                    'monitor': 'none',  # Don't monitor any existing albums automatically
                     'searchForMissingAlbums': False  # Don't search for existing albums
                 }
             }
             
             # Remove None values
             artist_data = {k: v for k, v in artist_data.items() if v is not None}
+            
+            # Log the artist data for debugging
+            self.logger.debug(f"Artist data to be sent to Lidarr (fallback): {artist_data}")
             
             # Add artist to Lidarr
             add_url = f"{self.lidarr_url}/api/v1/artist"
@@ -1168,7 +1338,7 @@ class NavidromeStarredAlbumsMonitor:
             else:
                 self.logger.warning(f"Failed to add artist {artist_name} to Lidarr: {add_response.status_code}")
                 if add_response.text:
-                    self.logger.debug(f"Error response: {add_response.text[:200]}")
+                    self.logger.warning(f"Error response: {add_response.text[:500]}")
                 return False
                 
         except Exception as e:
@@ -1179,11 +1349,10 @@ class NavidromeStarredAlbumsMonitor:
         """Verify album monitoring status for recently added artists"""
         try:
             if self.dry_run:
-                self.logger.info("DRY RUN: Skipping album monitoring verification")
-                print("🔍 DRY RUN: Skipping album monitoring verification")
+                self.logger.info("🔍 DRY RUN: Skipping album monitoring verification")
                 return True
             
-            print("🔍 Checking album monitoring status in Lidarr...")
+            self.logger.info("🔍 Checking album monitoring status in Lidarr...")
             
             headers = {'X-Api-Key': self.lidarr_api_key}
             
@@ -1207,7 +1376,7 @@ class NavidromeStarredAlbumsMonitor:
                 'total_albums_unmonitored': 0
             }
             
-            print("📊 Album Monitoring Status:")
+            self.logger.info("📊 Album Monitoring Status:")
             
             # Check each artist from our starred albums
             for starred_artist_name in self.unique_artists:
@@ -1301,17 +1470,15 @@ class NavidromeStarredAlbumsMonitor:
     def monitor_starred_album_artists(self):
         """Main function to monitor starred album artists in Lidarr"""
         try:
-            self.logger.info("Starting monitor_starred_album_artists method")
-            print("🎵 Navidrome Starred Albums Monitor")
-            print("=" * 50)
+            self.logger.info("=" * 50)
+            self.logger.info("🎵 Navidrome Starred Albums Monitor")
             
             if self.dry_run:
                 print("🔍 DRY RUN MODE - No changes will be made")
                 print()
             
             # Step 1: Get starred albums
-            self.logger.info("Step 1: Fetching starred albums")
-            print("📋 Fetching starred albums from Navidrome...")
+            self.logger.info("📋 Fetching starred albums from Navidrome...")
             if not self.get_starred_albums():
                 print("❌ Failed to fetch starred albums")
                 self.logger.error("Failed to fetch starred albums")
@@ -1321,8 +1488,7 @@ class NavidromeStarredAlbumsMonitor:
             print()
             
             # Step 2: Monitor specific starred albums
-            self.logger.info("Step 2: Finding and monitoring specific starred albums")
-            print("🎯 Finding and monitoring specific starred albums in Lidarr...")
+            self.logger.info("🎯 Finding and monitoring specific starred albums in Lidarr...")
             if not self.monitor_starred_albums_specifically():
                 print("❌ Failed to monitor starred albums specifically")
                 self.logger.error("Failed to monitor starred albums specifically")
@@ -1330,14 +1496,12 @@ class NavidromeStarredAlbumsMonitor:
             print()
             
             # Step 3: Get existing Lidarr artists
-            self.logger.info("Step 3: Checking existing Lidarr artists")
-            print("🎼 Checking existing artists in Lidarr...")
+            self.logger.info("🎼 Checking existing artists in Lidarr...")
             lidarr_artists = self.get_lidarr_artists()
             print()
             
             # Step 4: Process each artist
-            self.logger.info("Step 4: Processing artists")
-            print("🔍 Processing artists...")
+            self.logger.info("🔍 Processing artists...")
             artists_to_add = []
             artists_already_monitored = 0
             
@@ -1374,8 +1538,7 @@ class NavidromeStarredAlbumsMonitor:
             
             for i, artist_name in enumerate(artists_to_add, 1):
                 try:
-                    print(f"🔍 Processing artist {i}/{len(artists_to_add)}: {artist_name}")
-                    self.logger.info(f"Processing artist {i}/{len(artists_to_add)}: {artist_name}")
+                    self.logger.info(f"🔍 Processing artist {i}/{len(artists_to_add)}: {artist_name}")
                     
                     # First, try to find the full artist name in MusicBrainz
                     musicbrainz_data = None
@@ -1463,8 +1626,7 @@ class NavidromeStarredAlbumsMonitor:
                             
                             if collaboration_success > 0:
                                 added_count += 1
-                                self.logger.info(f"Collaboration processed successfully: {collaboration_success}/{len(split_artists)} artists added for '{artist_name}'")
-                                print(f"   ✅ Collaboration processed: {collaboration_success}/{len(split_artists)} artists added for '{artist_name}'")
+                                self.logger.info(f"✅ Collaboration processed: {collaboration_success}/{len(split_artists)} artists added for '{artist_name}'")
                             else:
                                 failed_count += 1
                                 self.logger.warning(f"Collaboration failed: No artists added for '{artist_name}'")
@@ -1537,10 +1699,8 @@ class NavidromeStarredAlbumsMonitor:
             
             if self.failed_artists:
                 print()
-                print("❌ Failed Artists:")
                 self.logger.info("❌ Failed Artists:")
                 for artist in self.failed_artists:
-                    print(f"   • {artist}")
                     self.logger.info(f"   • {artist}")
             
             self.logger.info("Navidrome Starred Albums Monitor completed successfully")

@@ -69,6 +69,7 @@ class LidarrClient:
         # Cache for Lidarr configuration
         self._quality_profiles = None
         self._root_folders = None
+        self._metadata_profiles = None
         
         self.logger.debug(f"LidarrClient initialized: {self.lidarr_url} (dry_run={self.dry_run})")
 
@@ -154,6 +155,33 @@ class LidarrClient:
                 
         except Exception as e:
             self.logger.error(f"Error getting root folders: {e}")
+            return []
+
+    def get_metadata_profiles(self) -> List[Dict[str, Any]]:
+        """Get metadata profiles from Lidarr (cached)"""
+        try:
+            if hasattr(self, '_metadata_profiles') and self._metadata_profiles is not None:
+                return self._metadata_profiles
+            
+            if self.dry_run:
+                self.logger.debug("DRY RUN: Using mock metadata profiles")
+                self._metadata_profiles = [{'id': 1, 'name': 'Mock Metadata Profile'}]
+                return self._metadata_profiles
+            
+            headers = self._get_headers()
+            url = f"{self.lidarr_url}/api/v1/metadataprofile"
+            response = requests.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                self._metadata_profiles = response.json()
+                self.logger.debug(f"Retrieved {len(self._metadata_profiles)} metadata profiles")
+                return self._metadata_profiles
+            else:
+                self.logger.error(f"Failed to get metadata profiles: HTTP {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting metadata profiles: {e}")
             return []
 
     def search_musicbrainz_artist(self, artist_name: str) -> Optional[Dict[str, Any]]:
@@ -361,30 +389,36 @@ class LidarrClient:
             # Get Lidarr configuration
             quality_profiles = self.get_quality_profiles()
             root_folders = self.get_root_folders()
+            metadata_profiles = self.get_metadata_profiles()
             
-            if not quality_profiles or not root_folders:
-                self.logger.error("Failed to get Lidarr configuration (quality profiles or root folders)")
+            if not quality_profiles or not root_folders or not metadata_profiles:
+                self.logger.error("Failed to get Lidarr configuration (quality profiles, root folders, or metadata profiles)")
                 return False
             
             quality_profile_id = quality_profiles[0]['id']
             root_folder_path = root_folders[0]['path']
+            metadata_profile_id = metadata_profiles[0]['id']
             
             # Prepare artist data for future monitoring
             artist_data = {
                 'artistName': musicbrainz_data['name'] if musicbrainz_data else artist_name,
                 'foreignArtistId': musicbrainz_data['musicbrainz_id'] if musicbrainz_data else None,
                 'qualityProfileId': quality_profile_id,
+                'metadataProfileId': metadata_profile_id,
                 'rootFolderPath': root_folder_path,
                 'monitored': True,  # Monitor the artist
                 'albumFolder': True,
                 'addOptions': {
-                    'monitor': 'future',  # Only monitor future releases
+                    'monitor': 'none',  # Don't monitor any existing albums
                     'searchForMissingAlbums': search_for_missing  # Usually False for new artists
                 }
             }
             
             # Remove None values
             artist_data = {k: v for k, v in artist_data.items() if v is not None}
+            
+            # Log the artist data for debugging
+            self.logger.debug(f"Artist data to be sent to Lidarr: {artist_data}")
             
             # Add artist to Lidarr
             headers = self._get_headers()
@@ -398,7 +432,7 @@ class LidarrClient:
             else:
                 self.logger.warning(f"Failed to add artist {artist_name} to Lidarr: HTTP {response.status_code}")
                 if response.text:
-                    self.logger.debug(f"Error response: {response.text[:200]}")
+                    self.logger.warning(f"Error response: {response.text[:500]}")
                 return False
                 
         except Exception as e:
@@ -441,24 +475,27 @@ class LidarrClient:
             # Get Lidarr configuration
             quality_profiles = self.get_quality_profiles()
             root_folders = self.get_root_folders()
+            metadata_profiles = self.get_metadata_profiles()
             
-            if not quality_profiles or not root_folders:
-                self.logger.error("Failed to get Lidarr configuration (quality profiles or root folders)")
+            if not quality_profiles or not root_folders or not metadata_profiles:
+                self.logger.error("Failed to get Lidarr configuration (quality profiles, root folders, or metadata profiles)")
                 return False
             
             quality_profile_id = quality_profiles[0]['id']
             root_folder_path = root_folders[0]['path']
+            metadata_profile_id = metadata_profiles[0]['id']
             
             # Prepare artist data for all albums monitoring
             artist_data = {
                 'artistName': musicbrainz_data['name'] if musicbrainz_data else artist_name,
                 'foreignArtistId': musicbrainz_data['musicbrainz_id'] if musicbrainz_data else None,
                 'qualityProfileId': quality_profile_id,
+                'metadataProfileId': metadata_profile_id,
                 'rootFolderPath': root_folder_path,
                 'monitored': True,  # Monitor the artist
                 'albumFolder': True,
                 'addOptions': {
-                    'monitor': 'all',  # Monitor ALL releases (be careful!)
+                    'monitor': 'none',  # Don't monitor any existing albums automatically
                     'searchForMissingAlbums': search_for_missing
                 }
             }
