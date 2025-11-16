@@ -929,7 +929,12 @@ def queue_album_with_specific_tracks(search_query: str, artist_name: str, album_
         logging.info(f"      Selected album from: {username}")
         logging.info(f"      Album file: {filename}")
         
-        return attempt_selective_download(username, filename, results, missing_tracks, artist_name)
+        result = attempt_selective_download(username, filename, results, missing_tracks, artist_name)
+        
+        if not result:
+            logging.debug(f"      Album search failed for {username}, will try individual track searches")
+        
+        return result
         
     except Exception as e:
         logging.debug(f"      Error in album search: {e}")
@@ -1011,6 +1016,12 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
             track_title = track['title'].lower()
             track_number = track.get('trackNumber', 0)
             
+            # Ensure track_number is an integer for formatting
+            try:
+                track_number = int(track_number) if track_number else 0
+            except (ValueError, TypeError):
+                track_number = 0
+                
             logging.info(f"      🎵 Looking for track #{track_number}: '{track['title']}'")
             
             # Create a unique key for this track to check against global downloads
@@ -1031,8 +1042,6 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
             # Find all files that match this track
             matching_files = []
             
-            logging.debug(f"         Checking {len(user_files)} files in album directory...")
-            
             for file_info in user_files:
                 file_path = file_info['filename']
                 file_basename = file_path.split('/')[-1].lower()
@@ -1042,6 +1051,7 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 
                 # Check if this file matches the track
                 is_match = False
+                quality_score = 0  # Initialize quality_score before use
                 
                 # Extract track number from filename if present
                 import re
@@ -1052,7 +1062,6 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 if track_number and file_track_number and track_number == file_track_number:
                     is_match = True
                     quality_score += 50  # High bonus for track number match
-                    logging.debug(f"         🎯 Track #{track_number} match: {file_basename}")
                 
                 # Priority 2: Title match (for files that include track names)
                 def normalize_for_matching(text):
@@ -1073,18 +1082,14 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 if track_normalized in file_normalized:
                     is_match = True
                     quality_score += 30  # Good bonus for title match
-                    logging.debug(f"         🎯 Title match: '{track_title}' in {file_basename}")
                 # Try word-based match for longer titles
                 elif len(track_normalized.split()) >= 2:
                     track_words = [w for w in track_normalized.split() if len(w) > 2]
                     if track_words and all(w in file_normalized for w in track_words):
                         is_match = True
                         quality_score += 25  # Moderate bonus for word match
-                        logging.debug(f"         🎯 Word match: {track_words} in {file_basename}")
                 
                 if is_match:
-                    # Score this file to help select the best version
-                    quality_score = 0
                     
                     # Unwanted version patterns - these should be avoided
                     unwanted_patterns = [
@@ -1132,12 +1137,7 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 # Log if we're filtering out multiple versions
                 if len(matching_files) > 1:
                     best = matching_files[0]
-                    logging.debug(f"      🎯 Track '{track['title']}': Found {len(matching_files)} versions")
-                    logging.debug(f"         ✅ Selected: {best['basename']} (score: {best['quality_score']})")
-                    for alt in matching_files[1:3]:  # Show top alternatives
-                        logging.debug(f"         ⏭️  Skipped: {alt['basename']} (score: {alt['quality_score']})")
-                else:
-                    logging.debug(f"      📥 Queuing: {matching_files[0]['basename']}")
+                    logging.debug(f"      Selected best match for '{track['title']}': {best['basename']} (score: {best['quality_score']})")
                 
                 # Add only the best matching file
                 needed_files.append(matching_files[0]['file_info'])
@@ -1149,7 +1149,7 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                     'filename': matching_files[0]['file_info']['filename']
                 }
             else:
-                logging.debug(f"      ⚠️  No match found for track: {track['title']}")
+                logging.debug(f"      No match found for track: {track['title']}")
         
         # If we couldn't match specific tracks, queue all audio files (safer approach)
         if not needed_files:
@@ -1166,10 +1166,16 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
         }
         
         response = requests.post(url, headers=headers, json=needed_files, timeout=30)
-        return response.status_code in [200, 201]
+        
+        if response.status_code in [200, 201]:
+            logging.info(f"      ✅ Successfully queued {len(needed_files)} files")
+            return True
+        else:
+            logging.warning(f"      ❌ Failed to queue files: HTTP {response.status_code}")
+            return False
         
     except Exception as e:
-        logging.debug(f"      Error downloading: {e}")
+        logging.warning(f"      ❌ Error in selective download: {e}")
         return False
 
 def queue_single_search(search_query: str, search_type: str, artist_name: str, album_title: str, track_title: str = None) -> bool:
