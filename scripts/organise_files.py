@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Organise Files
+Organise Files v5.0 - Track Database Approach
 
-Comprehensive music file organization across all directories (Downloads, Owned, Not_Owned, Incomplete).
-Processes downloaded files, removes duplicates, and ensures proper album organization.
+Comprehensive music file organization using a track database approach.
+Scans all directories first to build a complete picture, then organizes albums properly.
 
 Directory Logic:
 - Downloads: New files - metadata checked, files with incomplete metadata stay here
@@ -12,18 +12,24 @@ Directory Logic:
 - Incomplete: Should contain incomplete albums and files with valid but incomplete metadata
 
 Processing Flow:
-1. Scan Downloads folder and check metadata quality
-2. Files with missing metadata (artist/album/title) stay in Downloads
-3. Files with complete metadata are organized based on Lidarr album completeness
-4. Check Owned directory for missing tracks (read-only)
-5. Remove duplicates across directories (Owned takes precedence)
-6. Organize Not_Owned and Incomplete (complete vs incomplete albums)
+1. Load all albums from Lidarr (monitored albums)
+2. Scan ALL directories and build a comprehensive track database
+3. Files with missing metadata stay in Downloads
+4. For each album (both monitored and discovered):
+   - Collect all tracks for that album from anywhere in the system
+   - Determine if album is complete based on track count/Lidarr data
+   - Move all tracks for that album to appropriate destination:
+     * Complete albums → Not_Owned (with [YEAR] prefix)
+     * Incomplete albums → Incomplete
+     * Files missing metadata → remain in Downloads
+5. Check Owned directory for missing tracks (read-only)
+6. Cleanup empty directories
 
 Name: Organise Files
 Author: SoulSeekarr
-Version: 4.0
+Version: 5.0
 Section: commands
-Tags: organization, lidarr, cleanup, duplicates, downloads, metadata
+Tags: organization, lidarr, cleanup, duplicates, downloads, metadata, track-database
 Supports dry run: true
 """
 
@@ -57,6 +63,17 @@ try:
     TQDM_AVAILABLE = True
 except ImportError:
     TQDM_AVAILABLE = False
+
+# Add the parent directory to Python path for imports
+sys.path.append(str(Path(__file__).parent.parent))
+
+# Import our modules
+try:
+    from database import get_db
+    DATABASE_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️ Warning: Database not available - expiry tracking will be disabled: {e}")
+    DATABASE_AVAILABLE = False
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -93,7 +110,7 @@ AUDIO_EXTENSIONS = {'.mp3', '.flac', '.m4a', '.mp4', '.ogg', '.opus', '.wma', '.
 
 
 class FileOrganiser:
-    """Main class for organizing music files across all directories."""
+    """Main class for organizing music files using track database approach."""
     
     def __init__(self, owned_dir: str = None, music_dir: str = None, 
                  incomplete_dir: str = None, downloads_dir: str = None,
@@ -102,7 +119,7 @@ class FileOrganiser:
         """Initialize the File Organiser."""
         
         logger.info("=" * 60)
-        logger.info("🎵 ORGANISE FILES")
+        logger.info("🎵 ORGANISE FILES v5.0 - Track Database Approach")
         logger.info("=" * 60)
         logger.info("")
         
@@ -130,19 +147,15 @@ class FileOrganiser:
         self.file_mode = 0o644
         self.dir_mode = 0o755
         
-        # Tracking
-        self.action_history = []
-        self.owned_missing_tracks = {}
-        
         # Statistics
         self.stats = {
-            'downloads_processed': 0,
+            'files_scanned': 0,
             'files_missing_metadata': 0,
-            'albums_checked': 0,
-            'incomplete_albums': 0,
-            'complete_albums': 0,
-            'moved_albums': 0,
-            'duplicates_removed': 0,
+            'albums_discovered': 0,
+            'albums_complete': 0,
+            'albums_incomplete': 0,
+            'albums_moved': 0,
+            'files_moved': 0,
             'owned_albums_checked': 0,
             'owned_missing_tracks': 0,
             'errors': 0
@@ -151,6 +164,15 @@ class FileOrganiser:
         # Lidarr cache
         self.lidarr_albums = {}
         self.lidarr_artists = {}
+        
+        # Database connection for expiry tracking
+        self.db = None
+        if DATABASE_AVAILABLE:
+            try:
+                self.db = get_db()
+                logger.info("📊 Expiry tracking enabled")
+            except Exception as e:
+                logger.warning(f"⚠️ Expiry tracking disabled: {e}")
         
         # Validate configuration
         if not self.lidarr_url or not self.lidarr_api_key:
@@ -194,27 +216,36 @@ class FileOrganiser:
             
             tags = audio.tags
             
-            # Extract essential metadata (artist, album, title)
-            for field in ['artist', 'album', 'title']:
+            # Extract essential metadata (artist, album, title, year)
+            for field in ['artist', 'album', 'title', 'date']:
                 value = None
                 
                 # Try common tag names
-                for tag_key in [field, field.upper(), f'TAG:{field}']:
+                tag_variants = {
+                    'artist': ['artist', 'ARTIST', 'TPE1', 'TAG:artist'],
+                    'album': ['album', 'ALBUM', 'TALB', 'TAG:album'],
+                    'title': ['title', 'TITLE', 'TIT2', 'TAG:title'],
+                    'date': ['date', 'DATE', 'TDRC', 'TYER', 'year', 'YEAR', 'TAG:date']
+                }
+                
+                for tag_key in tag_variants.get(field, [field]):
                     if tag_key in tags:
                         v = tags[tag_key]
                         value = str(v[0]) if isinstance(v, list) else str(v)
                         break
                 
-                # Try ID3 frames for MP3
-                if not value:
-                    id3_map = {'artist': 'TPE1', 'album': 'TALB', 'title': 'TIT2'}
-                    if id3_map.get(field) in tags:
-                        value = str(tags[id3_map[field]])
-                
                 if value and value.strip():
-                    metadata[field] = value.strip()
+                    # Extract year from date field (handle formats like "2023-01-01" or "2023")
+                    if field == 'date':
+                        year_match = re.match(r'(\d{4})', value)
+                        if year_match:
+                            metadata['year'] = year_match.group(1)
+                        else:
+                            missing.append('year')
+                    else:
+                        metadata[field] = value.strip()
                 else:
-                    missing.append(field)
+                    missing.append('year' if field == 'date' else field)
             
             has_required = len(missing) == 0
             return has_required, metadata, missing
@@ -241,189 +272,376 @@ class FileOrganiser:
             
         return music_files
     
-    def process_downloads_folder(self) -> None:
-        """Process files in Downloads folder based on metadata quality."""
-        if not self.downloads_dir.exists():
-            logger.info("⏭️  Downloads directory does not exist, skipping")
-            return
+    def build_track_database(self) -> Dict[str, Dict]:
+        """
+        Scan all directories and build a comprehensive database of all tracks.
         
-        logger.info("🔍 Scanning Downloads folder")
-        music_files = self.get_music_files(self.downloads_dir)
+        Returns:
+            Dict mapping album_key to {
+                'tracks': List of (file_path, metadata, source_directory),
+                'locations': Set of directories where tracks are found,
+                'complete_tracks': int
+            }
+        """
+        logger.info("🔍 Building comprehensive track database")
         
-        if not music_files:
-            logger.info("   No music files found in Downloads")
-            return
+        track_database = defaultdict(lambda: {
+            'tracks': [],
+            'locations': set(),
+            'complete_tracks': 0
+        })
         
-        logger.info(f"   Found {len(music_files)} music files")
+        # Directories to scan (excluding Owned for now as it's read-only)
+        scan_dirs = [
+            (self.downloads_dir, "Downloads"),
+            (self.incomplete_dir, "Incomplete"),
+            (self.music_dir, "Not_Owned")
+        ]
+        
+        # Pre-scan to count total files for accurate progress
+        logger.info("   📊 Counting files across all directories...")
+        total_files = 0
+        dir_file_counts = {}
+        
+        for dir_path, dir_name in scan_dirs:
+            if dir_path.exists():
+                files = self.get_music_files(dir_path)
+                count = len(files)
+                dir_file_counts[dir_name] = count
+                total_files += count
+                logger.info(f"      {dir_name}: {count:,} files")
+            else:
+                dir_file_counts[dir_name] = 0
+                logger.info(f"      {dir_name}: 0 files (directory not found)")
+        
+        logger.info(f"   📈 Total: {total_files:,} files to process")
+        self.stats['files_scanned'] = total_files
+        
+        if total_files == 0:
+            logger.info("   ⚠️  No music files found in any directory")
+            return {}
+        
         logger.info("")
         
-        # Check metadata for each file
-        files_with_metadata = []
-        files_without_metadata = []
+        # Main scanning with detailed progress
+        files_processed = 0
         
         if TQDM_AVAILABLE:
-            files_iter = tqdm(music_files, desc="PROGRESS_SUB: Checking metadata", unit="file", ncols=100)
-        else:
-            files_iter = music_files
+            main_progress = tqdm(total=total_files, desc="PROGRESS_MAIN: Building track database", 
+                               unit="file", ncols=100, position=0)
         
-        for file_path in files_iter:
-            has_metadata, metadata, missing = self.check_metadata_quality(file_path)
+        for dir_path, dir_name in scan_dirs:
+            if not dir_path.exists() or dir_file_counts[dir_name] == 0:
+                continue
+                
+            logger.info(f"   🔍 Scanning {dir_name} ({dir_file_counts[dir_name]:,} files)...")
+            music_files = self.get_music_files(dir_path)
             
-            if has_metadata:
-                files_with_metadata.append((file_path, metadata))
+            # Process files in this directory with sub-progress
+            if TQDM_AVAILABLE:
+                dir_progress = tqdm(music_files, 
+                                  desc=f"PROGRESS_SUB: Scanning {dir_name}", 
+                                  unit="file", ncols=100, position=1, leave=False)
             else:
-                files_without_metadata.append((file_path, missing))
-                self.stats['files_missing_metadata'] += 1
-        
-        logger.info(f"   ✅ {len(files_with_metadata)} files with complete metadata")
-        logger.info(f"   ⚠️  {len(files_without_metadata)} files with incomplete metadata (staying in Downloads)")
-        
-        if files_without_metadata:
-            logger.info("")
-            logger.info("   Files missing metadata:")
-            for file_path, missing in files_without_metadata[:10]:  # Show first 10
-                logger.info(f"      {file_path.name} - missing: {', '.join(missing)}")
-            if len(files_without_metadata) > 10:
-                logger.info(f"      ... and {len(files_without_metadata) - 10} more")
-        
-        # Group files with complete metadata by album
-        if files_with_metadata:
-            logger.info("")
-            logger.info("   📦 Grouping files by album...")
-            albums = self._group_files_by_album(files_with_metadata)
-            logger.info(f"   Found {len(albums)} albums")
+                dir_progress = music_files
             
-            # Process each album
-            self._process_download_albums(albums)
+            valid_tracks_in_dir = 0
+            missing_metadata_in_dir = 0
+            
+            for file_path in dir_progress:
+                try:
+                    # Check metadata quality
+                    has_metadata, metadata, missing = self.check_metadata_quality(file_path)
+                    
+                    if has_metadata:
+                        # Complete metadata - add to album database
+                        artist = metadata['artist']
+                        album = metadata['album'] 
+                        year = metadata.get('year', 'Unknown')
+                        album_key = f"{artist}|||{album}|||{year}"
+                        
+                        track_database[album_key]['tracks'].append((file_path, metadata, dir_name))
+                        track_database[album_key]['locations'].add(dir_name)
+                        track_database[album_key]['complete_tracks'] += 1
+                        valid_tracks_in_dir += 1
+                    else:
+                        # Missing metadata - count but don't include in albums
+                        missing_metadata_in_dir += 1
+                        self.stats['files_missing_metadata'] += 1
+                    
+                    files_processed += 1
+                    
+                    # Update main progress bar
+                    if TQDM_AVAILABLE:
+                        main_progress.update(1)
+                        # Update description with current stats
+                        main_progress.set_postfix({
+                            'Albums': len(track_database),
+                            'Valid': files_processed - self.stats['files_missing_metadata'],
+                            'Missing_MD': self.stats['files_missing_metadata']
+                        })
+                
+                except Exception as e:
+                    logger.warning(f"      ⚠️ Error processing {file_path}: {e}")
+                    self.stats['errors'] += 1
+                    files_processed += 1
+                    if TQDM_AVAILABLE:
+                        main_progress.update(1)
+            
+            # Summary for this directory
+            total_in_dir = valid_tracks_in_dir + missing_metadata_in_dir
+            if total_in_dir > 0:
+                valid_pct = (valid_tracks_in_dir / total_in_dir) * 100
+                logger.info(f"      ✅ {valid_tracks_in_dir:,} valid tracks ({valid_pct:.1f}%)")
+                if missing_metadata_in_dir > 0:
+                    missing_pct = (missing_metadata_in_dir / total_in_dir) * 100
+                    logger.info(f"      ⚠️  {missing_metadata_in_dir:,} missing metadata ({missing_pct:.1f}%)")
         
-        self.stats['downloads_processed'] = len(files_with_metadata)
-    
-    def _group_files_by_album(self, files_with_metadata: List[Tuple[Path, Dict]]) -> Dict[str, List[Tuple[Path, Dict]]]:
-        """Group files by artist and album."""
-        albums = defaultdict(list)
-        
-        for file_path, metadata in files_with_metadata:
-            artist = metadata['artist']
-            album = metadata['album']
-            album_key = f"{artist}|||{album}"
-            albums[album_key].append((file_path, metadata))
-        
-        return dict(albums)
-    
-    def _process_download_albums(self, albums: Dict[str, List[Tuple[Path, Dict]]]) -> None:
-        """Process albums from downloads and move to appropriate directory."""
         if TQDM_AVAILABLE:
-            albums_iter = tqdm(albums.items(), desc="PROGRESS_SUB: Processing albums", unit="album", ncols=100)
-        else:
-            albums_iter = albums.items()
+            main_progress.close()
         
-        for album_key, files in albums_iter:
+        self.stats['albums_discovered'] = len(track_database)
+        
+        logger.info("")
+        logger.info(f"   📊 Database build complete:")
+        logger.info(f"      Albums discovered: {len(track_database):,}")
+        logger.info(f"      Valid tracks: {files_processed - self.stats['files_missing_metadata']:,}")
+        logger.info(f"      Missing metadata: {self.stats['files_missing_metadata']:,}")
+        
+        # Show location distribution
+        location_stats = defaultdict(int)
+        cross_location_albums = 0
+        
+        for album_data in track_database.values():
+            location_count = len(album_data['locations'])
+            if location_count > 1:
+                cross_location_albums += 1
+            
+            for location in album_data['locations']:
+                location_stats[location] += 1
+        
+        logger.info("")
+        logger.info("   📍 Album distribution by location:")
+        for location, count in sorted(location_stats.items()):
+            logger.info(f"      {location}: {count:,} albums")
+        
+        if cross_location_albums > 0:
+            logger.info(f"   🔀 Albums spanning multiple locations: {cross_location_albums:,}")
+            logger.info("      (These will be consolidated during organization)")
+        
+        return dict(track_database)
+    
+    def process_albums_from_track_database(self, track_database: Dict[str, Dict]) -> None:
+        """
+        Process all albums found in the track database and organize them properly.
+        
+        For each album:
+        1. Determine if it's monitored by Lidarr
+        2. Check completeness 
+        3. Move all tracks to appropriate destination
+        """
+        total_albums = len(track_database)
+        logger.info(f"📊 Processing {total_albums:,} discovered albums")
+        
+        if total_albums == 0:
+            logger.info("   ⚠️  No albums to process")
+            return
+        
+        # Pre-analyze albums for better progress tracking
+        logger.info("   🔍 Analyzing albums for processing...")
+        monitored_count = 0
+        total_tracks_to_move = 0
+        
+        for album_key, album_data in track_database.items():
+            artist, album_title, year = album_key.split('|||', 2)
+            if self._find_lidarr_album(artist, album_title):
+                monitored_count += 1
+            total_tracks_to_move += len(album_data['tracks'])
+        
+        non_monitored_count = total_albums - monitored_count
+        
+        logger.info(f"      📈 Processing summary:")
+        logger.info(f"         Monitored albums: {monitored_count:,}")
+        logger.info(f"         Non-monitored albums: {non_monitored_count:,}")
+        logger.info(f"         Total tracks to process: {total_tracks_to_move:,}")
+        logger.info("")
+        
+        # Main processing with detailed progress
+        albums_processed = 0
+        
+        if TQDM_AVAILABLE:
+            main_progress = tqdm(total=total_albums, desc="PROGRESS_MAIN: Organizing albums", 
+                               unit="album", ncols=100, position=0)
+        
+        for album_key, album_data in track_database.items():
             try:
-                artist, album = album_key.split('|||', 1)
-                track_count = len(files)
+                artist, album_title, year = album_key.split('|||', 2)
+                tracks = album_data['tracks']
+                locations = album_data['locations']
+                track_count = len(tracks)
                 
-                # Check album completeness against Lidarr
-                is_complete = self.check_album_completeness(artist, album, track_count)
+                if not tracks:
+                    if TQDM_AVAILABLE:
+                        main_progress.update(1)
+                    continue
                 
-                if is_complete is None:
-                    # Not in Lidarr - move to incomplete for manual review
-                    logger.info(f"   📂 Not in Lidarr: {artist} - {album} → Incomplete")
-                    destination = self.incomplete_dir
-                elif is_complete:
-                    # Complete album - move to Not_Owned
-                    logger.info(f"   ✅ Complete: {artist} - {album} → Not_Owned")
+                # Check if this album is monitored by Lidarr
+                lidarr_album = self._find_lidarr_album(artist, album_title)
+                expected_tracks = 0
+                
+                if lidarr_album:
+                    # Get expected track count from Lidarr
+                    expected_tracks = lidarr_album.get('statistics', {}).get('trackCount')
+                    if not expected_tracks:
+                        expected_tracks = lidarr_album.get('trackCount', 0)
+                    
+                    # Try to get more accurate count from API
+                    album_id = lidarr_album.get('id')
+                    if album_id:
+                        tracks_data = self._make_lidarr_request(f'track?albumId={album_id}')
+                        if tracks_data:
+                            expected_tracks = len(tracks_data)
+                
+                # Determine completeness
+                if lidarr_album and expected_tracks > 0:
+                    # Use Lidarr data for monitored albums
+                    is_complete = track_count >= expected_tracks and track_count > 1
+                    album_type = "monitored"
+                else:
+                    # Use heuristic for non-monitored albums  
+                    is_complete = track_count >= 10 and track_count > 1
+                    expected_tracks = 10  # Assume reasonable album size
+                    album_type = "non-monitored"
+                
+                # Single track albums are always considered incomplete
+                if track_count == 1:
+                    is_complete = False
+                
+                # Log album processing (less verbose than before, let progress bar handle it)
+                location_str = ", ".join(sorted(locations))
+                if is_complete:
+                    completion_status = f"Complete ({album_type})"
+                    self.stats['albums_complete'] += 1
                     destination = self.music_dir
                 else:
-                    # Incomplete album - move to Incomplete
-                    logger.info(f"   ⚠️  Incomplete: {artist} - {album} ({track_count} tracks) → Incomplete")
+                    completion_status = f"Incomplete ({album_type})"
+                    self.stats['albums_incomplete'] += 1
                     destination = self.incomplete_dir
                 
-                # Move files to destination
+                # Move all tracks for this album to the destination
+                files_moved = 0
                 if not self.dry_run:
-                    self._move_files_to_album_folder(files, destination, artist, album)
+                    files_moved = self._consolidate_album_tracks(tracks, destination, artist, album_title, year)
+                    if files_moved > 0:
+                        self.stats['albums_moved'] += 1
+                        self.stats['files_moved'] += files_moved
+                
+                # Show detailed info for first few albums or if lots of files moved
+                albums_processed += 1
+                show_detail = (albums_processed <= 5 or files_moved >= 5 or 
+                              len(locations) > 1 or track_count == 1)
+                
+                if show_detail:
+                    logger.info(f"   {'✅' if is_complete else '⚠️ '} {completion_status}: {artist} - {album_title}")
+                    logger.info(f"      📊 {track_count}/{expected_tracks} tracks from {location_str}")
+                    if files_moved > 0:
+                        logger.info(f"      📦 Moved {files_moved} files")
+                
+                # Track for expiry in new location
+                if self.db and tracks:
+                    track_tuples = [(Path(t[0]), t[1]) for t in tracks]
+                    self.track_album_for_expiry(destination, album_key, track_tuples)
+                    
+                    # Show expiry info for first few albums or important cases (debug level)
+                    if show_detail and not self.dry_run:
+                        try:
+                            with self.db.get_connection() as conn:
+                                # Set timeout to prevent database locks
+                                conn.execute("PRAGMA busy_timeout = 5000")  # 5 seconds
+                                cursor = conn.cursor()
+                                cursor.execute("""
+                                    SELECT first_detected 
+                                    FROM expiring_albums WHERE album_key = ?
+                                """, (album_key,))
+                                expiry_info = cursor.fetchone()
+                                if expiry_info:
+                                    logger.debug(f"      📅 First detected: {expiry_info['first_detected']}")
+                        except Exception as e:
+                            logger.debug(f"      ⚠️ Could not get expiry info: {e}")
+                            pass  # Don't let expiry info errors break the main flow
+                
+                # Update progress bar with current stats
+                if TQDM_AVAILABLE:
+                    main_progress.update(1)
+                    main_progress.set_postfix({
+                        'Complete': self.stats['albums_complete'],
+                        'Incomplete': self.stats['albums_incomplete'], 
+                        'Moved': self.stats['albums_moved'],
+                        'Files': self.stats['files_moved']
+                    })
                 
             except Exception as e:
                 logger.info(f"   ❌ Error processing album {album_key}: {e}")
                 self.stats['errors'] += 1
-    
-    def _move_files_to_album_folder(self, files: List[Tuple[Path, Dict]], 
-                                     destination_dir: Path, artist: str, album: str) -> None:
-        """Move files to the appropriate album folder."""
-        # Create destination structure
-        safe_artist = self._sanitize_filename(artist)
-        safe_album = self._sanitize_filename(album)
+                if TQDM_AVAILABLE:
+                    main_progress.update(1)
         
-        target_artist_dir = destination_dir / safe_artist
-        target_album_dir = target_artist_dir / safe_album
+        if TQDM_AVAILABLE:
+            main_progress.close()
         
-        target_album_dir.mkdir(parents=True, exist_ok=True)
-        self._fix_permissions(target_artist_dir)
-        self._fix_permissions(target_album_dir)
-        
-        # Move each file
-        for file_path, metadata in files:
-            target_file = target_album_dir / file_path.name
-            
-            if target_file.exists():
-                logger.info(f"      ⚠️  Target exists, skipping: {file_path.name}")
-                continue
-            
-            shutil.move(str(file_path), str(target_file))
-            self._fix_permissions(target_file)
-    
+        logger.info("")
+        logger.info(f"   📊 Album organization complete:")
+        logger.info(f"      Complete albums: {self.stats['albums_complete']:,}")
+        logger.info(f"      Incomplete albums: {self.stats['albums_incomplete']:,}")
+        logger.info(f"      Albums moved: {self.stats['albums_moved']:,}")
+        logger.info(f"      Files moved: {self.stats['files_moved']:,}")
+        if self.stats['errors'] > 0:
+            logger.info(f"      Errors encountered: {self.stats['errors']:,}")
+
     def load_lidarr_data(self) -> bool:
         """Load artists and albums from Lidarr."""
         logger.info("🔗 Loading data from Lidarr...")
         
         # Load artists
+        logger.info("   📥 Fetching artists from Lidarr API...")
         artists_data = self._make_lidarr_request('artist')
         if artists_data is None:
             logger.info("❌ Failed to load artists from Lidarr")
             return False
         
-        for artist in artists_data:
+        logger.info(f"   📊 Processing {len(artists_data)} artists...")
+        if TQDM_AVAILABLE:
+            artist_iter = tqdm(artists_data, desc="PROGRESS_SUB: Processing artists", unit="artist", ncols=100)
+        else:
+            artist_iter = artists_data
+        
+        for artist in artist_iter:
             artist_name = artist.get('artistName', '').lower()
             self.lidarr_artists[artist_name] = artist
         
-        logger.info(f"   Loaded {len(self.lidarr_artists)} artists")
+        logger.info(f"   ✅ Loaded {len(self.lidarr_artists)} artists")
         
         # Load albums
+        logger.info("   📥 Fetching albums from Lidarr API...")
         albums_data = self._make_lidarr_request('album')
         if albums_data is None:
             logger.info("❌ Failed to load albums from Lidarr")
             return False
         
-        for album in albums_data:
+        logger.info(f"   📊 Processing {len(albums_data)} albums...")
+        if TQDM_AVAILABLE:
+            album_iter = tqdm(albums_data, desc="PROGRESS_SUB: Processing albums", unit="album", ncols=100)
+        else:
+            album_iter = albums_data
+        
+        for album in album_iter:
             artist_name = album.get('artist', {}).get('artistName', '').lower()
             album_title = album.get('title', '').lower()
             key = f"{artist_name}|||{album_title}"
             self.lidarr_albums[key] = album
         
-        logger.info(f"   Loaded {len(self.lidarr_albums)} albums")
+        logger.info(f"   ✅ Loaded {len(self.lidarr_albums)} albums")
         return True
-    
-    def check_album_completeness(self, artist: str, album: str, local_tracks: int) -> Optional[bool]:
-        """
-        Check if album is complete against Lidarr.
-        
-        Returns:
-            True if complete, False if incomplete, None if not in Lidarr
-        """
-        lookup_key = f"{artist.lower()}|||{album.lower()}"
-        
-        if lookup_key in self.lidarr_albums:
-            album_data = self.lidarr_albums[lookup_key]
-            expected_tracks = album_data.get('trackCount', 999)
-            return local_tracks >= expected_tracks
-        
-        # Try fuzzy match
-        for key, album_data in self.lidarr_albums.items():
-            stored_artist, stored_album = key.split('|||', 1)
-            if self._fuzzy_match(artist.lower(), stored_artist) and self._fuzzy_match(album.lower(), stored_album):
-                expected_tracks = album_data.get('trackCount', 999)
-                return local_tracks >= expected_tracks
-        
-        return None
     
     def check_owned_directory(self) -> None:
         """Check Owned directory for missing tracks (read-only)."""
@@ -433,108 +651,82 @@ class FileOrganiser:
         
         logger.info("🔍 Checking Owned directory")
         
+        # Count albums first for progress tracking
+        logger.info("   📊 Scanning for album folders...")
         album_folders = self._find_album_folders(self.owned_dir)
-        logger.info(f"   Found {len(album_folders)} albums")
+        total_albums = len(album_folders)
         
-        if not album_folders:
+        logger.info(f"   📁 Found {total_albums:,} album folders to verify")
+        
+        if total_albums == 0:
+            logger.info("   ⚠️  No album folders found in Owned directory")
             return
         
-        if TQDM_AVAILABLE:
-            albums_iter = tqdm(album_folders, desc="PROGRESS_SUB: Checking owned", unit="album", ncols=100)
-        else:
-            albums_iter = album_folders
+        incomplete_count = 0
+        albums_processed = 0
         
-        for album_path in albums_iter:
+        if TQDM_AVAILABLE:
+            progress = tqdm(album_folders, desc="PROGRESS_SUB: Verifying owned albums", 
+                          unit="album", ncols=100)
+        else:
+            progress = album_folders
+        
+        for album_path in progress:
             try:
                 self.stats['owned_albums_checked'] += 1
+                albums_processed += 1
                 
                 artist, album, track_count = self._parse_album_info(album_path)
-                is_complete = self.check_album_completeness(artist, album, track_count)
                 
-                if is_complete is False:
-                    logger.info(f"   ⚠️  Missing tracks: {artist} - {album} ({track_count} tracks)")
-                    self.owned_missing_tracks[str(album_path)] = {
-                        'artist': artist,
-                        'album': album,
-                        'tracks': track_count
-                    }
-                    self.stats['owned_missing_tracks'] += 1
+                # Check against Lidarr if available
+                lidarr_album = self._find_lidarr_album(artist, album)
+                
+                if lidarr_album:
+                    expected_tracks = lidarr_album.get('statistics', {}).get('trackCount', 0)
+                    if track_count < expected_tracks:
+                        missing_count = expected_tracks - track_count
+                        incomplete_count += 1
+                        
+                        # Show details for first few incomplete albums
+                        if incomplete_count <= 5:
+                            logger.info(f"   ⚠️  Incomplete: {artist} - {album}")
+                            logger.info(f"      📊 {track_count}/{expected_tracks} tracks ({missing_count} missing)")
+                
+                # Update progress postfix with current stats
+                if TQDM_AVAILABLE:
+                    progress.set_postfix({
+                        'Checked': albums_processed,
+                        'Complete': albums_processed - incomplete_count,
+                        'Incomplete': incomplete_count
+                    })
                     
             except Exception as e:
                 logger.info(f"   ❌ Error checking {album_path}: {e}")
                 self.stats['errors'] += 1
         
-        if self.owned_missing_tracks:
-            logger.info(f"   Found {len(self.owned_missing_tracks)} incomplete albums in Owned")
-    
-    def organize_albums(self) -> None:
-        """Organize albums in Not_Owned and Incomplete directories."""
-        logger.info("📊 Organizing albums")
+        self.stats['owned_missing_tracks'] = incomplete_count
+        complete_count = self.stats['owned_albums_checked'] - incomplete_count
         
-        # Process Not_Owned directory
-        logger.info("   Checking Not_Owned directory...")
-        not_owned_albums = self._find_album_folders(self.music_dir)
-        logger.info(f"   Found {len(not_owned_albums)} albums")
-        
-        if not_owned_albums:
-            self._process_album_folders(not_owned_albums, "Not_Owned")
-        
-        # Process Incomplete directory
         logger.info("")
-        logger.info("   Checking Incomplete directory...")
-        incomplete_albums = self._find_album_folders(self.incomplete_dir)
-        logger.info(f"   Found {len(incomplete_albums)} albums")
-        
-        if incomplete_albums:
-            self._process_album_folders(incomplete_albums, "Incomplete")
-    
-    def _process_album_folders(self, album_folders: List[Path], source_dir_name: str) -> None:
-        """Process a list of album folders."""
-        if TQDM_AVAILABLE:
-            albums_iter = tqdm(album_folders, desc=f"PROGRESS_SUB: Processing {source_dir_name}", unit="album", ncols=100)
-        else:
-            albums_iter = album_folders
-        
-        for album_path in albums_iter:
-            try:
-                self.stats['albums_checked'] += 1
-                
-                artist, album, track_count = self._parse_album_info(album_path)
-                
-                # Skip single tracks
-                if track_count == 1:
-                    continue
-                
-                # Check completeness
-                is_complete = self.check_album_completeness(artist, album, track_count)
-                
-                if source_dir_name == "Not_Owned" and is_complete is False:
-                    # Incomplete album in Not_Owned - move to Incomplete
-                    logger.info(f"      ⚠️  Incomplete: {artist} - {album} → Incomplete")
-                    self.stats['incomplete_albums'] += 1
-                    if not self.dry_run:
-                        self._move_album(album_path, self.incomplete_dir, artist)
-                        
-                elif source_dir_name == "Incomplete" and is_complete is True:
-                    # Complete album in Incomplete - move to Not_Owned
-                    logger.info(f"      ✅ Complete: {artist} - {album} → Not_Owned")
-                    self.stats['complete_albums'] += 1
-                    if not self.dry_run:
-                        self._move_album(album_path, self.music_dir, artist)
-                
-            except Exception as e:
-                logger.info(f"      ❌ Error: {e}")
-                self.stats['errors'] += 1
+        logger.info(f"   📊 Owned directory verification complete:")
+        logger.info(f"      Albums checked: {self.stats['owned_albums_checked']:,}")
+        logger.info(f"      Complete albums: {complete_count:,}")
+        if incomplete_count > 0:
+            logger.info(f"      Incomplete albums: {incomplete_count:,}")
+            if incomplete_count > 5:
+                logger.info(f"         (showing details for first 5, {incomplete_count-5} more found)")
     
     def cleanup_empty_directories(self) -> int:
-        """Remove empty directories."""
+        """Remove empty directories with progress tracking."""
         logger.info("🧹 Cleaning up empty directories")
         
-        removed = 0
+        # Scan first to count empty directories for progress tracking
+        empty_dirs = []
         for base_dir in [self.music_dir, self.incomplete_dir, self.downloads_dir]:
             if not base_dir.exists():
                 continue
             
+            logger.info(f"   🔍 Scanning {base_dir.name} for empty directories...")
             for dirpath, dirnames, filenames in os.walk(base_dir, topdown=False):
                 current_dir = Path(dirpath)
                 
@@ -543,14 +735,126 @@ class FileOrganiser:
                 
                 try:
                     if not any(current_dir.iterdir()):
-                        if not self.dry_run:
-                            current_dir.rmdir()
-                        removed += 1
+                        empty_dirs.append(current_dir)
                 except:
                     pass
         
-        logger.info(f"   Removed {removed} empty directories")
+        total_empty = len(empty_dirs)
+        logger.info(f"   📊 Found {total_empty} empty directories to remove")
+        
+        if total_empty == 0:
+            logger.info("   ✅ No empty directories found")
+            return 0
+        
+        removed = 0
+        
+        if TQDM_AVAILABLE and total_empty > 5:  # Only show progress for larger cleanup jobs
+            progress = tqdm(empty_dirs, desc="PROGRESS_SUB: Removing empty dirs", 
+                          unit="dir", ncols=100)
+        else:
+            progress = empty_dirs
+        
+        for current_dir in progress:
+            try:
+                if not self.dry_run:
+                    current_dir.rmdir()
+                removed += 1
+                
+                # Log first few removals
+                if removed <= 5:
+                    logger.info(f"      🗑️  Removed: {current_dir}")
+            except Exception as e:
+                if removed <= 3:  # Don't spam with too many error messages
+                    logger.warning(f"      ⚠️ Could not remove {current_dir}: {e}")
+        
+        if removed > 5:
+            logger.info(f"      ... and {removed - 5} more directories removed")
+        
+        logger.info(f"   ✅ Cleanup complete: {removed}/{total_empty} directories removed")
         return removed
+    
+    def track_album_for_expiry(self, directory: Path, album_key: str, tracks: List[Tuple[Path, Dict]]):
+        """Track an album for expiry monitoring in the database, preserving first_detected timestamp."""
+        if not self.db or not tracks:
+            return
+        
+        try:
+            # Parse album info
+            artist, album, year = album_key.split('|||', 2)
+            
+            # Calculate file statistics
+            total_size = 0
+            file_count = len(tracks)
+            
+            for file_path, metadata in tracks:
+                if file_path.exists():
+                    stat = file_path.stat()
+                    total_size += stat.st_size / (1024 * 1024)  # MB
+            
+            # Check if album already exists in database to preserve first_detected timestamp
+            existing_album = None
+            try:
+                with self.db.get_connection() as conn:
+                    # Set a timeout to prevent database locks
+                    conn.execute("PRAGMA busy_timeout = 10000")  # 10 seconds
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id, first_detected FROM expiring_albums WHERE album_key = ?", (album_key,))
+                    existing = cursor.fetchone()
+                    if existing:
+                        existing_album = existing
+            except Exception as e:
+                logger.warning(f"   ⚠️ Could not check existing album in database: {e}")
+                # Continue without existing album info
+            
+            if existing_album:
+                logger.debug(f"   📊 Updating existing album: {artist} - {album}")
+                logger.debug(f"      Preserving first_detected timestamp from database")
+            else:
+                logger.debug(f"   📊 Adding new album: {artist} - {album}")
+                logger.debug(f"      Will use current timestamp as first_detected")
+            
+            # Prepare album data - only essential tracking info
+            # Frontend/cleanup scripts will determine expiry policy
+            album_data = {
+                'album_key': album_key,
+                'artist': artist,
+                'album': album,
+                'directory': str(directory),
+                'oldest_file_days': 0,  # Legacy field, not used for expiry
+                'days_until_expiry': 0,  # Legacy field, not used - frontend calculates
+                'file_count': file_count,
+                'total_size_mb': round(total_size, 2),
+                'is_starred': False,  # Will be updated by other scripts
+                'status': 'pending'
+            }
+            
+            # Store in database (upsert will preserve first_detected for existing albums)
+            album_id = self.db.upsert_expiring_album(album_data)
+            
+            # Clear existing track records and add current ones
+            self.db.clear_album_tracks(album_id)
+            
+            for file_path, metadata in tracks:
+                if file_path.exists():
+                    stat = file_path.stat()
+                    
+                    track_data = {
+                        'file_path': str(file_path),
+                        'file_name': file_path.name,
+                        'track_title': metadata.get('title'),
+                        'track_number': metadata.get('tracknumber'),
+                        'track_artist': metadata.get('artist'),
+                        'file_size_mb': round((stat.st_size / (1024 * 1024)), 2),
+                        'days_old': 0,  # Legacy field, not used for expiry
+                        'last_modified': datetime.fromtimestamp(stat.st_mtime),
+                        'is_starred': False,
+                        'navidrome_id': None
+                    }
+                    
+                    self.db.add_album_track(album_id, track_data)
+            
+        except Exception as e:
+            logger.warning(f"   ⚠️ Failed to track album expiry: {e}")
     
     def print_summary(self) -> None:
         """Print summary statistics."""
@@ -558,51 +862,196 @@ class FileOrganiser:
         logger.info("=" * 60)
         logger.info("📊 SUMMARY")
         logger.info("=" * 60)
-        logger.info(f"Downloads processed:      {self.stats['downloads_processed']}")
+        logger.info(f"Files scanned:            {self.stats['files_scanned']}")
         logger.info(f"Files missing metadata:   {self.stats['files_missing_metadata']}")
-        logger.info(f"Albums checked:           {self.stats['albums_checked']}")
+        logger.info(f"Albums discovered:        {self.stats['albums_discovered']}")
+        logger.info(f"Complete albums:          {self.stats['albums_complete']}")
+        logger.info(f"Incomplete albums:        {self.stats['albums_incomplete']}")
+        logger.info(f"Albums moved:             {self.stats['albums_moved']}")
+        logger.info(f"Files moved:              {self.stats['files_moved']}")
         logger.info(f"Owned albums checked:     {self.stats['owned_albums_checked']}")
         logger.info(f"Owned missing tracks:     {self.stats['owned_missing_tracks']}")
-        logger.info(f"Incomplete albums found:  {self.stats['incomplete_albums']}")
-        logger.info(f"Complete albums found:    {self.stats['complete_albums']}")
-        logger.info(f"Albums moved:             {self.stats['moved_albums']}")
         logger.info(f"Errors:                   {self.stats['errors']}")
+        
+        # Add expiry tracking summary if available
+        if self.db:
+            try:
+                with self.db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    
+                    # Get basic tracking statistics
+                    cursor.execute("""
+                        SELECT 
+                            COUNT(*) as total_albums,
+                            COUNT(CASE WHEN is_starred = 1 THEN 1 END) as starred,
+                            MIN(first_detected) as earliest_detected,
+                            MAX(first_detected) as latest_detected
+                        FROM expiring_albums 
+                        WHERE status = 'pending'
+                    """)
+                    tracking_stats = cursor.fetchone()
+                    
+                    if tracking_stats and tracking_stats['total_albums'] > 0:
+                        logger.info("=" * 60)
+                        logger.info("📊 EXPIRY TRACKING")
+                        logger.info("=" * 60)
+                        logger.info(f"Albums tracked for expiry: {tracking_stats['total_albums']:,}")
+                        logger.info(f"Starred (protected):       {tracking_stats['starred']:,}")
+                        
+                        if tracking_stats['earliest_detected'] and tracking_stats['latest_detected']:
+                            logger.info(f"First detection range:     {tracking_stats['earliest_detected']} to {tracking_stats['latest_detected']}")
+                        
+                        # Show some recently added albums
+                        logger.info("")
+                        logger.info("📅 Recently tracked albums:")
+                        cursor.execute("""
+                            SELECT artist, album, first_detected, directory
+                            FROM expiring_albums 
+                            WHERE status = 'pending'
+                            ORDER BY first_detected DESC
+                            LIMIT 3
+                        """)
+                        for row in cursor.fetchall():
+                            dir_name = Path(row['directory']).name
+                            logger.info(f"   📁 {row['artist']} - {row['album']}")
+                            logger.info(f"      📅 Added: {row['first_detected']} in {dir_name}")
+                        
+                        logger.info("")
+                        logger.info("💡 Expiry policy will be determined by frontend/cleanup scripts")
+                        logger.info("💡 View detailed expiry info at: /library")
+                        
+            except Exception as e:
+                logger.warning(f"   ⚠️ Could not get tracking summary: {e}")
+        
         logger.info("=" * 60)
+        logger.info("✅ Processing complete")
         logger.info(f"📝 Log file: {log_file}")
         logger.info("=" * 60)
     
     def run(self) -> None:
-        """Main execution flow."""
+        """Main execution flow with enhanced progress tracking."""
+        start_time = datetime.now()
+        
         # Step 1: Load Lidarr data
-        logger.info("PROGRESS: [1/5] 20% - Loading Lidarr data")
+        step_start = datetime.now()
+        logger.info("PROGRESS: [1/5] 20% - Loading Lidarr monitored albums")
         if not self.load_lidarr_data():
             logger.info("❌ Failed to load Lidarr data - aborting")
             return
+        
+        step_duration = (datetime.now() - step_start).total_seconds()
+        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
         logger.info("")
         
-        # Step 2: Process Downloads
-        logger.info("PROGRESS: [2/5] 40% - Processing Downloads folder")
-        self.process_downloads_folder()
+        # Step 2: Build comprehensive track database from all directories
+        step_start = datetime.now()
+        logger.info("PROGRESS: [2/5] 40% - Building comprehensive track database")
+        track_database = self.build_track_database()
+        
+        if not track_database:
+            logger.info("⚠️  No albums found to process - exiting early")
+            self.print_summary()
+            return
+        
+        step_duration = (datetime.now() - step_start).total_seconds()
+        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
         logger.info("")
         
-        # Step 3: Check Owned directory
-        logger.info("PROGRESS: [3/5] 60% - Checking Owned directory")
+        # Step 3: Process all albums and organize them properly
+        step_start = datetime.now()
+        logger.info("PROGRESS: [3/5] 60% - Organizing albums from track database")
+        self.process_albums_from_track_database(track_database)
+        
+        step_duration = (datetime.now() - step_start).total_seconds()
+        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        logger.info("")
+        
+        # Step 4: Check Owned directory (read-only)
+        step_start = datetime.now()
+        logger.info("PROGRESS: [4/5] 80% - Checking Owned directory")
         self.check_owned_directory()
-        logger.info("")
         
-        # Step 4: Organize albums
-        logger.info("PROGRESS: [4/5] 80% - Organizing albums")
-        self.organize_albums()
+        step_duration = (datetime.now() - step_start).total_seconds()
+        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
         logger.info("")
         
         # Step 5: Cleanup
+        step_start = datetime.now()
         logger.info("PROGRESS: [5/5] 100% - Cleanup")
-        self.cleanup_empty_directories()
+        empty_dirs_removed = self.cleanup_empty_directories()
         
-        # Print summary
+        step_duration = (datetime.now() - step_start).total_seconds()
+        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        logger.info("")
+        
+        # Print summary with total time
+        total_duration = (datetime.now() - start_time).total_seconds()
+        logger.info(f"🕐 Total processing time: {total_duration:.1f}s")
+        
+        # Performance insights
+        if self.stats['files_scanned'] > 0:
+            files_per_sec = self.stats['files_scanned'] / total_duration
+            logger.info(f"📊 Performance: {files_per_sec:.1f} files/second")
+        
+        if self.stats['albums_discovered'] > 0:
+            albums_per_sec = self.stats['albums_discovered'] / total_duration  
+            logger.info(f"📊 Performance: {albums_per_sec:.1f} albums/second")
+        
         self.print_summary()
     
     # Helper methods
+    
+    def _find_lidarr_album(self, artist: str, album_title: str) -> Optional[Dict]:
+        """Find album in Lidarr data using exact matching."""
+        lookup_key = f"{artist.lower().strip()}|||{album_title.lower().strip()}"
+        return self.lidarr_albums.get(lookup_key)
+    
+    def _consolidate_album_tracks(self, tracks: List[Tuple], 
+                                   destination_dir: Path, artist: str, album: str, year: str) -> int:
+        """
+        Move all tracks for an album to the destination directory.
+        
+        Returns:
+            Number of files actually moved
+        """
+        # Create destination structure with year prefix
+        safe_artist = self._sanitize_filename(artist)
+        album_with_year = f"[{year}] {album}" if year != 'Unknown' else album
+        safe_album = self._sanitize_filename(album_with_year)
+        
+        target_artist_dir = destination_dir / safe_artist
+        target_album_dir = target_artist_dir / safe_album
+        
+        target_album_dir.mkdir(parents=True, exist_ok=True)
+        self._fix_permissions(target_artist_dir)
+        self._fix_permissions(target_album_dir)
+        
+        files_moved = 0
+        
+        for file_path, metadata, source_dir in tracks:
+            file_path = Path(file_path)  # Ensure it's a Path object
+            target_file = target_album_dir / file_path.name
+            
+            # Skip if already in correct location
+            if file_path.resolve() == target_file.resolve():
+                continue
+            
+            if target_file.exists():
+                logger.info(f"      ⚠️  Target exists, skipping: {file_path.name}")
+                continue
+            
+            try:
+                shutil.move(str(file_path), str(target_file))
+                self._fix_permissions(target_file)
+                files_moved += 1
+            except Exception as e:
+                logger.info(f"      ❌ Failed to move {file_path.name}: {e}")
+                self.stats['errors'] += 1
+        
+        if files_moved > 0:
+            logger.info(f"      📦 Moved {files_moved} files to {target_album_dir}")
+        
+        return files_moved
     
     def _sanitize_filename(self, name: str) -> str:
         """Sanitize filename for filesystem."""
@@ -638,22 +1087,6 @@ class FileOrganiser:
         except Exception as e:
             logger.info(f"❌ Lidarr API error: {e}")
             return None
-    
-    def _fuzzy_match(self, str1: str, str2: str, threshold: float = 0.8) -> bool:
-        """Simple fuzzy string matching."""
-        if str1 == str2:
-            return True
-        if str1 in str2 or str2 in str1:
-            return True
-        
-        longer = max(str1, str2, key=len)
-        shorter = min(str1, str2, key=len)
-        
-        if len(longer) == 0:
-            return True
-        
-        matches = sum(1 for a, b in zip(longer, shorter) if a == b)
-        return (matches / len(longer)) >= threshold
     
     def _find_album_folders(self, search_dir: Path) -> List[Path]:
         """Find all album folders in directory."""
@@ -692,31 +1125,12 @@ class FileOrganiser:
                       if f.is_file() and f.suffix.lower() in AUDIO_EXTENSIONS]
         
         return artist_name, album_name, len(audio_files)
-    
-    def _move_album(self, album_path: Path, destination_dir: Path, artist: str) -> None:
-        """Move album to destination directory."""
-        target_artist_dir = destination_dir / artist
-        target_album_path = target_artist_dir / album_path.name
-        
-        if target_album_path.exists():
-            return
-        
-        target_artist_dir.mkdir(parents=True, exist_ok=True)
-        self._fix_permissions(target_artist_dir)
-        
-        shutil.move(str(album_path), str(target_album_path))
-        
-        self._fix_permissions(target_album_path)
-        for item in target_album_path.rglob('*'):
-            self._fix_permissions(item)
-        
-        self.stats['moved_albums'] += 1
 
 
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Organize music files across all directories with metadata checking"
+        description="Organize music files using track database approach"
     )
     
     parser.add_argument('--owned-dir', help='Owned music directory (protected)')

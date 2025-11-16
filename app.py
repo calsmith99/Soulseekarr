@@ -18,7 +18,6 @@ from werkzeug.serving import make_server
 import logging
 import requests
 from urllib.parse import urljoin
-from database import get_db
 import settings
 
 app = Flask(__name__)
@@ -27,6 +26,12 @@ app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
 # Configure logging
 logging.basicConfig(level=logging.INFO)  # Balanced logging level
 logger = logging.getLogger(__name__)
+
+# Initialize database early and ensure migrations complete
+logger.info("Initializing database with migrations...")
+from database import get_db
+db = get_db()  # This will trigger lazy initialization and complete migrations
+logger.info("Database initialization complete")
 
 # Disable Werkzeug access logging to reduce noise
 logging.getLogger('werkzeug').setLevel(logging.WARNING)
