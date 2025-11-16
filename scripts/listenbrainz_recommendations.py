@@ -42,9 +42,22 @@ from pathlib import Path
 
 # Add parent directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from slskd_utils import search_and_download_album
+
+# Import enhanced downloading logic from queue_lidarr_monitored
+sys.path.append(str(Path(__file__).parent))
+from queue_lidarr_monitored import (
+    queue_tracks_for_download, check_downloads_folder, check_download_queue,
+    DOWNLOADED_TRACKS, is_audio_file_wanted
+)
+
+# Import settings for configuration (needed by queue_lidarr_monitored functions)
+from settings import get_lidarr_config, get_slskd_config
+
 from datetime import datetime
 from collections import defaultdict
+
+# Global configuration for enhanced download functions
+CONFIG = {}
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -88,6 +101,9 @@ class ListenBrainzRecommendations:
         
         # Load configuration
         self.load_config()
+        
+        # Set up global CONFIG for enhanced download functions
+        self.setup_global_config()
 
     def load_config(self):
         """Load configuration from settings or environment variables."""
@@ -118,6 +134,17 @@ class ListenBrainzRecommendations:
         self.slskd_api_key = os.getenv('SLSKD_API_KEY')
         
         self.logger.info("Loaded configuration from environment variables")
+
+    def setup_global_config(self):
+        """Set up the global CONFIG variable needed by enhanced download functions."""
+        global CONFIG
+        CONFIG.update({
+            'lidarr_url': self.lidarr_url,
+            'lidarr_api_key': self.lidarr_api_key,
+            'slskd_url': self.slskd_url,
+            'slskd_api_key': self.slskd_api_key
+        })
+        self.logger.debug("Set up global CONFIG for enhanced download functions")
 
     def get_weekly_exploration_playlist(self):
         """Get the latest Weekly Exploration playlist ID for the user with retry logic."""
@@ -283,17 +310,26 @@ class ListenBrainzRecommendations:
         return missing
 
     def queue_album_in_slskd(self, artist, album):
-        """Queue an album for download in slskd using shared utility."""
+        """Queue an album for download using enhanced logic with deduplication."""
         if not all([self.slskd_url, self.slskd_api_key]):
             raise ValueError("slskd configuration is incomplete")
         
         try:
-            success = search_and_download_album(
-                slskd_url=self.slskd_url,
-                slskd_api_key=self.slskd_api_key,
-                artist=artist,
-                album=album,
-                logger=self.logger,
+            # Create a fake track list for the album (since we don't have Lidarr track data)
+            # We'll let the enhanced logic search for the full album
+            fake_tracks = [{
+                'title': f"Track from {album}",  # Placeholder - album search will find actual tracks
+                'trackNumber': 1,
+                'discNumber': 1
+            }]
+            
+            self.logger.info(f"🎵 Queuing album: {artist} - {album}")
+            
+            # Use the enhanced downloading logic
+            success = queue_tracks_for_download(
+                tracks=fake_tracks,
+                artist_name=artist, 
+                album_title=album,
                 dry_run=self.dry_run
             )
             
