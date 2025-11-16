@@ -158,6 +158,8 @@ class FileOrganiser:
             'files_moved': 0,
             'owned_albums_checked': 0,
             'owned_missing_tracks': 0,
+            'system_files_removed': 0,
+            'empty_dirs_removed': 0,
             'errors': 0
         }
         
@@ -216,12 +218,13 @@ class FileOrganiser:
             
             tags = audio.tags
             
-            # Extract essential metadata (artist, album, title, year)
-            for field in ['artist', 'album', 'title', 'date']:
+            # Extract essential metadata (albumartist, album, title, year)
+            for field in ['albumartist', 'artist', 'album', 'title', 'date']:
                 value = None
                 
                 # Try common tag names
                 tag_variants = {
+                    'albumartist': ['albumartist', 'ALBUMARTIST', 'TPE2', 'TAG:albumartist', 'ALBUM ARTIST'],
                     'artist': ['artist', 'ARTIST', 'TPE1', 'TAG:artist'],
                     'album': ['album', 'ALBUM', 'TALB', 'TAG:album'],
                     'title': ['title', 'TITLE', 'TIT2', 'TAG:title'],
@@ -246,6 +249,21 @@ class FileOrganiser:
                         metadata[field] = value.strip()
                 else:
                     missing.append('year' if field == 'date' else field)
+            
+            # Use albumartist if available, fallback to artist
+            if 'albumartist' in metadata:
+                metadata['artist'] = metadata['albumartist']  # Override artist with albumartist
+            elif 'artist' not in metadata:
+                missing.append('artist')
+            
+            # Remove albumartist from metadata since we've used it to set artist
+            metadata.pop('albumartist', None)
+            
+            # Check if we have the essential fields
+            essential_fields = ['artist', 'album', 'title']
+            missing = [field for field in essential_fields if field not in metadata or not metadata[field].strip()]
+            if 'year' not in metadata:
+                missing.append('year')
             
             has_required = len(missing) == 0
             return has_required, metadata, missing
@@ -355,7 +373,8 @@ class FileOrganiser:
                     
                     if has_metadata:
                         # Complete metadata - add to album database
-                        artist = metadata['artist']
+                        # Use albumartist for organization to avoid featured artist splits
+                        artist = metadata['artist']  # This is now albumartist if it was available
                         album = metadata['album'] 
                         year = metadata.get('year', 'Unknown')
                         album_key = f"{artist}|||{album}|||{year}"
@@ -364,6 +383,11 @@ class FileOrganiser:
                         track_database[album_key]['locations'].add(dir_name)
                         track_database[album_key]['complete_tracks'] += 1
                         valid_tracks_in_dir += 1
+                        
+                        # Debug logging for featured artist issues (first few instances)
+                        if 'feat' in file_path.stem.lower() and len([k for k in track_database.keys() if 'feat' not in k]) <= 3:
+                            logger.info(f"      🎵 Featured track: {file_path.name}")
+                            logger.info(f"         � Organized under: {artist} (avoiding artist split)")
                     else:
                         # Missing metadata - count but don't include in albums
                         missing_metadata_in_dir += 1
@@ -716,17 +740,61 @@ class FileOrganiser:
             if incomplete_count > 5:
                 logger.info(f"         (showing details for first 5, {incomplete_count-5} more found)")
     
-    def cleanup_empty_directories(self) -> int:
-        """Remove empty directories with progress tracking."""
-        logger.info("🧹 Cleaning up empty directories")
+    def cleanup_system_files_and_directories(self) -> Tuple[int, int]:
+        """Remove macOS system files and empty directories with progress tracking."""
+        logger.info("🧹 Cleaning up system files and empty directories")
         
-        # Scan first to count empty directories for progress tracking
+        # First pass: Remove macOS system files
+        logger.info("   🍎 Removing macOS system files (._* files)...")
+        system_files = []
+        for base_dir in [self.music_dir, self.incomplete_dir, self.downloads_dir]:
+            if not base_dir.exists():
+                continue
+            
+            for root, dirs, files in os.walk(base_dir):
+                for file in files:
+                    if file.startswith('._') or file == '.DS_Store':
+                        system_files.append(Path(root) / file)
+        
+        system_files_removed = 0
+        if system_files:
+            logger.info(f"   � Found {len(system_files)} system files to remove")
+            
+            if TQDM_AVAILABLE and len(system_files) > 10:
+                progress = tqdm(system_files, desc="PROGRESS_SUB: Removing system files", 
+                              unit="file", ncols=100)
+            else:
+                progress = system_files
+            
+            for system_file in progress:
+                try:
+                    if not self.dry_run:
+                        system_file.unlink()
+                    system_files_removed += 1
+                    
+                    # Log first few removals
+                    if system_files_removed <= 5:
+                        logger.info(f"      🗑️  Removed: {system_file.name}")
+                except Exception as e:
+                    if system_files_removed <= 3:
+                        logger.warning(f"      ⚠️ Could not remove {system_file}: {e}")
+            
+            if system_files_removed > 5:
+                logger.info(f"      ... and {system_files_removed - 5} more system files removed")
+            
+            logger.info(f"   ✅ System file cleanup: {system_files_removed}/{len(system_files)} files removed")
+        else:
+            logger.info("   ✅ No system files found to remove")
+        
+        self.stats['system_files_removed'] = system_files_removed
+        
+        # Second pass: Remove empty directories
+        logger.info("   📁 Removing empty directories...")
         empty_dirs = []
         for base_dir in [self.music_dir, self.incomplete_dir, self.downloads_dir]:
             if not base_dir.exists():
                 continue
             
-            logger.info(f"   🔍 Scanning {base_dir.name} for empty directories...")
             for dirpath, dirnames, filenames in os.walk(base_dir, topdown=False):
                 current_dir = Path(dirpath)
                 
@@ -734,44 +802,45 @@ class FileOrganiser:
                     continue
                 
                 try:
+                    # Check if directory is empty (no files or subdirectories)
                     if not any(current_dir.iterdir()):
                         empty_dirs.append(current_dir)
                 except:
                     pass
         
-        total_empty = len(empty_dirs)
-        logger.info(f"   📊 Found {total_empty} empty directories to remove")
-        
-        if total_empty == 0:
-            logger.info("   ✅ No empty directories found")
-            return 0
-        
-        removed = 0
-        
-        if TQDM_AVAILABLE and total_empty > 5:  # Only show progress for larger cleanup jobs
-            progress = tqdm(empty_dirs, desc="PROGRESS_SUB: Removing empty dirs", 
-                          unit="dir", ncols=100)
+        empty_dirs_removed = 0
+        if empty_dirs:
+            logger.info(f"   📊 Found {len(empty_dirs)} empty directories to remove")
+            
+            if TQDM_AVAILABLE and len(empty_dirs) > 10:
+                progress = tqdm(empty_dirs, desc="PROGRESS_SUB: Removing empty dirs", 
+                              unit="dir", ncols=100)
+            else:
+                progress = empty_dirs
+            
+            for current_dir in progress:
+                try:
+                    if not self.dry_run:
+                        current_dir.rmdir()
+                    empty_dirs_removed += 1
+                    
+                    # Log first few removals
+                    if empty_dirs_removed <= 5:
+                        logger.info(f"      🗑️  Removed: {current_dir}")
+                except Exception as e:
+                    if empty_dirs_removed <= 3:
+                        logger.warning(f"      ⚠️ Could not remove {current_dir}: {e}")
+            
+            if empty_dirs_removed > 5:
+                logger.info(f"      ... and {empty_dirs_removed - 5} more directories removed")
+            
+            logger.info(f"   ✅ Directory cleanup: {empty_dirs_removed}/{len(empty_dirs)} directories removed")
         else:
-            progress = empty_dirs
+            logger.info("   ✅ No empty directories found to remove")
         
-        for current_dir in progress:
-            try:
-                if not self.dry_run:
-                    current_dir.rmdir()
-                removed += 1
-                
-                # Log first few removals
-                if removed <= 5:
-                    logger.info(f"      🗑️  Removed: {current_dir}")
-            except Exception as e:
-                if removed <= 3:  # Don't spam with too many error messages
-                    logger.warning(f"      ⚠️ Could not remove {current_dir}: {e}")
+        self.stats['empty_dirs_removed'] = empty_dirs_removed
         
-        if removed > 5:
-            logger.info(f"      ... and {removed - 5} more directories removed")
-        
-        logger.info(f"   ✅ Cleanup complete: {removed}/{total_empty} directories removed")
-        return removed
+        return system_files_removed, empty_dirs_removed
     
     def track_album_for_expiry(self, directory: Path, album_key: str, tracks: List[Tuple[Path, Dict]]):
         """Track an album for expiry monitoring in the database, preserving first_detected timestamp."""
@@ -871,6 +940,8 @@ class FileOrganiser:
         logger.info(f"Files moved:              {self.stats['files_moved']}")
         logger.info(f"Owned albums checked:     {self.stats['owned_albums_checked']}")
         logger.info(f"Owned missing tracks:     {self.stats['owned_missing_tracks']}")
+        logger.info(f"System files removed:     {self.stats['system_files_removed']}")
+        logger.info(f"Empty dirs removed:       {self.stats['empty_dirs_removed']}")
         logger.info(f"Errors:                   {self.stats['errors']}")
         
         # Add expiry tracking summary if available
@@ -978,7 +1049,7 @@ class FileOrganiser:
         # Step 5: Cleanup
         step_start = datetime.now()
         logger.info("PROGRESS: [5/5] 100% - Cleanup")
-        empty_dirs_removed = self.cleanup_empty_directories()
+        system_files_removed, empty_dirs_removed = self.cleanup_system_files_and_directories()
         
         step_duration = (datetime.now() - step_start).total_seconds()
         logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
@@ -996,6 +1067,10 @@ class FileOrganiser:
         if self.stats['albums_discovered'] > 0:
             albums_per_sec = self.stats['albums_discovered'] / total_duration  
             logger.info(f"📊 Performance: {albums_per_sec:.1f} albums/second")
+        
+        # Add cleanup stats
+        if system_files_removed > 0 or empty_dirs_removed > 0:
+            logger.info(f"🧹 Cleanup: {system_files_removed} system files, {empty_dirs_removed} empty directories removed")
         
         self.print_summary()
     
