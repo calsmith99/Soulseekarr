@@ -839,55 +839,97 @@ class FileOrganiser:
         logger.info("🗑️  Cleaning up database entries for deleted files")
         
         try:
-            # Get all file entries from the database
-            cursor = self.db.execute("SELECT id, file_path FROM files")
-            all_entries = cursor.fetchall()
-            
-            if not all_entries:
-                logger.info("   ✅ No database entries found - nothing to clean")
-                return 0
-            
-            logger.info(f"   📊 Checking {len(all_entries)} database entries for deleted files")
-            
-            deleted_entries = []
-            
-            # Check each file entry
-            for entry_id, file_path in all_entries:
-                if not Path(file_path).exists():
-                    deleted_entries.append((entry_id, file_path))
-            
-            if not deleted_entries:
-                logger.info("   ✅ All database entries point to existing files")
-                return 0
-            
-            logger.info(f"   🗑️  Found {len(deleted_entries)} entries for deleted files")
-            
-            # Remove entries for deleted files
-            deleted_count = 0
-            for entry_id, file_path in deleted_entries:
-                try:
-                    if not self.dry_run:
-                        self.db.execute("DELETE FROM files WHERE id = ?", (entry_id,))
+            with self.db.get_connection() as conn:
+                # Get all file entries from the album_tracks table (where individual files are tracked)
+                cursor = conn.execute("SELECT id, file_path, album_id FROM album_tracks")
+                all_entries = cursor.fetchall()
+                
+                if not all_entries:
+                    logger.info("   ✅ No database entries found - nothing to clean")
+                    return 0
+                
+                logger.info(f"   📊 Checking {len(all_entries)} database entries for deleted files")
+                
+                deleted_entries = []
+                affected_albums = set()
+                
+                # Check each file entry
+                for entry_id, file_path, album_id in all_entries:
+                    if not Path(file_path).exists():
+                        deleted_entries.append((entry_id, file_path))
+                        affected_albums.add(album_id)
+                
+                if not deleted_entries:
+                    logger.info("   ✅ All database entries point to existing files")
+                    return 0
+                
+                logger.info(f"   🗑️  Found {len(deleted_entries)} entries for deleted files")
+                
+                # Remove entries for deleted files
+                deleted_count = 0
+                for entry_id, file_path in deleted_entries:
+                    try:
+                        if not self.dry_run:
+                            conn.execute("DELETE FROM album_tracks WHERE id = ?", (entry_id,))
+                        
+                        deleted_count += 1
+                        
+                        # Log first few deletions
+                        if deleted_count <= 5:
+                            logger.info(f"      🗑️  Removed entry: {Path(file_path).name}")
+                        
+                    except Exception as e:
+                        logger.warning(f"      ⚠️  Failed to remove entry for {file_path}: {e}")
+                
+                if deleted_count > 5:
+                    logger.info(f"      ... and {deleted_count - 5} more entries removed")
+                
+                # Check for orphaned albums (albums with no remaining tracks)
+                orphaned_albums = []
+                if affected_albums:
+                    logger.info(f"   📊 Checking {len(affected_albums)} potentially affected albums")
                     
-                    deleted_count += 1
+                    for album_id in affected_albums:
+                        cursor = conn.execute("SELECT COUNT(*) FROM album_tracks WHERE album_id = ?", (album_id,))
+                        track_count = cursor.fetchone()[0]
+                        
+                        if track_count == 0:
+                            # Get album info before deleting
+                            cursor = conn.execute("SELECT artist, album FROM expiring_albums WHERE id = ?", (album_id,))
+                            album_info = cursor.fetchone()
+                            if album_info:
+                                orphaned_albums.append((album_id, album_info[0], album_info[1]))
+                
+                # Remove orphaned album entries
+                orphaned_count = 0
+                if orphaned_albums:
+                    logger.info(f"   🗑️  Found {len(orphaned_albums)} orphaned albums (no remaining tracks)")
                     
-                    # Log first few deletions
-                    if deleted_count <= 5:
-                        logger.info(f"      🗑️  Removed entry: {Path(file_path).name}")
+                    for album_id, artist, album in orphaned_albums:
+                        try:
+                            if not self.dry_run:
+                                conn.execute("DELETE FROM expiring_albums WHERE id = ?", (album_id,))
+                            
+                            orphaned_count += 1
+                            
+                            # Log first few deletions
+                            if orphaned_count <= 3:
+                                logger.info(f"      🗑️  Removed album: {artist} - {album}")
+                            
+                        except Exception as e:
+                            logger.warning(f"      ⚠️  Failed to remove album {artist} - {album}: {e}")
                     
-                except Exception as e:
-                    logger.warning(f"      ⚠️  Failed to remove entry for {file_path}: {e}")
-            
-            if deleted_count > 5:
-                logger.info(f"      ... and {deleted_count - 5} more entries removed")
-            
-            # Commit changes if not dry run
-            if not self.dry_run:
-                self.db.commit()
-            
-            logger.info(f"   ✅ Database cleanup: {deleted_count}/{len(deleted_entries)} entries removed")
-            self.stats['database_entries_removed'] = deleted_count
-            return deleted_count
+                    if orphaned_count > 3:
+                        logger.info(f"      ... and {orphaned_count - 3} more albums removed")
+                
+                # Commit changes if not dry run
+                if not self.dry_run:
+                    conn.commit()
+                
+                total_removed = deleted_count + orphaned_count
+                logger.info(f"   ✅ Database cleanup: {deleted_count} tracks + {orphaned_count} albums = {total_removed} entries removed")
+                self.stats['database_entries_removed'] = total_removed
+                return total_removed
             
         except Exception as e:
             logger.error(f"   ❌ Error during database cleanup: {e}")

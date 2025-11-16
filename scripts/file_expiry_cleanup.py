@@ -34,6 +34,12 @@ import hashlib
 import random
 import string
 from time import sleep
+import re
+
+try:
+    from mutagen import File as MutagenFile
+except ImportError:
+    MutagenFile = None
 
 # Add parent directory to path so we can import action_logger
 sys.path.append(str(Path(__file__).parent.parent))
@@ -487,6 +493,30 @@ class FileExpiryCleanup:
             self.logger.error(f"Error extracting music info from path {file_path}: {e}")
             return "", "", ""
     
+    def normalize_for_comparison(self, text):
+        """Normalize text for comparison between filesystem and Navidrome data.
+        
+        This handles the common filesystem character replacements that occur
+        when albums/artists are saved to disk.
+        """
+        if not text:
+            return ""
+        
+        # Create a normalized version that maps filesystem characters back to originals
+        normalized = text
+        
+        # Common filesystem character replacements
+        replacements = {
+            '_': '/',      # Horizons_West -> Horizons/West
+            ' - ': ': ',   # Album - Subtitle -> Album: Subtitle  
+            ' _ ': ' / ',  # Artist _ Album -> Artist / Album
+        }
+        
+        for fs_char, original_char in replacements.items():
+            normalized = normalized.replace(fs_char, original_char)
+        
+        return normalized.lower()
+
     def is_content_starred(self, file_path):
         """Check if the file or its album is starred in Navidrome"""
         try:
@@ -495,36 +525,65 @@ class FileExpiryCleanup:
                 self.logger.warning(f"Starred content not loaded - treating file as starred for safety: {file_path}")
                 return True
             
-            artist, album, track = self.extract_music_info_from_path(file_path)
+            # Try to get metadata from audio file first
+            metadata = self.get_audio_metadata(file_path)
             
-            if not artist:
-                # Can't determine if starred without artist info - be safe
-                self.logger.debug(f"No artist info extracted - treating as starred for safety: {file_path}")
-                return True
+            if metadata:
+                # Use metadata from audio file (most accurate)
+                artist = metadata['artist'].lower()
+                album = metadata['album'].lower()
+                track = metadata.get('title', '').lower()
+            else:
+                # Fall back to filesystem path parsing
+                artist_fs, album_fs, track_fs = self.extract_music_info_from_path(file_path)
+                
+                if not artist_fs:
+                    # Can't determine if starred without artist info - be safe
+                    self.logger.debug(f"No artist info extracted - treating as starred for safety: {file_path}")
+                    return True
+                
+                # Use filesystem names and try normalization
+                artist = artist_fs.lower()
+                album = album_fs.lower()
+                track = track_fs.lower()
+                
+                # Also try the normalized version for filesystem names
+                artist_normalized = self.normalize_for_comparison(artist_fs)
+                album_normalized = self.normalize_for_comparison(album_fs)
+                track_normalized = self.normalize_for_comparison(track_fs)
             
-            # Normalize strings to lowercase for comparison (starred content is already lowercase)
-            artist_lower = artist.lower()
-            album_lower = album.lower()
-            track_lower = track.lower()
-            
-            # Check if album is starred
-            album_key = f"{artist_lower} - {album_lower}"
+            # Check if album is starred (direct comparison first)
+            album_key = f"{artist} - {album}"
             if album_key in self.starred_albums:
                 self.logger.debug(f"Album is starred: {album_key}")
                 return True
-            else:
-                # Debug: log failed album matches
-                self.logger.debug(f"Album NOT starred - checking '{album_key}' against {len(self.starred_albums)} starred albums")
-                # Show similar album names for debugging
-                for starred_key in self.starred_albums:
-                    if artist_lower in starred_key.lower():
-                        self.logger.debug(f"  Found starred album for artist: '{starred_key}'")
             
-            # Check if individual track is starred
-            track_key = f"{artist_lower} - {album_lower} - {track_lower}"
+            # If using filesystem names, also try normalized versions
+            if not metadata:
+                album_key_normalized = f"{artist_normalized} - {album_normalized}"
+                if album_key_normalized in self.starred_albums:
+                    self.logger.debug(f"Album is starred (normalized): {album_key_normalized}")
+                    return True
+            
+            # Debug: log failed album matches
+            self.logger.debug(f"Album NOT starred - checking '{album_key}' against {len(self.starred_albums)} starred albums")
+            # Show similar album names for debugging
+            for starred_key in self.starred_albums:
+                if artist in starred_key:
+                    self.logger.debug(f"  Found starred album for artist: '{starred_key}'")
+            
+            # Check if individual track is starred (direct comparison)
+            track_key = f"{artist} - {album} - {track}"
             if track_key in self.starred_tracks:
                 self.logger.debug(f"Track is starred: {track_key}")
                 return True
+            
+            # If using filesystem names, also try normalized version
+            if not metadata:
+                track_key_normalized = f"{artist_normalized} - {album_normalized} - {track_normalized}"
+                if track_key_normalized in self.starred_tracks:
+                    self.logger.debug(f"Track is starred (normalized): {track_key_normalized}")
+                    return True
             
             return False
             
@@ -533,6 +592,120 @@ class FileExpiryCleanup:
             # On error, assume starred to be safe (don't delete)
             return True
     
+    def get_audio_metadata(self, file_path):
+        """Extract artist, album, and track metadata from audio file"""
+        if not MutagenFile:
+            self.logger.debug("Mutagen not available - falling back to filesystem parsing")
+            return None
+            
+        try:
+            audio = MutagenFile(file_path)
+            if not audio or not audio.tags:
+                self.logger.debug(f"No audio tags found in: {file_path}")
+                return None
+            
+            tags = audio.tags
+            metadata = {}
+            
+            # Extract essential metadata
+            for field in ['albumartist', 'artist', 'album', 'title']:
+                value = None
+                
+                # Try common tag names for FLAC and MP3
+                tag_variants = {
+                    'albumartist': ['albumartist', 'ALBUMARTIST', 'TPE2'],
+                    'artist': ['artist', 'ARTIST', 'TPE1'],
+                    'album': ['album', 'ALBUM', 'TALB'],
+                    'title': ['title', 'TITLE', 'TIT2']
+                }
+                
+                for tag_key in tag_variants.get(field, [field]):
+                    if tag_key in tags:
+                        v = tags[tag_key]
+                        value = str(v[0]) if isinstance(v, list) else str(v)
+                        break
+                
+                if value and value.strip():
+                    metadata[field] = value.strip()
+            
+            # Use albumartist if available, fallback to artist
+            if 'albumartist' in metadata:
+                metadata['artist'] = metadata['albumartist']  # Override artist with albumartist
+            
+            # Must have artist and album at minimum
+            if not metadata.get('artist') or not metadata.get('album'):
+                self.logger.debug(f"Missing essential metadata (artist/album) in: {file_path}")
+                return None
+            
+            self.logger.debug(f"Extracted metadata from {file_path}: {metadata['artist']} - {metadata['album']}")
+            return metadata
+            
+        except Exception as e:
+            self.logger.debug(f"Error extracting metadata from {file_path}: {e}")
+            return None
+
+    def get_navidrome_album_metadata(self, artist, album_path_name):
+        """Get original album metadata from Navidrome using Subsonic API"""
+        if not self.subsonic_token or not self.subsonic_salt:
+            return None
+        
+        try:
+            # Search for the album using search3 endpoint
+            search_url = f"{self.navidrome_url}/rest/search3"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'FileExpiryCleanup',
+                'f': 'json',
+                'query': f"{artist}",  # Search by artist to find albums
+                'albumCount': 50
+            }
+            
+            response = requests.get(search_url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                subsonic_response = data.get('subsonic-response', {})
+                
+                if subsonic_response.get('status') == 'ok':
+                    search_result = subsonic_response.get('searchResult3', {})
+                    albums = search_result.get('album', [])
+                    
+                    if albums:
+                        # Look for the best match
+                        for album_data in albums:
+                            navidrome_album = album_data.get('name', '').lower()
+                            navidrome_artist = album_data.get('artist', '').lower()
+                            
+                            # Check if this matches our filesystem album
+                            if (navidrome_artist == artist.lower() and 
+                                (navidrome_album == album_path_name.lower() or 
+                                 self.normalize_for_comparison(navidrome_album) == album_path_name.lower() or
+                                 self.normalize_for_comparison(album_path_name) == navidrome_album)):
+                                
+                                self.logger.debug(f"Found Navidrome metadata: {navidrome_artist} - {navidrome_album}")
+                                return {
+                                    'original_artist': album_data.get('artist', artist),
+                                    'original_album': album_data.get('name', album_path_name),
+                                    'navidrome_id': album_data.get('id'),
+                                    'cover_art': album_data.get('coverArt')
+                                }
+                    
+                    self.logger.debug(f"No Navidrome match found for: {artist} - {album_path_name}")
+                    return None
+                else:
+                    self.logger.debug(f"Navidrome search failed: {subsonic_response.get('error', {})}")
+                    return None
+            else:
+                self.logger.debug(f"Navidrome search request failed: {response.status_code}")
+                return None
+                
+        except Exception as e:
+            self.logger.debug(f"Error getting Navidrome album metadata: {e}")
+            return None
+
     def track_album_expiry(self, file_path):
         """Track album expiry data for UI display"""
         try:
@@ -542,13 +715,27 @@ class FileExpiryCleanup:
             days_old = file_age.days
             days_until_expiry = self.cleanup_days - days_old
             
-            # Extract album info from path
-            artist, album, track = self.extract_music_info_from_path(file_path)
+            # Try to get metadata from audio file first
+            metadata = self.get_audio_metadata(file_path)
+            
+            if metadata:
+                # Use metadata from audio file (most reliable)
+                artist = metadata['artist']
+                album = metadata['album'] 
+                track = metadata.get('title', '')
+                source = "metadata"
+                self.logger.debug(f"Using audio metadata: {artist} - {album}")
+            else:
+                # Fall back to filesystem path parsing
+                artist, album, track = self.extract_music_info_from_path(file_path)
+                source = "filesystem"
+                self.logger.debug(f"Using filesystem parsing: {artist} - {album}")
             
             if not artist or not album:
+                self.logger.debug(f"Could not extract artist/album info from {file_path}")
                 return
                 
-            # Create album key
+            # Create album key using the extracted names
             album_key = f"{artist} - {album}"
             
             # Check if this file/album is starred
@@ -558,22 +745,29 @@ class FileExpiryCleanup:
             path_parts = Path(file_path).parts
             album_dir = None
             
-            # Find the album directory in the path
+            # Try to find the actual album directory in the path
             for i, part in enumerate(path_parts):
-                if part == artist and i + 1 < len(path_parts):
+                # Look for artist match (case insensitive)
+                if part.lower() == artist.lower() and i + 1 < len(path_parts):
                     # The next part should be the album directory
                     album_dir_full = path_parts[i + 1]
-                    album_dir = f"{artist}/{album_dir_full}"
+                    album_dir = f"{part}/{album_dir_full}"
                     break
             
             if not album_dir:
-                album_dir = f"{artist}/{album}"
+                # Fallback: construct directory path
+                artist_fs, album_fs, _ = self.extract_music_info_from_path(file_path)
+                if artist_fs and album_fs:
+                    album_dir = f"{artist_fs}/{album_fs}"
+                else:
+                    album_dir = f"{artist}/{album}"
             
-            # Track this album's expiry data
+            # Track this album's expiry data using metadata names
             if album_key not in self.album_expiry_data:
                 self.album_expiry_data[album_key] = {
-                    'artist': artist,
-                    'album': album,
+                    'artist': artist,                    # Original artist name from metadata
+                    'album': album,                      # Original album name from metadata  
+                    'metadata_source': source,           # Track where the data came from
                     'oldest_file_days': days_old,
                     'days_until_expiry': days_until_expiry,
                     'file_count': 0,
