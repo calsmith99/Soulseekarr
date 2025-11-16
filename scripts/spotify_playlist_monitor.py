@@ -2176,18 +2176,25 @@ class SpotifyPlaylistMonitor:
                 self.logger.warning("slskd configuration missing")
                 return False
             
-            # Use shared utility function
+            # Get album information if available
+            album = song.get('album') or song.get('album_name')
+            
+            # Use shared utility function with album info
             success = search_and_download_song(
                 slskd_url=self.slskd_url,
                 slskd_api_key=self.slskd_api_key,
                 artist=song['artist'],
                 title=song['title'],
+                album=album,  # Include album for better matching
                 logger=self.logger,
                 dry_run=False
             )
             
             if success:
-                self.logger.info(f"Successfully queued: {song['artist']} - {song['title']}")
+                if album:
+                    self.logger.info(f"Successfully queued: {song['artist']} - {song['title']} (from {album})")
+                else:
+                    self.logger.info(f"Successfully queued: {song['artist']} - {song['title']}")
             
             return success
             

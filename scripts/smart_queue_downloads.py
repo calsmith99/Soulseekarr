@@ -517,7 +517,7 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
     
     # Strategy: Search for the album, then queue only the specific tracks we need
     # Create more specific search query to prioritize original versions
-    album_search_query = f'"{artist_name}" "{album_title}" -remix -mix -live -acoustic'
+    album_search_query = f'"{artist_name}" "{album_title}"'
     logging.info(f"   🔍 Searching for album: \"{album_search_query}\"")
     
     success = queue_album_with_specific_tracks(album_search_query, artist_name, album_title, tracks)
@@ -535,9 +535,8 @@ def queue_tracks_for_download(tracks: List[Dict], artist_name: str, album_title:
             if interrupted:
                 break
             
-            # Create more specific track search query to avoid remixes
-        for track in tracks:
-            track_search_query = f'"{artist_name}" "{track["title"]}" -remix -mix -live -acoustic -edit'
+            # Create basic track search query (post-filtering will handle quality)
+            track_search_query = f'"{artist_name}" "{track["title"]}"'
             logging.info(f"      🔍 Searching: \"{track_search_query}\"")
             
             if queue_single_search(track_search_query, "track", artist_name, album_title, track['title']):

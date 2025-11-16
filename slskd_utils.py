@@ -335,7 +335,7 @@ class SlskdDownloader:
         
         Uses sophisticated word-based matching and quality scoring.
         """
-        # Parse search query to extract artist and title
+        # Parse search query to extract artist, title, and possibly album
         parts = search_query.split('-', 1)
         if len(parts) == 2:
             target_artist = self._normalize_string(parts[0])
@@ -344,21 +344,29 @@ class SlskdDownloader:
             target_artist = ""
             query_title = search_query
         
-        # Clean and normalize title
-        if target_title:
-            cleaned_title = self._clean_song_title(target_title)
-            normalized_title = self._normalize_string(cleaned_title)
+        # Check if target_title includes album info (from "title (from album)" format)
+        target_album = ""
+        if target_title and "(from " in target_title:
+            title_parts = target_title.split(" (from ", 1)
+            actual_title = title_parts[0]
+            target_album = self._normalize_string(title_parts[1].rstrip(")"))
         else:
-            cleaned_title = self._clean_song_title(query_title)
-            normalized_title = self._normalize_string(cleaned_title)
+            actual_title = target_title or query_title
+        
+        # Clean and normalize title
+        cleaned_title = self._clean_song_title(actual_title)
+        normalized_title = self._normalize_string(cleaned_title)
         
         self.logger.info(f"Looking for matches - Artist: '{target_artist}', Title: '{normalized_title}'")
-        if cleaned_title != query_title:
-            self.logger.debug(f"  (Cleaned title: {query_title} -> {cleaned_title})")
+        if target_album:
+            self.logger.info(f"  Album context: '{target_album}'")
+        if cleaned_title != actual_title:
+            self.logger.debug(f"  (Cleaned title: {actual_title} -> {cleaned_title})")
         
         # Extract words for matching
         artist_words = [w for w in target_artist.split() if len(w) > 2]
         title_words = [w for w in normalized_title.split() if len(w) > 2]
+        album_words = [w for w in target_album.split() if len(w) > 2] if target_album else []
         all_words = [w for w in (target_artist + ' ' + normalized_title).split() if len(w) > 3]
         
         candidates = []
@@ -399,6 +407,57 @@ class SlskdDownloader:
                 # Remove track numbers for better matching (e.g., "08 Song.mp3" -> "Song.mp3")
                 cleaned_filename = re.sub(r'^\d+\s*[-.]?\s*', '', normalized_filename)
                 
+                # Check for version indicators - but only penalize if they don't match target
+                unwanted_keywords = [
+                    'remix', 'mix)', 'edit)', 'version)', 'live', 'acoustic', 'demo', 
+                    'karaoke', 'instrumental', 'radio edit', 'clean version', 'explicit',
+                    'cover', 'tribute', 'mashup', 'bootleg', 'alternate', 'alternative'
+                ]
+                
+                # Check if the target title itself contains version indicators
+                target_has_remix = 'remix' in normalized_title.lower()
+                target_has_live = 'live' in normalized_title.lower() 
+                target_has_acoustic = 'acoustic' in normalized_title.lower()
+                target_has_edit = 'edit' in normalized_title.lower()
+                target_has_version = 'version' in normalized_title.lower()
+                
+                unwanted_penalty = 0
+                for keyword in unwanted_keywords:
+                    if keyword in normalized_filename.lower() or keyword in cleaned_filename.lower():
+                        # Only penalize if target doesn't expect this type of version
+                        should_penalize = True
+                        
+                        if keyword == 'remix' and target_has_remix:
+                            should_penalize = False  # Target expects remix, so don't penalize
+                        elif keyword == 'live' and target_has_live:
+                            should_penalize = False  # Target expects live version
+                        elif keyword == 'acoustic' and target_has_acoustic:
+                            should_penalize = False  # Target expects acoustic version
+                        elif keyword in ['edit)', 'version)'] and (target_has_edit or target_has_version):
+                            should_penalize = False  # Target expects edit/version
+                        
+                        if should_penalize:
+                            unwanted_penalty += 20  # Heavy penalty for unwanted versions
+                
+                # Special penalty for obvious remix patterns - but only if target doesn't expect them
+                remix_patterns = [
+                    r'\(.*remix.*\)', r'\[.*remix.*\]',  # (any remix) or [any remix]
+                    r'\(.*mix\)', r'\[.*mix\]',          # (any mix) or [any mix] 
+                    r'\(.*edit\)', r'\[.*edit\]',        # (any edit) or [any edit]
+                ]
+                
+                for pattern in remix_patterns:
+                    if re.search(pattern, normalized_filename, re.IGNORECASE):
+                        # Only penalize remix patterns if target doesn't expect remix
+                        if 'remix' in pattern and target_has_remix:
+                            continue  # Target expects remix, don't penalize
+                        elif ('mix' in pattern and not 'remix' in pattern) and target_has_remix:
+                            continue  # Target expects some kind of mix
+                        elif 'edit' in pattern and target_has_edit:
+                            continue  # Target expects edit
+                        else:
+                            unwanted_penalty += 30  # Very heavy penalty for unexpected patterns
+                
                 # Calculate match score
                 match_score = 0
                 
@@ -411,6 +470,18 @@ class SlskdDownloader:
                 for word in title_words:
                     if word in normalized_filename or word in cleaned_filename:
                         match_score += 15
+                
+                # Album word matching bonus (when album context available)
+                album_bonus = 0
+                if album_words:
+                    for word in album_words:
+                        if word in normalized_filename or word in cleaned_filename:
+                            album_bonus += 10
+                    # If we have album context but no album words match, slight penalty
+                    if album_bonus == 0:
+                        match_score -= 5
+                    else:
+                        match_score += album_bonus
                 
                 # Last resort: any meaningful word matches
                 if match_score == 0:
@@ -435,6 +506,28 @@ class SlskdDownloader:
                 if size_mb > 3:
                     match_score += min(int(size_mb / 2), 5)
                 
+                # Apply unwanted version penalty
+                match_score -= unwanted_penalty
+                
+                # Bonus for matching expected version types
+                version_match_bonus = 0
+                if target_has_remix and 'remix' in normalized_filename.lower():
+                    version_match_bonus += 25  # Strong bonus for finding expected remix
+                elif target_has_live and 'live' in normalized_filename.lower():
+                    version_match_bonus += 25  # Strong bonus for finding expected live version
+                elif target_has_acoustic and 'acoustic' in normalized_filename.lower():
+                    version_match_bonus += 25  # Strong bonus for finding expected acoustic
+                
+                match_score += version_match_bonus
+                
+                # Prefer files with "original" or "album version" indicators (only if not looking for special version)
+                if not (target_has_remix or target_has_live or target_has_acoustic or target_has_edit):
+                    original_indicators = ['original', 'album version', 'studio version', 'single version']
+                    for indicator in original_indicators:
+                        if indicator in normalized_filename.lower():
+                            match_score += 20
+                
+                # Only add candidates with positive scores (after penalties)
                 if match_score > 0:
                     candidates.append({
                         'username': username,
@@ -609,6 +702,7 @@ def search_and_download_album(slskd_url: str, slskd_api_key: str,
 
 def search_and_download_song(slskd_url: str, slskd_api_key: str,
                              artist: str, title: str,
+                             album: Optional[str] = None,
                              logger: Optional[logging.Logger] = None,
                              dry_run: bool = False) -> bool:
     """
@@ -619,6 +713,7 @@ def search_and_download_song(slskd_url: str, slskd_api_key: str,
         slskd_api_key: API key for authentication
         artist: Artist name
         title: Song title
+        album: Optional album name for better matching
         logger: Optional logger instance
         dry_run: If True, only simulate the download
         
@@ -626,6 +721,14 @@ def search_and_download_song(slskd_url: str, slskd_api_key: str,
         True if successful, False otherwise
     """
     downloader = SlskdDownloader(slskd_url, slskd_api_key, logger)
-    search_query = f"{artist} {title}"
+    
+    # Create search query - include album in search if available for better results
+    if album:
+        search_query = f"{artist} {title} {album}"
+        target_name = f"{title} (from {album})"
+    else:
+        search_query = f"{artist} {title}"
+        target_name = title
+        
     return downloader.search_and_download(search_query, search_type='song',
-                                         target_name=title, dry_run=dry_run)
+                                         target_name=target_name, dry_run=dry_run)
