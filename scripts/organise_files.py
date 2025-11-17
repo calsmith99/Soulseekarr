@@ -115,13 +115,16 @@ class FileOrganiser:
     def __init__(self, owned_dir: str = None, music_dir: str = None, 
                  incomplete_dir: str = None, downloads_dir: str = None,
                  lidarr_url: str = None, lidarr_api_key: str = None, 
-                 dry_run: bool = False):
+                 dry_run: bool = False, auto_mode: bool = False):
         """Initialize the File Organiser."""
         
-        logger.info("=" * 60)
-        logger.info("🎵 ORGANISE FILES v5.0 - Track Database Approach")
-        logger.info("=" * 60)
-        logger.info("")
+        self.auto_mode = auto_mode
+        
+        if not auto_mode:
+            logger.info("=" * 60)
+            logger.info("🎵 ORGANISE FILES v5.0 - Track Database Approach")
+            logger.info("=" * 60)
+            logger.info("")
         
         # Get directories from settings
         self.owned_dir = Path(owned_dir or get_owned_directory()).resolve()
@@ -137,7 +140,7 @@ class FileOrganiser:
         
         self.dry_run = dry_run
         
-        if self.dry_run:
+        if self.dry_run and not auto_mode:
             logger.info("🧪 DRY RUN MODE - No files will be moved or modified")
             logger.info("")
         
@@ -1309,24 +1312,33 @@ class FileOrganiser:
         """Main execution flow with enhanced progress tracking."""
         start_time = datetime.now()
         
+        if self.auto_mode:
+            logger.info("🔄 Starting organize files (auto mode)")
+        
         # Step 1: Load Lidarr data
         step_start = datetime.now()
-        logger.info("PROGRESS: [1/5] 20% - Loading Lidarr monitored albums")
+        if not self.auto_mode:
+            logger.info("PROGRESS: [1/5] 20% - Loading Lidarr monitored albums")
         if not self.load_lidarr_data():
             logger.info("❌ Failed to load Lidarr data - aborting")
             return
         
         step_duration = (datetime.now() - step_start).total_seconds()
-        logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
-        logger.info("")
+        if not self.auto_mode:
+            logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+            logger.info("")
         
         # Step 2: Build comprehensive track database from all directories
         step_start = datetime.now()
-        logger.info("PROGRESS: [2/5] 40% - Building comprehensive track database")
+        if not self.auto_mode:
+            logger.info("PROGRESS: [2/5] 40% - Building comprehensive track database")
         track_database = self.build_track_database()
         
         if not track_database:
-            logger.info("⚠️  No albums found to process - exiting early")
+            if self.auto_mode:
+                logger.info("ℹ️  No albums found to process")
+            else:
+                logger.info("⚠️  No albums found to process - exiting early")
             self.print_summary()
             return
         
@@ -1617,6 +1629,8 @@ def main():
     parser.add_argument('--lidarr-url', help='Lidarr base URL')
     parser.add_argument('--lidarr-api-key', help='Lidarr API key')
     parser.add_argument('--dry-run', action='store_true', help='Simulate changes without applying them')
+    parser.add_argument('--auto-mode', action='store_true', 
+                       help='Run in automated mode with reduced output for cron jobs')
     
     args = parser.parse_args()
     
@@ -1632,7 +1646,8 @@ def main():
             downloads_dir=args.downloads_dir,
             lidarr_url=args.lidarr_url,
             lidarr_api_key=args.lidarr_api_key,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            auto_mode=args.auto_mode
         )
         
         organiser.run()

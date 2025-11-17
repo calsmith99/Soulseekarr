@@ -1,0 +1,25 @@
+# Navidrome Cleanup - Cron Jobs Configuration
+#
+# Copy this to your crontab or include it in your system's cron configuration
+# 
+# To install:
+#   1. Make the script executable: chmod +x cron_organize_files.sh
+#   2. Add to crontab: crontab -e
+#   3. Add the line below (adjust path as needed)
+
+# Run organize files every hour at minute 5
+# This processes downloads, moves files, and cleans up database entries
+5 * * * * /path/to/navidrome-cleanup/cron_organize_files.sh >/dev/null 2>&1
+
+# Alternative schedules (uncomment one if you prefer):
+# Every 30 minutes:
+# */30 * * * * /path/to/navidrome-cleanup/cron_organize_files.sh >/dev/null 2>&1
+
+# Every 2 hours:
+# 5 */2 * * * /path/to/navidrome-cleanup/cron_organize_files.sh >/dev/null 2>&1
+
+# Every 6 hours:
+# 5 */6 * * * /path/to/navidrome-cleanup/cron_organize_files.sh >/dev/null 2>&1
+
+# Only during specific hours (9 AM to 11 PM):
+# 5 9-23 * * * /path/to/navidrome-cleanup/cron_organize_files.sh >/dev/null 2>&1

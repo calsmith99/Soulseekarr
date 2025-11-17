@@ -24,7 +24,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)  # Balanced logging level
+logging.basicConfig(level=logging.DEBUG)  # Temporarily enable debug for cron troubleshooting
 logger = logging.getLogger(__name__)
 
 # Initialize database early and ensure migrations complete
@@ -175,6 +175,136 @@ def update_service_status():
             'last_check': datetime.now().isoformat(),
             'error': None if success else message
         }
+
+# Cron job management functions
+def get_cron_jobs():
+    """Get current cron jobs from the system."""
+    import platform
+    cron_jobs = []
+    
+    try:
+        if platform.system() != 'Windows':
+            # Unix-like systems (Linux, macOS)
+            result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.strip().split('\n')
+                for line in lines:
+                    if line.strip() and not line.startswith('#'):
+                        # Parse cron line to extract script information
+                        if 'cron_organize_files.sh' in line:
+                            parts = line.split()
+                            if len(parts) >= 6:
+                                schedule = ' '.join(parts[:5])
+                                command = ' '.join(parts[5:])
+                                
+                                cron_jobs.append({
+                                    'script_id': 'organise_files',
+                                    'schedule': schedule,
+                                    'command': command,
+                                    'enabled': True
+                                })
+        else:
+            # Windows - check Task Scheduler (simplified)
+            try:
+                result = subprocess.run(['schtasks', '/query', '/fo', 'csv'], capture_output=True, text=True)
+                if result.returncode == 0:
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines[1:]:  # Skip header
+                        if 'navidrome' in line.lower() and 'organize' in line.lower():
+                            parts = line.split(',')
+                            if len(parts) >= 4:
+                                task_name = parts[0].strip('"')
+                                status = parts[3].strip('"')
+                                
+                                cron_jobs.append({
+                                    'script_id': 'organise_files',
+                                    'schedule': 'Hourly',
+                                    'command': task_name,
+                                    'enabled': status.lower() == 'ready'
+                                })
+            except:
+                pass
+                
+    except Exception as e:
+        logger.debug(f"Error reading cron jobs: {e}")
+    
+    return cron_jobs
+
+def is_cron_enabled(script_id):
+    """Check if a script has cron enabled."""
+    cron_jobs = get_cron_jobs()
+    logger.debug(f"Checking cron status for {script_id}. Found cron jobs: {cron_jobs}")
+    for job in cron_jobs:
+        if job['script_id'] == script_id and job['enabled']:
+            logger.debug(f"Found enabled cron job for {script_id}")
+            return True
+    logger.debug(f"No enabled cron job found for {script_id}")
+    return False
+
+def enable_cron(script_id, schedule='5 * * * *'):
+    """Enable cron for a script (Linux only)."""
+    try:
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        
+        if script_id == 'organise_files':
+            cron_script_path = os.path.join(project_root, 'cron_organize_files.sh')
+            
+            # Check if script exists
+            if not os.path.exists(cron_script_path):
+                return False, f"Cron script not found: {cron_script_path}"
+            
+            # Make script executable
+            subprocess.run(['chmod', '+x', cron_script_path], check=True)
+            
+            # Get current crontab
+            result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+            current_cron = result.stdout if result.returncode == 0 else ""
+            
+            # Check if job already exists
+            job_line = f"{schedule} {cron_script_path} >/dev/null 2>&1"
+            if cron_script_path not in current_cron:
+                # Add the job
+                new_cron = current_cron.strip() + '\n' + job_line + '\n'
+                subprocess.run(['crontab', '-'], input=new_cron, text=True, check=True)
+                return True, "Cron job enabled successfully"
+            else:
+                return True, "Cron job already exists"
+        else:
+            return False, f"Cron automation not configured for {script_id}"
+                
+    except Exception as e:
+        logger.error(f"Error enabling cron for {script_id}: {e}")
+        return False, f"Error enabling cron: {str(e)}"
+
+def disable_cron(script_id):
+    """Disable cron for a script (Linux only)."""
+    try:
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        
+        if script_id == 'organise_files':
+            cron_script_path = os.path.join(project_root, 'cron_organize_files.sh')
+            
+            # Get current crontab
+            result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
+            if result.returncode == 0:
+                current_cron = result.stdout
+                
+                # Remove lines containing our script
+                lines = current_cron.split('\n')
+                new_lines = [line for line in lines if cron_script_path not in line]
+                new_cron = '\n'.join(new_lines)
+                
+                # Update crontab
+                subprocess.run(['crontab', '-'], input=new_cron, text=True, check=True)
+                return True, "Cron job disabled successfully"
+            else:
+                return True, "No crontab found"
+        else:
+            return False, f"Cron automation not configured for {script_id}"
+                
+    except Exception as e:
+        logger.error(f"Error disabling cron for {script_id}: {e}")
+        return False, f"Error disabling cron: {str(e)}"
 
 def get_script_status(script_id):
     """Get the current status of a script."""
@@ -606,6 +736,12 @@ def index():
     # Get scripts from scripts folder only
     discovered_scripts = scan_scripts_folder()
     
+    # Add cron status to each script
+    for script_id, config in discovered_scripts.items():
+        config['cron_enabled'] = is_cron_enabled(script_id)
+        config['cron_supported'] = script_id in ['organise_files']  # Add more as they get cron support
+        logger.info(f"Script: {script_id}, cron_supported: {config['cron_supported']}, cron_enabled: {config['cron_enabled']}")
+    
     # Group scripts by section
     script_sections = {}
     for script_id, config in discovered_scripts.items():
@@ -1027,10 +1163,17 @@ def get_available_scripts():
             history = get_script_execution_history(script_id)
             status = get_script_status(script_id)
             
+            # Add cron status
+            cron_enabled = is_cron_enabled(script_id)
+            cron_supported = script_id in ['organise_files']  # Add more as they get cron support
+            logger.info(f"Script: {script_id}, cron_supported: {cron_supported}, cron_enabled: {cron_enabled}")
+            
             scripts_with_history[script_id] = {
                 **config,
                 'execution_history': history,
-                'current_status': status
+                'current_status': status,
+                'cron_enabled': cron_enabled,
+                'cron_supported': cron_supported
             }
         
         logger.info(f"Returning {len(scripts_with_history)} scripts")
@@ -1951,6 +2094,92 @@ def listenbrainz_status():
     except Exception as e:
         logger.error(f"Error checking ListenBrainz status: {e}")
         return jsonify({'connected': False, 'error': str(e)}), 500
+
+# Cron Management API Endpoints
+@app.route('/api/cron/<script_id>/status', methods=['GET'])
+def get_cron_status(script_id):
+    """Get cron status for a specific script."""
+    try:
+        enabled = is_cron_enabled(script_id)
+        cron_jobs = get_cron_jobs()
+        
+        # Find specific job details
+        job_details = None
+        for job in cron_jobs:
+            if job['script_id'] == script_id:
+                job_details = job
+                break
+        
+        return jsonify({
+            'success': True,
+            'enabled': enabled,
+            'schedule': job_details['schedule'] if job_details else None,
+            'command': job_details['command'] if job_details else None
+        })
+    except Exception as e:
+        logger.error(f"Error getting cron status for {script_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cron/<script_id>/enable', methods=['POST'])
+def enable_cron_endpoint(script_id):
+    """Enable cron for a script."""
+    try:
+        logger.info(f"Received cron enable request for {script_id}")
+        logger.info(f"Request headers: {dict(request.headers)}")
+        logger.info(f"Request content type: {request.content_type}")
+        
+        # Handle both JSON and non-JSON requests
+        try:
+            data = request.get_json() or {}
+            logger.info(f"Parsed JSON data: {data}")
+        except Exception as e:
+            logger.info(f"Failed to parse JSON (using empty dict): {e}")
+            data = {}
+        
+        schedule = data.get('schedule', '5 * * * *')  # Default: every hour at 5 minutes past
+        logger.info(f"Using schedule: {schedule}")
+        
+        success, message = enable_cron(script_id, schedule)
+        
+        if success:
+            logger.info(f"Cron enabled for {script_id}: {message}")
+            return jsonify({'success': True, 'message': message})
+        else:
+            logger.error(f"Failed to enable cron for {script_id}: {message}")
+            return jsonify({'success': False, 'error': message}), 400
+            
+    except Exception as e:
+        logger.error(f"Error enabling cron for {script_id}: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cron/<script_id>/disable', methods=['POST'])
+def disable_cron_endpoint(script_id):
+    """Disable cron for a script."""
+    try:
+        success, message = disable_cron(script_id)
+        
+        if success:
+            logger.info(f"Cron disabled for {script_id}: {message}")
+            return jsonify({'success': True, 'message': message})
+        else:
+            logger.error(f"Failed to disable cron for {script_id}: {message}")
+            return jsonify({'success': False, 'error': message}), 400
+            
+    except Exception as e:
+        logger.error(f"Error disabling cron for {script_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/cron/all', methods=['GET'])
+def get_all_cron_jobs():
+    """Get all cron jobs."""
+    try:
+        cron_jobs = get_cron_jobs()
+        return jsonify({'success': True, 'jobs': cron_jobs})
+    except Exception as e:
+        logger.error(f"Error getting all cron jobs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/slskd/downloads')
 def get_slskd_downloads():

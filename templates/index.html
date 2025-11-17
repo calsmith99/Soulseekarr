@@ -244,6 +244,40 @@
             line-height: 1.2;
         }
 
+        /* Toggle buttons for cron scheduling */
+        .btn-toggle {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            min-width: 65px;
+        }
+
+        .btn-toggle:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-toggle.active {
+            background-color: var(--success-color);
+            border-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-toggle.active:hover {
+            background-color: var(--success-hover, #28a745);
+            border-color: var(--success-hover, #28a745);
+        }
+
+        .btn-toggle:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .btn-paused {
             background-color: var(--warning-color);
             border-color: var(--warning-color);
@@ -1746,6 +1780,13 @@
                                 <button class="btn btn-danger btn-sm stop-btn" data-script-id="${scriptId}" ${!status.running ? 'disabled' : ''}>
                                     Stop
                                 </button>
+                                ${script.cron_supported ? `
+                                    <button class="btn-toggle btn-xs cron-toggle-btn ${script.cron_enabled ? 'active' : ''}" 
+                                            data-script-id="${scriptId}" 
+                                            title="${script.cron_enabled ? 'Disable automated scheduling' : 'Enable automated scheduling'}">
+                                        ${script.cron_enabled ? 'Auto: ON' : 'Auto: OFF'}
+                                    </button>
+                                ` : ''}
                             </div>
                         </div>
                     `;
@@ -1768,6 +1809,13 @@
                     btn.addEventListener('click', async (e) => {
                         const scriptId = btn.dataset.scriptId;
                         await this.stopScript(scriptId);
+                    });
+                });
+
+                document.querySelectorAll('.cron-toggle-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const scriptId = btn.dataset.scriptId;
+                        await this.toggleCron(scriptId, btn);
                     });
                 });
             }
@@ -1808,6 +1856,60 @@
                 } catch (error) {
                     console.error('Error stopping script:', error);
                     this.showNotification('Error stopping script', 'error');
+                }
+            }
+
+            async toggleCron(scriptId, button) {
+                try {
+                    // Check current status first
+                    const statusResponse = await fetch(`/api/cron/${scriptId}/status`);
+                    const statusData = await statusResponse.json();
+                    
+                    if (!statusResponse.ok) {
+                        this.showNotification('Failed to check cron status', 'error');
+                        return;
+                    }
+                    
+                    const currentlyEnabled = statusData.enabled;
+                    const newAction = currentlyEnabled ? 'disable' : 'enable';
+                    
+                    // Disable button during operation
+                    button.disabled = true;
+                    button.textContent = currentlyEnabled ? 'Disabling...' : 'Enabling...';
+                    
+                    const response = await fetch(`/api/cron/${scriptId}/${newAction}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        // Update button state
+                        const enabled = newAction === 'enable';
+                        button.classList.toggle('active', enabled);
+                        button.textContent = enabled ? 'Auto: ON' : 'Auto: OFF';
+                        button.title = enabled ? 'Disable automated scheduling' : 'Enable automated scheduling';
+                        
+                        // Update script data
+                        if (this.scripts[scriptId]) {
+                            this.scripts[scriptId].cron_enabled = enabled;
+                        }
+                        
+                        this.showNotification(
+                            `Automated scheduling ${enabled ? 'enabled' : 'disabled'} for ${this.scripts[scriptId].name}`, 
+                            'success'
+                        );
+                    } else {
+                        this.showNotification(data.error || `Failed to ${newAction} automated scheduling`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error toggling cron:', error);
+                    this.showNotification('Error toggling automated scheduling', 'error');
+                } finally {
+                    // Re-enable button
+                    button.disabled = false;
                 }
             }
 
