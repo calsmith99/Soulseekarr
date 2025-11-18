@@ -19,6 +19,7 @@ import logging
 import requests
 from urllib.parse import urljoin
 import settings
+from scheduler import get_scheduler, start_scheduler, stop_scheduler
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
@@ -1163,9 +1164,24 @@ def get_available_scripts():
             history = get_script_execution_history(script_id)
             status = get_script_status(script_id)
             
-            # Add cron status
-            cron_enabled = is_cron_enabled(script_id)
-            cron_supported = script_id in ['organise_files']  # Add more as they get cron support
+            # Add cron status from new scheduler
+            scheduler = get_scheduler()
+            job_status = scheduler.get_job_status(script_id)
+            
+            cron_enabled = job_status is not None and job_status['enabled']
+            cron_supported = True  # All scripts now support scheduling
+            
+            # Get schedule details if enabled
+            schedule_info = None
+            if job_status and job_status['enabled']:
+                schedule_info = {
+                    'interval_type': job_status['interval_type'],
+                    'interval_value': job_status['interval_value'],
+                    'next_run': job_status['next_run'],
+                    'last_run': job_status['last_run'],
+                    'run_count': job_status['run_count']
+                }
+            
             logger.info(f"Script: {script_id}, cron_supported: {cron_supported}, cron_enabled: {cron_enabled}")
             
             scripts_with_history[script_id] = {
@@ -1173,7 +1189,8 @@ def get_available_scripts():
                 'execution_history': history,
                 'current_status': status,
                 'cron_enabled': cron_enabled,
-                'cron_supported': cron_supported
+                'cron_supported': cron_supported,
+                'schedule_info': schedule_info
             }
         
         logger.info(f"Returning {len(scripts_with_history)} scripts")
@@ -2100,35 +2117,43 @@ def listenbrainz_status():
 def get_cron_status(script_id):
     """Get cron status for a specific script."""
     try:
-        enabled = is_cron_enabled(script_id)
-        cron_jobs = get_cron_jobs()
+        # Get status from the new scheduler
+        scheduler = get_scheduler()
+        job_status = scheduler.get_job_status(script_id)
         
-        # Find specific job details
-        job_details = None
-        for job in cron_jobs:
-            if job['script_id'] == script_id:
-                job_details = job
-                break
-        
-        return jsonify({
-            'success': True,
-            'enabled': enabled,
-            'schedule': job_details['schedule'] if job_details else None,
-            'command': job_details['command'] if job_details else None
-        })
+        if job_status:
+            return jsonify({
+                'success': True,
+                'enabled': job_status['enabled'],
+                'schedule': f"every {job_status['interval_value']} {job_status['interval_type']}",
+                'next_run': job_status['next_run'],
+                'last_run': job_status['last_run'],
+                'last_run_status': job_status['last_run_status'],
+                'run_count': job_status['run_count'],
+                'error_count': job_status['error_count']
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'enabled': False,
+                'schedule': None
+            })
     except Exception as e:
         logger.error(f"Error getting cron status for {script_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/cron/<script_id>/enable', methods=['POST'])
 def enable_cron_endpoint(script_id):
-    """Enable cron for a script."""
+    """Enable cron for a script with the new scheduler system."""
     try:
         logger.info(f"Received cron enable request for {script_id}")
-        logger.info(f"Request headers: {dict(request.headers)}")
-        logger.info(f"Request content type: {request.content_type}")
         
-        # Handle both JSON and non-JSON requests
+        # Get script configuration
+        script_config = find_script_config(script_id)
+        if not script_config:
+            return jsonify({'success': False, 'error': 'Script not found'}), 404
+        
+        # Parse request data
         try:
             data = request.get_json() or {}
             logger.info(f"Parsed JSON data: {data}")
@@ -2136,10 +2161,36 @@ def enable_cron_endpoint(script_id):
             logger.info(f"Failed to parse JSON (using empty dict): {e}")
             data = {}
         
-        schedule = data.get('schedule', '5 * * * *')  # Default: every hour at 5 minutes past
-        logger.info(f"Using schedule: {schedule}")
+        # Parse schedule parameters
+        interval_type = data.get('interval_type', 'hours')
+        interval_value = data.get('interval_value', 1)
         
-        success, message = enable_cron(script_id, schedule)
+        # Validate interval type
+        if interval_type not in ['minutes', 'hours', 'days']:
+            interval_type = 'hours'
+        
+        # Validate interval value
+        try:
+            interval_value = int(interval_value)
+            if interval_value <= 0:
+                interval_value = 1
+        except:
+            interval_value = 1
+        
+        # Get script path
+        script_path = f"scripts/{script_id}.py"
+        if not os.path.exists(script_path):
+            return jsonify({'success': False, 'error': 'Script file not found'}), 404
+        
+        # Use the new scheduler
+        scheduler = get_scheduler()
+        success, message = scheduler.add_job(
+            script_id=script_id,
+            script_name=script_config['name'],
+            script_path=script_path,
+            interval_type=interval_type,
+            interval_value=interval_value
+        )
         
         if success:
             logger.info(f"Cron enabled for {script_id}: {message}")
@@ -2158,7 +2209,9 @@ def enable_cron_endpoint(script_id):
 def disable_cron_endpoint(script_id):
     """Disable cron for a script."""
     try:
-        success, message = disable_cron(script_id)
+        # Use the new scheduler
+        scheduler = get_scheduler()
+        success, message = scheduler.remove_job(script_id)
         
         if success:
             logger.info(f"Cron disabled for {script_id}: {message}")
@@ -2171,12 +2224,49 @@ def disable_cron_endpoint(script_id):
         logger.error(f"Error disabling cron for {script_id}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/cron/<script_id>/update', methods=['POST'])
+def update_cron_schedule(script_id):
+    """Update the schedule for an existing cron job."""
+    try:
+        data = request.get_json() or {}
+        
+        interval_type = data.get('interval_type', 'hours')
+        interval_value = data.get('interval_value', 1)
+        
+        # Validate inputs
+        if interval_type not in ['minutes', 'hours', 'days']:
+            return jsonify({'success': False, 'error': 'Invalid interval type'}), 400
+        
+        try:
+            interval_value = int(interval_value)
+            if interval_value <= 0:
+                return jsonify({'success': False, 'error': 'Invalid interval value'}), 400
+        except:
+            return jsonify({'success': False, 'error': 'Invalid interval value'}), 400
+        
+        # Use the new scheduler
+        scheduler = get_scheduler()
+        success, message = scheduler.update_job_schedule(script_id, interval_type, interval_value)
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'error': message}), 400
+            
+    except Exception as e:
+        logger.error(f"Error updating cron schedule for {script_id}: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/cron/all', methods=['GET'])
 def get_all_cron_jobs():
-    """Get all cron jobs."""
+    """Get all cron jobs from the new scheduler."""
     try:
-        cron_jobs = get_cron_jobs()
-        return jsonify({'success': True, 'jobs': cron_jobs})
+        scheduler = get_scheduler()
+        jobs = scheduler.get_all_jobs()
+        return jsonify({'success': True, 'jobs': jobs})
+    except Exception as e:
+        logger.error(f"Error getting all cron jobs: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
     except Exception as e:
         logger.error(f"Error getting all cron jobs: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
@@ -2445,6 +2535,14 @@ if __name__ == '__main__':
     # Initialize playlist script configurations on startup
     ensure_playlist_active_flags()
     
+    # Start the internal scheduler
+    logger.info("Starting internal scheduler...")
+    try:
+        start_scheduler()
+        logger.info("Internal scheduler started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start internal scheduler: {e}")
+    
     # Test service connectivity on startup
     logger.info("Testing service connectivity on startup...")
     update_service_status()
@@ -2460,4 +2558,10 @@ if __name__ == '__main__':
     host = os.environ.get('HOST', '0.0.0.0')
     
     logger.info(f"Starting SoulSeekarr on {host}:{port}")
-    app.run(host=host, port=port, debug=False, threaded=True)
+    
+    try:
+        app.run(host=host, port=port, debug=False, threaded=True)
+    except KeyboardInterrupt:
+        logger.info("Shutting down SoulSeekarr...")
+        stop_scheduler()
+        logger.info("Scheduler stopped. Goodbye!")

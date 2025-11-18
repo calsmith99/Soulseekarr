@@ -278,6 +278,43 @@
             cursor: not-allowed;
         }
 
+        /* Schedule information display */
+        .schedule-info-container {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .schedule-details {
+            font-size: 10px;
+            color: var(--text-muted);
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        .schedule-details .run-count {
+            color: var(--text-secondary);
+            font-style: italic;
+            margin-left: var(--spacing-xs);
+        }
+
+        .btn-toggle.active {
+            background-color: var(--success-color);
+            border-color: var(--success-color);
+            color: white;
+            min-width: auto;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .script-actions {
+            display: flex;
+            gap: var(--spacing-xs);
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
         .btn-paused {
             background-color: var(--warning-color);
             border-color: var(--warning-color);
@@ -588,6 +625,89 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
+        }
+
+        /* Schedule Modal Styles */
+        .form-group {
+            margin-bottom: var(--spacing-md);
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: var(--spacing-xs);
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: var(--spacing-sm);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background-color: var(--card-background);
+            color: var(--text-primary);
+            font-size: var(--font-size-base);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(93, 156, 236, 0.2);
+        }
+
+        .form-text {
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .schedule-config {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: center;
+        }
+
+        .interval-input {
+            width: 80px;
+            flex-shrink: 0;
+        }
+
+        .schedule-info {
+            margin-top: var(--spacing-sm);
+            padding: var(--spacing-sm);
+            background-color: var(--background);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+        }
+
+        .current-schedule {
+            margin-top: var(--spacing-md);
+            padding: var(--spacing-md);
+            background-color: var(--background);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+        }
+
+        .current-schedule h4 {
+            margin-bottom: var(--spacing-sm);
+            color: var(--text-primary);
+        }
+
+        .schedule-status div {
+            margin-bottom: var(--spacing-xs);
+            color: var(--text-secondary);
+        }
+
+        .schedule-status strong {
+            color: var(--text-primary);
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: var(--spacing-sm);
+            justify-content: flex-end;
+            margin-top: var(--spacing-lg);
+            padding-top: var(--spacing-md);
+            border-top: 1px solid var(--border-color);
         }
 
         .log-container {
@@ -1572,6 +1692,66 @@
         </div>
     </div>
 
+    <!-- Schedule Configuration Modal -->
+    <div class="modal-overlay" id="schedule-modal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="schedule-modal-title">Configure Schedule</h3>
+                <button class="modal-close" onclick="window.soulSeekarrApp.closeScheduleModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div id="schedule-content">
+                    <div class="form-group">
+                        <label for="schedule-script-name">Script:</label>
+                        <span id="schedule-script-name" class="form-text"></span>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="interval-type">Run Every:</label>
+                        <div class="schedule-config">
+                            <input type="number" id="interval-value" min="1" max="999" value="1" class="form-control interval-input">
+                            <select id="interval-type" class="form-control">
+                                <option value="minutes">Minutes</option>
+                                <option value="hours" selected>Hours</option>
+                                <option value="days">Days</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div id="schedule-info" class="schedule-info">
+                            <small class="text-muted">
+                                <span id="schedule-description">Script will run every 1 hour</span>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div id="current-schedule" class="current-schedule" style="display: none;">
+                        <h4>Current Schedule</h4>
+                        <div class="schedule-status">
+                            <div><strong>Frequency:</strong> <span id="current-frequency"></span></div>
+                            <div><strong>Last Run:</strong> <span id="current-last-run">Never</span></div>
+                            <div><strong>Next Run:</strong> <span id="current-next-run">-</span></div>
+                            <div><strong>Total Runs:</strong> <span id="current-run-count">0</span></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-buttons">
+                    <button id="schedule-save-btn" class="btn btn-primary" onclick="window.soulSeekarrApp.saveSchedule()">
+                        Enable Schedule
+                    </button>
+                    <button id="schedule-disable-btn" class="btn btn-danger" onclick="window.soulSeekarrApp.disableSchedule()" style="display: none;">
+                        Disable Schedule
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.soulSeekarrApp.closeScheduleModal()">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         class SoulSeekarrApp {
             constructor() {
@@ -1581,6 +1761,7 @@
                 this.logUpdateInterval = null;
                 this.currentLogScript = null;
                 this.currentExecutionId = null;
+                this.currentScheduleScript = null;
                 this.isLogModalOpen = false;
                 this.isLogsPaused = false;
                 this.lastScrollPosition = 0;
@@ -1617,6 +1798,13 @@
                     }
                 });
 
+                // Close schedule modal when clicking outside of it
+                document.getElementById('schedule-modal').addEventListener('click', (e) => {
+                    if (e.target === e.currentTarget) {
+                        this.closeScheduleModal();
+                    }
+                });
+
                 // Close modals with Escape key
                 document.addEventListener('keydown', (e) => {
                     if (e.key === 'Escape') {
@@ -1625,6 +1813,9 @@
                         }
                         if (document.getElementById('tracks-modal').classList.contains('open')) {
                             this.closeTracksModal();
+                        }
+                        if (document.getElementById('schedule-modal').classList.contains('open')) {
+                            this.closeScheduleModal();
                         }
                     }
                     // Toggle pause with spacebar when log modal is open
@@ -1780,13 +1971,7 @@
                                 <button class="btn btn-danger btn-sm stop-btn" data-script-id="${scriptId}" ${!status.running ? 'disabled' : ''}>
                                     Stop
                                 </button>
-                                ${script.cron_supported ? `
-                                    <button class="btn-toggle btn-xs cron-toggle-btn ${script.cron_enabled ? 'active' : ''}" 
-                                            data-script-id="${scriptId}" 
-                                            title="${script.cron_enabled ? 'Disable automated scheduling' : 'Enable automated scheduling'}">
-                                        ${script.cron_enabled ? 'Auto: ON' : 'Auto: OFF'}
-                                    </button>
-                                ` : ''}
+                                ${script.cron_supported ? this.renderScheduleInfo(script, scriptId) : ''}
                             </div>
                         </div>
                     `;
@@ -1812,10 +1997,10 @@
                     });
                 });
 
-                document.querySelectorAll('.cron-toggle-btn').forEach(btn => {
+                document.querySelectorAll('.schedule-config-btn').forEach(btn => {
                     btn.addEventListener('click', async (e) => {
                         const scriptId = btn.dataset.scriptId;
-                        await this.toggleCron(scriptId, btn);
+                        await this.openScheduleModal(scriptId);
                     });
                 });
             }
@@ -2039,6 +2224,84 @@
                 if (status.return_code === 0) return 'Completed';
                 if (status.return_code && status.return_code !== 0) return 'Error';
                 return 'Idle';
+            }
+
+            renderScheduleInfo(script, scriptId) {
+                if (!script.cron_enabled || !script.schedule_info) {
+                    // Not scheduled - show schedule button
+                    return `
+                        <button class="btn-toggle btn-xs schedule-config-btn" 
+                                data-script-id="${scriptId}" 
+                                title="Set up scheduled execution">
+                            Schedule
+                        </button>
+                    `;
+                }
+
+                // Get schedule info
+                const scheduleInfo = script.schedule_info;
+                const nextRun = scheduleInfo.next_run;
+                const intervalType = scheduleInfo.interval_type;
+                const intervalValue = scheduleInfo.interval_value;
+
+                // Format button text with next run time
+                let buttonText = 'Scheduled';
+                let scheduleDetails = '';
+                let timeUntilRun = '';
+
+                if (nextRun) {
+                    const nextRunDate = new Date(nextRun);
+                    const now = new Date();
+                    const timeDiff = nextRunDate - now;
+                    
+                    if (timeDiff > 0) {
+                        timeUntilRun = this.formatTimeUntil(timeDiff);
+                        buttonText = `Next in ${timeUntilRun}`;
+                    } else {
+                        buttonText = 'Due now';
+                    }
+
+                    // For daily schedules, show what time it runs
+                    if (intervalType === 'days') {
+                        const runTime = nextRunDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                        scheduleDetails = `Daily at ${runTime}`;
+                    } else {
+                        scheduleDetails = `Every ${intervalValue} ${intervalValue === 1 ? intervalType.slice(0, -1) : intervalType}`;
+                    }
+                } else {
+                    scheduleDetails = `Every ${intervalValue} ${intervalValue === 1 ? intervalType.slice(0, -1) : intervalType}`;
+                }
+
+                return `
+                    <div class="schedule-info-container">
+                        <button class="btn-toggle btn-xs schedule-config-btn active" 
+                                data-script-id="${scriptId}" 
+                                title="Configure scheduled execution">
+                            ${buttonText}
+                        </button>
+                        <div class="schedule-details">
+                            ${scheduleDetails}
+                            ${scheduleInfo.run_count > 0 ? `<span class="run-count">(${scheduleInfo.run_count} runs)</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            formatTimeUntil(milliseconds) {
+                const seconds = Math.floor(milliseconds / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+
+                if (days > 0) {
+                    return `${days}d ${hours % 24}h`;
+                } else if (hours > 0) {
+                    return `${hours}h ${minutes % 60}m`;
+                } else if (minutes > 0) {
+                    return `${minutes}m`;
+                } else {
+                    return `${seconds}s`;
+                }
             }
 
             renderQueue() {
@@ -2808,6 +3071,183 @@
             closeTracksModal() {
                 document.getElementById('tracks-modal').classList.remove('open');
                 document.body.classList.remove('modal-open');
+            }
+
+            // Schedule Modal Methods
+            async openScheduleModal(scriptId) {
+                const script = this.scripts[scriptId];
+                if (!script) return;
+
+                this.currentScheduleScript = scriptId;
+
+                // Set script name
+                document.getElementById('schedule-script-name').textContent = script.name;
+                
+                // Load current schedule if exists
+                try {
+                    const response = await fetch(`/api/cron/${scriptId}/status`);
+                    const data = await response.json();
+                    
+                    if (data.success && data.enabled) {
+                        // Parse current schedule
+                        this.populateScheduleForm(data);
+                        document.getElementById('current-schedule').style.display = 'block';
+                        document.getElementById('schedule-save-btn').textContent = 'Update Schedule';
+                        document.getElementById('schedule-disable-btn').style.display = 'inline-block';
+                    } else {
+                        // Default values for new schedule
+                        document.getElementById('interval-value').value = 1;
+                        document.getElementById('interval-type').value = 'hours';
+                        document.getElementById('current-schedule').style.display = 'none';
+                        document.getElementById('schedule-save-btn').textContent = 'Enable Schedule';
+                        document.getElementById('schedule-disable-btn').style.display = 'none';
+                    }
+                } catch (error) {
+                    console.error('Error loading schedule status:', error);
+                    // Use defaults
+                    document.getElementById('interval-value').value = 1;
+                    document.getElementById('interval-type').value = 'hours';
+                    document.getElementById('current-schedule').style.display = 'none';
+                    document.getElementById('schedule-save-btn').textContent = 'Enable Schedule';
+                    document.getElementById('schedule-disable-btn').style.display = 'none';
+                }
+
+                // Add event listeners for live updates
+                this.setupScheduleFormListeners();
+
+                // Update description
+                this.updateScheduleDescription();
+
+                // Show modal
+                document.getElementById('schedule-modal').classList.add('open');
+                document.body.classList.add('modal-open');
+            }
+
+            populateScheduleForm(scheduleData) {
+                // Extract interval info from schedule description or use defaults
+                if (scheduleData.schedule && scheduleData.schedule.includes('every ')) {
+                    const parts = scheduleData.schedule.split('every ')[1].split(' ');
+                    if (parts.length >= 2) {
+                        document.getElementById('interval-value').value = parseInt(parts[0]) || 1;
+                        document.getElementById('interval-type').value = parts[1].replace(/s$/, '') || 'hours';
+                    }
+                }
+
+                // Update current schedule info
+                if (scheduleData.next_run) {
+                    document.getElementById('current-next-run').textContent = new Date(scheduleData.next_run).toLocaleString();
+                }
+                if (scheduleData.last_run) {
+                    document.getElementById('current-last-run').textContent = new Date(scheduleData.last_run).toLocaleString();
+                } else {
+                    document.getElementById('current-last-run').textContent = 'Never';
+                }
+                
+                document.getElementById('current-run-count').textContent = scheduleData.run_count || 0;
+                document.getElementById('current-frequency').textContent = scheduleData.schedule || '-';
+            }
+
+            setupScheduleFormListeners() {
+                const intervalValue = document.getElementById('interval-value');
+                const intervalType = document.getElementById('interval-type');
+
+                // Remove existing listeners
+                intervalValue.removeEventListener('input', this.updateScheduleDescription.bind(this));
+                intervalType.removeEventListener('change', this.updateScheduleDescription.bind(this));
+
+                // Add new listeners
+                intervalValue.addEventListener('input', this.updateScheduleDescription.bind(this));
+                intervalType.addEventListener('change', this.updateScheduleDescription.bind(this));
+            }
+
+            updateScheduleDescription() {
+                const value = document.getElementById('interval-value').value;
+                const type = document.getElementById('interval-type').value;
+                
+                const description = `Script will run every ${value} ${value == 1 ? type.slice(0, -1) : type}`;
+                document.getElementById('schedule-description').textContent = description;
+            }
+
+            async saveSchedule() {
+                const scriptId = this.currentScheduleScript;
+                if (!scriptId) return;
+
+                const intervalValue = parseInt(document.getElementById('interval-value').value);
+                const intervalType = document.getElementById('interval-type').value;
+
+                if (!intervalValue || intervalValue <= 0) {
+                    this.showNotification('Please enter a valid interval value', 'error');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`/api/cron/${scriptId}/enable`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            interval_type: intervalType,
+                            interval_value: intervalValue
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.showNotification(data.message || 'Schedule saved successfully', 'success');
+                        this.closeScheduleModal();
+                        
+                        // Update script state
+                        if (this.scripts[scriptId]) {
+                            this.scripts[scriptId].cron_enabled = true;
+                        }
+                        
+                        // Refresh the scripts display
+                        this.loadScripts();
+                    } else {
+                        this.showNotification(data.error || 'Failed to save schedule', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error saving schedule:', error);
+                    this.showNotification('Error saving schedule', 'error');
+                }
+            }
+
+            async disableSchedule() {
+                const scriptId = this.currentScheduleScript;
+                if (!scriptId) return;
+
+                try {
+                    const response = await fetch(`/api/cron/${scriptId}/disable`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        this.showNotification(data.message || 'Schedule disabled successfully', 'success');
+                        this.closeScheduleModal();
+                        
+                        // Update script state
+                        if (this.scripts[scriptId]) {
+                            this.scripts[scriptId].cron_enabled = false;
+                        }
+                        
+                        // Refresh the scripts display
+                        this.loadScripts();
+                    } else {
+                        this.showNotification(data.error || 'Failed to disable schedule', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error disabling schedule:', error);
+                    this.showNotification('Error disabling schedule', 'error');
+                }
+            }
+
+            closeScheduleModal() {
+                document.getElementById('schedule-modal').classList.remove('open');
+                document.body.classList.remove('modal-open');
+                this.currentScheduleScript = null;
             }
 
             // Settings Methods

@@ -119,6 +119,28 @@ class DatabaseManager:
             )
         """)
         
+        # Scheduled jobs table (for internal scheduler)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS scheduled_jobs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                script_id TEXT NOT NULL UNIQUE,
+                script_name TEXT NOT NULL,
+                script_path TEXT NOT NULL,
+                enabled BOOLEAN DEFAULT FALSE,
+                interval_type TEXT NOT NULL DEFAULT 'minutes',
+                interval_value INTEGER NOT NULL DEFAULT 60,
+                next_run TIMESTAMP,
+                last_run TIMESTAMP,
+                last_run_status TEXT,
+                last_run_duration REAL,
+                run_count INTEGER DEFAULT 0,
+                error_count INTEGER DEFAULT 0,
+                last_error TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         # Expiring albums table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS expiring_albums (
@@ -182,6 +204,9 @@ class DatabaseManager:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_status ON script_executions(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_logs_execution_id ON script_logs(execution_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_logs_timestamp ON script_logs(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next_run ON scheduled_jobs(next_run)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_script_id ON scheduled_jobs(script_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_status ON expiring_albums(status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_days_until_expiry ON expiring_albums(days_until_expiry)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_last_seen ON expiring_albums(last_seen)")
