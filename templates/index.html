@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SoulSeekarr</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="32x32" href="/soulseekarr.png">
+    <link rel="apple-touch-icon" href="/soulseekarr.png">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -90,6 +93,22 @@
         }
 
         .sidebar-logo {
+            font-size: var(--font-size-lg);
+            font-weight: 700;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .logo-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .logo-text {
             font-size: var(--font-size-lg);
             font-weight: 700;
             color: var(--primary-color);
@@ -525,6 +544,12 @@
         .queue-item-name {
             font-weight: 500;
             color: var(--text-primary);
+        }
+
+        .schedule-icon {
+            font-size: 12px;
+            margin-right: var(--spacing-xs);
+            opacity: 0.8;
         }
 
         .queue-item-time {
@@ -1423,7 +1448,10 @@
         <!-- Sidebar -->
         <nav class="sidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo">SoulSeekarr</div>
+                <div class="sidebar-logo">
+                    <img src="/soulseekarr.png" alt="SoulSeekarr" class="logo-icon">
+                    <span class="logo-text">SoulSeekarr</span>
+                </div>
             </div>
             <div class="sidebar-nav">
                 <a href="#" class="sidebar-nav-item active" data-page="system">
@@ -1784,25 +1812,46 @@
                     });
                 });
 
-                // Close log modal when clicking outside of it
-                document.getElementById('log-modal').addEventListener('click', (e) => {
+                // Close log modal when clicking outside of it (but not during text selection)
+                document.getElementById('log-modal').addEventListener('mousedown', (e) => {
                     if (e.target === e.currentTarget) {
+                        e.target._clickStartedOnBackground = true;
+                    }
+                });
+                
+                document.getElementById('log-modal').addEventListener('mouseup', (e) => {
+                    if (e.target === e.currentTarget && e.target._clickStartedOnBackground) {
                         this.closeLogModal();
                     }
+                    e.target._clickStartedOnBackground = false;
                 });
 
-                // Close tracks modal when clicking outside of it
-                document.getElementById('tracks-modal').addEventListener('click', (e) => {
+                // Close tracks modal when clicking outside of it (but not during text selection)
+                document.getElementById('tracks-modal').addEventListener('mousedown', (e) => {
                     if (e.target === e.currentTarget) {
+                        e.target._clickStartedOnBackground = true;
+                    }
+                });
+                
+                document.getElementById('tracks-modal').addEventListener('mouseup', (e) => {
+                    if (e.target === e.currentTarget && e.target._clickStartedOnBackground) {
                         this.closeTracksModal();
                     }
+                    e.target._clickStartedOnBackground = false;
                 });
 
-                // Close schedule modal when clicking outside of it
-                document.getElementById('schedule-modal').addEventListener('click', (e) => {
+                // Close schedule modal when clicking outside of it (but not during text selection)
+                document.getElementById('schedule-modal').addEventListener('mousedown', (e) => {
                     if (e.target === e.currentTarget) {
+                        e.target._clickStartedOnBackground = true;
+                    }
+                });
+                
+                document.getElementById('schedule-modal').addEventListener('mouseup', (e) => {
+                    if (e.target === e.currentTarget && e.target._clickStartedOnBackground) {
                         this.closeScheduleModal();
                     }
+                    e.target._clickStartedOnBackground = false;
                 });
 
                 // Close modals with Escape key
@@ -2338,7 +2387,10 @@
                     return `
                         <div class="queue-item" onclick="window.soulSeekarrApp.openLogModalFromQueue('${item.scriptId}', '${item.name}', ${item.execution_id})">
                             <div class="queue-item-header">
-                                <div class="queue-item-name">${item.name}</div>
+                                <div class="queue-item-name">
+                                    ${item.name.includes('(Scheduled)') ? '<span class="schedule-icon" title="Scheduled execution">⏰</span>' : ''}
+                                    ${item.name}
+                                </div>
                                 <div class="status-badge status-${item.status}">
                                     ${isRunning ? '<div class="spinner"></div>' : ''}
                                     ${this.getQueueStatusText(item.status)}

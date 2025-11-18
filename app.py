@@ -2511,6 +2511,16 @@ def calculate_eta(bytes_remaining, average_speed):
         minutes = int((seconds % 3600) / 60)
         return f"{hours}h {minutes}m"
 
+@app.route('/favicon.ico')
+def favicon():
+    """Serve the favicon."""
+    return send_from_directory(os.getcwd(), 'soulseekarr.ico', mimetype='image/x-icon')
+
+@app.route('/soulseekarr.png')
+def logo():
+    """Serve the logo PNG."""
+    return send_from_directory(os.getcwd(), 'soulseekarr.png', mimetype='image/png')
+
 @app.errorhandler(404)
 def not_found(error):
     return jsonify({'error': 'Not found'}), 404

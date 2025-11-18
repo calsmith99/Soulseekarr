@@ -100,7 +100,7 @@ class SchedulerManager:
             return []
     
     def _execute_job(self, job: Dict):
-        """Execute a scheduled job."""
+        """Execute a scheduled job with integrated execution tracking."""
         job_id = job['id']
         script_id = job['script_id']
         script_name = job['script_name']
@@ -108,9 +108,19 @@ class SchedulerManager:
         
         logger.info(f"Executing scheduled job: {script_name} ({script_id})")
         
+        # Start execution tracking (same as manual runs)
+        execution_id = None
+        try:
+            execution_id = self.db.start_execution(script_id, f"{script_name} (Scheduled)", dry_run=False)
+            logger.info(f"Started execution tracking for scheduled job: {execution_id}")
+        except Exception as e:
+            logger.error(f"Failed to start execution tracking: {e}")
+            return
+        
         start_time = datetime.now()
         success = False
         error_message = None
+        return_code = 1
         
         try:
             # Make sure script path is absolute
@@ -121,11 +131,18 @@ class SchedulerManager:
             
             # Execute the script
             if script_path.endswith('.py'):
-                # Python script
-                cmd = ['python3', '-u', script_path]
-            else:
-                # Shell script
+                # Python script - use the same python executable as the current process
+                import sys
+                cmd = [sys.executable, '-u', script_path]
+            elif script_path.endswith('.bat'):
+                # Windows batch file
+                cmd = ['cmd', '/c', script_path]
+            elif script_path.endswith('.sh'):
+                # Shell script (Linux/Unix)
                 cmd = ['/bin/bash', script_path]
+            else:
+                # Try to execute directly
+                cmd = [script_path]
             
             # Run with timeout
             result = subprocess.run(
@@ -136,21 +153,32 @@ class SchedulerManager:
                 cwd=os.path.dirname(script_path) if os.path.dirname(script_path) else None
             )
             
+            return_code = result.returncode
+            
             if result.returncode == 0:
                 success = True
-                logger.info(f"Job {script_name} completed successfully")
+                logger.info(f"Scheduled job {script_name} completed successfully")
             else:
                 error_message = f"Exit code {result.returncode}: {result.stderr}"
-                logger.error(f"Job {script_name} failed: {error_message}")
+                logger.error(f"Scheduled job {script_name} failed: {error_message}")
                 
         except subprocess.TimeoutExpired:
+            return_code = -1
             error_message = "Job execution timeout (1 hour)"
-            logger.error(f"Job {script_name} timed out")
+            logger.error(f"Scheduled job {script_name} timed out")
         except Exception as e:
+            return_code = -1
             error_message = str(e)
-            logger.error(f"Job {script_name} execution error: {e}")
+            logger.error(f"Scheduled job {script_name} execution error: {e}")
         
-        # Calculate duration and next run time
+        # Finish execution tracking
+        try:
+            self.db.finish_execution(execution_id, return_code, error_message)
+            logger.info(f"Finished execution tracking for scheduled job: {execution_id}")
+        except Exception as e:
+            logger.error(f"Failed to finish execution tracking: {e}")
+        
+        # Calculate next run time and update job statistics
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         next_run = self._calculate_next_run(job['interval_type'], job['interval_value'])
