@@ -1011,6 +1011,7 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
         # Filter files to only include tracks we actually need
         # For each missing track, find the BEST matching file (not all matching files)
         needed_files = []
+        processed_tracks = set()  # Track which tracks we've already processed to avoid duplicates
 
         for track in tracks_to_download:  # Use filtered tracks instead of all missing tracks
             track_title = track['title'].lower()
@@ -1021,11 +1022,27 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 track_number = int(track_number) if track_number else 0
             except (ValueError, TypeError):
                 track_number = 0
+            
+            # Create a more specific track identifier including track number
+            track_identifier = f"{track_number:02d}_{track_title}"
+            
+            # Skip if we've already processed this exact track in this directory
+            if track_identifier in processed_tracks:
+                logging.debug(f"      ⏭️  Skipping already processed track: {track['title']}")
+                continue
+            
+            processed_tracks.add(track_identifier)
                 
             logging.info(f"      🎵 Looking for track #{track_number}: '{track['title']}'")
             
             # Create a unique key for this track to check against global downloads
             track_key = f"{artist_name.lower()}|{track_title}"
+            
+            # Additional check: see if this exact track from this user is already queued
+            user_track_key = f"{username}|{track_key}"
+            if user_track_key in DOWNLOADED_TRACKS:
+                logging.info(f"      ⏭️  Skipping '{track['title']}': already queued from {username}")
+                continue
             
             # Skip if we've already downloaded this track from another album in THIS session
             # Only skip if we're confident it's the same track from the same user
@@ -1137,14 +1154,26 @@ def attempt_selective_download(username: str, filename: str, results, missing_tr
                 # Log if we're filtering out multiple versions
                 if len(matching_files) > 1:
                     best = matching_files[0]
-                    logging.debug(f"      Selected best match for '{track['title']}': {best['basename']} (score: {best['quality_score']})")
+                    logging.info(f"      🎯 Track '{track['title']}': Found {len(matching_files)} versions, selected best")
+                    logging.info(f"         ✅ Selected: {best['basename']} (score: {best['quality_score']})")
+                    
+                    # Log the rejected versions for transparency
+                    for rejected in matching_files[1:]:
+                        logging.debug(f"         ⏭️  Rejected: {rejected['basename']} (score: {rejected['quality_score']})")
                 
                 # Add only the best matching file
                 needed_files.append(matching_files[0]['file_info'])
                 
                 # Record this track in global tracking to prevent future duplicates
+                # Use both the general track key and the user-specific key
                 track_key = f"{artist_name.lower()}|{track_title}"
+                user_track_key = f"{username}|{track_key}"
+                
                 DOWNLOADED_TRACKS[track_key] = {
+                    'user': username,
+                    'filename': matching_files[0]['file_info']['filename']
+                }
+                DOWNLOADED_TRACKS[user_track_key] = {
                     'user': username,
                     'filename': matching_files[0]['file_info']['filename']
                 }

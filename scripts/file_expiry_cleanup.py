@@ -37,6 +37,12 @@ from time import sleep
 import re
 
 try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+
+try:
     from mutagen import File as MutagenFile
 except ImportError:
     MutagenFile = None
@@ -333,6 +339,7 @@ class FileExpiryCleanup:
     def get_album_art_url(self, artist, album):
         """Get album cover art URL from Navidrome using Subsonic API"""
         if not self.subsonic_token or not self.subsonic_salt:
+            self.logger.debug(f"No Subsonic credentials available for album art: {artist} - {album}")
             return None
         
         try:
@@ -345,10 +352,11 @@ class FileExpiryCleanup:
                 'v': '1.16.1',
                 'c': 'FileExpiryCleanup',
                 'f': 'json',
-                'query': f"{artist} {album}",
-                'albumCount': 5
+                'query': f'"{artist}" "{album}"',  # Use quoted search for better matching
+                'albumCount': 10
             }
             
+            self.logger.debug(f"Searching for album art: {artist} - {album}")
             response = requests.get(search_url, params=params, timeout=10)
             
             if response.status_code == 200:
@@ -362,33 +370,108 @@ class FileExpiryCleanup:
                     if not isinstance(albums, list):
                         albums = [albums] if albums else []
                     
-                    # Find exact match or best match
-                    album_lower = album.lower()
-                    artist_lower = artist.lower()
+                    self.logger.debug(f"Found {len(albums)} album results for {artist} - {album}")
+                    
+                    # Try multiple matching strategies
+                    matches = []
+                    album_lower = album.lower().strip()
+                    artist_lower = artist.lower().strip()
                     
                     for album_result in albums:
-                        result_album = album_result.get('name', '').lower()
-                        result_artist = album_result.get('artist', '').lower()
+                        result_album = album_result.get('name', '').lower().strip()
+                        result_artist = album_result.get('artist', '').lower().strip()
+                        album_id = album_result.get('id')
                         
-                        # Check for exact match or close match
+                        if not album_id:
+                            continue
+                            
+                        self.logger.debug(f"Checking album ID {album_id}: '{result_artist}' - '{result_album}'")
+                        
+                        # Calculate match score
+                        match_score = 0
+                        
+                        # Exact matches get highest score
                         if result_album == album_lower and result_artist == artist_lower:
-                            album_id = album_result.get('id')
-                            if album_id:
-                                # Build getCoverArt URL
-                                cover_url = f"{self.navidrome_url}/rest/getCoverArt"
-                                cover_params = {
-                                    'u': self.navidrome_username,
-                                    't': self.subsonic_token,
-                                    's': self.subsonic_salt,
-                                    'v': '1.16.1',
-                                    'c': 'FileExpiryCleanup',
-                                    'id': album_id,
-                                    'size': 300
-                                }
-                                # Build full URL with params
-                                from urllib.parse import urlencode
-                                full_url = f"{cover_url}?{urlencode(cover_params)}"
-                                return full_url
+                            match_score = 100
+                        # Artist exact + album contains
+                        elif result_artist == artist_lower and album_lower in result_album:
+                            match_score = 80
+                        # Album exact + artist contains  
+                        elif result_album == album_lower and artist_lower in result_artist:
+                            match_score = 80
+                        # Both contain each other
+                        elif album_lower in result_album and artist_lower in result_artist:
+                            match_score = 60
+                        # Partial matches
+                        elif artist_lower in result_artist or result_artist in artist_lower:
+                            if album_lower in result_album or result_album in album_lower:
+                                match_score = 40
+                        
+                        if match_score > 0:
+                            matches.append({
+                                'id': album_id,
+                                'score': match_score,
+                                'artist': result_artist,
+                                'album': result_album
+                            })
+                    
+                    # Sort by match score and try each one
+                    matches.sort(key=lambda x: x['score'], reverse=True)
+                    
+                    for match in matches[:3]:  # Try top 3 matches
+                        album_id = match['id']
+                        self.logger.debug(f"Trying album ID {album_id} with score {match['score']}")
+                        
+                        # Test if cover art is available for this album ID
+                        cover_url = f"{self.navidrome_url}/rest/getCoverArt"
+                        cover_params = {
+                            'u': self.navidrome_username,
+                            't': self.subsonic_token,
+                            's': self.subsonic_salt,
+                            'v': '1.16.1',
+                            'c': 'FileExpiryCleanup',
+                            'id': album_id,
+                            'size': 300
+                        }
+                        
+                        try:
+                            # Test the cover art URL
+                            test_response = requests.get(cover_url, params=cover_params, timeout=5)
+                            
+                            if test_response.status_code == 200:
+                                # Check if response is actual image data
+                                content_type = test_response.headers.get('Content-Type', '')
+                                if content_type.startswith('image/'):
+                                    # Build full URL with params for future use
+                                    from urllib.parse import urlencode
+                                    full_url = f"{cover_url}?{urlencode(cover_params)}"
+                                    self.logger.debug(f"Successfully found album art for {artist} - {album} using ID {album_id}")
+                                    return full_url
+                                else:
+                                    self.logger.debug(f"Album ID {album_id}: Response not an image ({content_type})")
+                            else:
+                                # Try to parse error response
+                                try:
+                                    error_content = test_response.text
+                                    if 'Artwork not found' in error_content:
+                                        self.logger.debug(f"Album ID {album_id}: No artwork available")
+                                    elif 'Album not found' in error_content:
+                                        self.logger.debug(f"Album ID {album_id}: Album no longer exists")
+                                    else:
+                                        self.logger.debug(f"Album ID {album_id}: HTTP {test_response.status_code}")
+                                except:
+                                    self.logger.debug(f"Album ID {album_id}: HTTP {test_response.status_code}")
+                                    
+                        except Exception as e:
+                            self.logger.debug(f"Error testing album ID {album_id}: {e}")
+                            continue
+                    
+                    self.logger.debug(f"No working album art found for {artist} - {album} (tried {len(matches)} matches)")
+                else:
+                    error = subsonic_response.get('error', {})
+                    self.logger.debug(f"Subsonic API error for {artist} - {album}: {error.get('message', 'Unknown error')}")
+            else:
+                self.logger.debug(f"HTTP error searching for {artist} - {album}: {response.status_code}")
             
             return None
             
@@ -833,34 +916,70 @@ class FileExpiryCleanup:
             db = get_db()
             saved_count = 0
             
-            for album_key, data in self.album_expiry_data.items():
-                # Get album art URL from Navidrome
-                album_art_url = self.get_album_art_url(data['artist'], data['album'])
+            # Create progress bar for album processing
+            album_items = list(self.album_expiry_data.items())
+            
+            if TQDM_AVAILABLE:
+                album_progress = tqdm(album_items,
+                                    desc="PROGRESS_MAIN: Saving albums to database",
+                                    unit="album", ncols=100, position=0)
+            else:
+                album_progress = album_items
+            
+            albums_with_art = 0
+            
+            try:
+                for album_key, data in album_progress:
+                    # Get album art URL from Navidrome
+                    album_art_url = self.get_album_art_url(data['artist'], data['album'])
+                    
+                    if album_art_url:
+                        albums_with_art += 1
+                        if not TQDM_AVAILABLE:
+                            print(f"    🎨 Found album art for {data['artist']} - {data['album']}")
+                        self.logger.info(f"Found album art for {data['artist']} - {data['album']}")
+                    else:
+                        self.logger.debug(f"No album art found for {data['artist']} - {data['album']}")
+                    
+                    album_record = {
+                        'album_key': album_key,
+                        'artist': data['artist'],
+                        'album': data['album'],
+                        'directory': data['directory'],
+                        'album_art_url': album_art_url,
+                        'oldest_file_days': data['oldest_file_days'],
+                        'days_until_expiry': data['days_until_expiry'],
+                        'file_count': data['file_count'],
+                        'total_size_mb': data['total_size_mb'],
+                        'is_starred': data['is_starred'],
+                        'cleanup_days': self.cleanup_days,
+                        'status': 'starred' if data['is_starred'] else 'pending'
+                    }
+                    album_id = db.upsert_expiring_album(album_record)
+                    
+                    # Clear existing tracks for this album
+                    db.clear_album_tracks(album_id)
+                    
+                    # Add all tracks
+                    for track in data.get('tracks', []):
+                        db.add_album_track(album_id, track)
+                    
+                    saved_count += 1
+                    
+                    # Update progress bar
+                    if TQDM_AVAILABLE:
+                        album_progress.set_postfix({
+                            'Saved': saved_count,
+                            'With_Art': albums_with_art,
+                            'Art_%': f"{(albums_with_art/saved_count)*100:.1f}" if saved_count > 0 else "0"
+                        })
+                        
+            finally:
+                if TQDM_AVAILABLE:
+                    album_progress.close()
                 
-                album_record = {
-                    'album_key': album_key,
-                    'artist': data['artist'],
-                    'album': data['album'],
-                    'directory': data['directory'],
-                    'album_art_url': album_art_url,
-                    'oldest_file_days': data['oldest_file_days'],
-                    'days_until_expiry': data['days_until_expiry'],
-                    'file_count': data['file_count'],
-                    'total_size_mb': data['total_size_mb'],
-                    'is_starred': data['is_starred'],
-                    'cleanup_days': self.cleanup_days,
-                    'status': 'starred' if data['is_starred'] else 'pending'
-                }
-                album_id = db.upsert_expiring_album(album_record)
-                
-                # Clear existing tracks for this album
-                db.clear_album_tracks(album_id)
-                
-                # Add all tracks
-                for track in data.get('tracks', []):
-                    db.add_album_track(album_id, track)
-                
-                saved_count += 1
+            print(f"    ✅ Saved {saved_count} albums")
+            print(f"    🎨 Found album art for {albums_with_art} albums ({(albums_with_art/saved_count)*100:.1f}%)" if saved_count > 0 else "")
             
             self.logger.info(f"Saved {saved_count} albums with {total_tracks} tracks to database")
             print(f"✅ Saved {saved_count} albums with all track details to database")
@@ -908,58 +1027,100 @@ class FileExpiryCleanup:
         self.logger.debug(f"Starting cleanup of music directory: {directory_path}")
         
         music_extensions = {'.mp3', '.flac', '.m4a', '.aac', '.ogg', '.wma', '.wav', '.opus'}
+        
+        # Pre-scan to count total music files for progress bar
+        print("    📊 Scanning directory to count files...")
+        total_music_files = 0
+        all_file_paths = []
+        
+        for root, dirs, files in os.walk(directory_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                file_ext = Path(file_path).suffix.lower()
+                
+                # Count music files only (skip metadata files)
+                if file_ext in music_extensions:
+                    total_music_files += 1
+                    all_file_paths.append(file_path)
+        
+        if total_music_files == 0:
+            print("    ℹ️  No music files found in directory")
+            return
+            
+        print(f"    📁 Found {total_music_files:,} music files to process")
+        
+        # Main processing with progress bar
         files_processed = 0
         
+        if TQDM_AVAILABLE:
+            progress = tqdm(all_file_paths, 
+                          desc="PROGRESS_MAIN: Processing music files",
+                          unit="file", ncols=100, position=0)
+        else:
+            progress = all_file_paths
+        
         try:
-            for root, dirs, files in os.walk(directory_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    
-                    # Delete macOS metadata files immediately without tracking
-                    if file.startswith('._'):
-                        print(f"    🗑️  Removing macOS metadata file: {file}")
-                        self.logger.info(f"Removing macOS metadata file: {file_path}")
-                        if not self.dry_run:
-                            try:
-                                os.remove(file_path)
-                                self.logger.info(f"Deleted macOS metadata file: {file_path}")
-                            except Exception as e:
-                                self.logger.error(f"Error deleting macOS metadata file {file_path}: {e}")
-                        continue
-                    
-                    file_ext = Path(file_path).suffix.lower()
-                    
-                    # Only process music files
-                    if file_ext not in music_extensions:
-                        continue
-                    
-                    files_processed += 1
-                    self.stats['files_scanned'] += 1
-                    
-                    # Always track album data for UI cache (regardless of age)
-                    self.track_album_expiry(file_path)
-                    
-                    # Check if file is old enough
-                    if not self.is_file_old_enough(file_path):
-                        self.stats['files_skipped_recent'] += 1
-                        continue
-                    
-                    # Check if content is starred
-                    if self.is_content_starred(file_path):
-                        self.stats['files_skipped_starred'] += 1
-                        filename = Path(file_path).name
-                        print(f"    ⭐ Skipping starred content: {filename}")
-                        self.logger.info(f"Skipping starred content: {file_path}")
-                        continue
-                    
-                    # File is old enough and not starred - log and delete it
-                    filename = Path(file_path).name
-                    print(f"    🗑️  Found expired file: {filename}")
-                    self.logger.info(f"Found expired file: {file_path}")
-                    self.delete_file(file_path)
-                    
-                    # Small delay to avoid overwhelming the system
+            for file_path in progress:
+                # Delete macOS metadata files immediately without tracking
+                filename = os.path.basename(file_path)
+                if filename.startswith('._'):
+                    print(f"    🗑️  Removing macOS metadata file: {filename}")
+                    self.logger.info(f"Removing macOS metadata file: {file_path}")
                     if not self.dry_run:
+                        try:
+                            os.remove(file_path)
+                            self.logger.info(f"Deleted macOS metadata file: {file_path}")
+                        except Exception as e:
+                            self.logger.error(f"Error deleting macOS metadata file {file_path}: {e}")
+                    continue
+                
+                files_processed += 1
+                self.stats['files_scanned'] += 1
+                
+                # Always track album data for UI cache (regardless of age)
+                self.track_album_expiry(file_path)
+                
+                # Check if file is old enough
+                if not self.is_file_old_enough(file_path):
+                    self.stats['files_skipped_recent'] += 1
+                    if TQDM_AVAILABLE:
+                        progress.set_postfix({
+                            'Expired': self.stats['files_deleted'],
+                            'Starred': self.stats['files_skipped_starred'],
+                            'Recent': self.stats['files_skipped_recent']
+                        })
+                    continue
+                
+                # Check if content is starred
+                if self.is_content_starred(file_path):
+                    self.stats['files_skipped_starred'] += 1
+                    if not TQDM_AVAILABLE:
+                        print(f"    ⭐ Skipping starred content: {filename}")
+                    self.logger.info(f"Skipping starred content: {file_path}")
+                    if TQDM_AVAILABLE:
+                        progress.set_postfix({
+                            'Expired': self.stats['files_deleted'],
+                            'Starred': self.stats['files_skipped_starred'],
+                            'Recent': self.stats['files_skipped_recent']
+                        })
+                    continue
+                
+                # File is old enough and not starred - log and delete it
+                if not TQDM_AVAILABLE:
+                    print(f"    🗑️  Found expired file: {filename}")
+                self.logger.info(f"Found expired file: {file_path}")
+                self.delete_file(file_path)
+                
+                # Update progress bar stats
+                if TQDM_AVAILABLE:
+                    progress.set_postfix({
+                        'Expired': self.stats['files_deleted'],
+                        'Starred': self.stats['files_skipped_starred'],
+                        'Recent': self.stats['files_skipped_recent']
+                    })
+                
+                # Small delay to avoid overwhelming the system
+                if not self.dry_run:
                         sleep(0.1)
         
         except Exception as e:
@@ -967,8 +1128,19 @@ class FileExpiryCleanup:
             self.logger.error(msg)
             self.stats['errors'] += 1
         
-        # Only log summary if we found files to process
+        finally:
+            # Close progress bar
+            if TQDM_AVAILABLE:
+                progress.close()
+        
+        # Print summary
         files_found = self.stats['files_deleted'] + self.stats['files_skipped_starred']
+        print(f"    📊 Processed {files_processed:,} files:")
+        print(f"        🗑️  Expired files: {self.stats['files_deleted']}")
+        print(f"        ⭐ Starred (protected): {self.stats['files_skipped_starred']}")
+        print(f"        📅 Recent (safe): {self.stats['files_skipped_recent']}")
+        
+        # Only log summary if we found files to process
         if files_found > 0:
             self.logger.info(f"Processed {files_processed} files in {directory_path} - Found {files_found} old enough files")
     

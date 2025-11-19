@@ -1184,6 +1184,9 @@
             width: 100%;
             aspect-ratio: 1;
             background: linear-gradient(135deg, var(--card-background) 0%, var(--sidebar-background) 100%);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -1191,11 +1194,8 @@
             overflow: hidden;
         }
 
-        .album-cover-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
+        .album-cover.has-image {
+            background-color: transparent;
         }
 
         .album-cover-icon {
@@ -1206,6 +1206,13 @@
             justify-content: center;
             width: 100%;
             height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .album-cover.has-image .album-cover-icon {
+            opacity: 0.1;
+            color: rgba(255, 255, 255, 0.3);
         }
 
         .album-expiry-badge {
@@ -1474,6 +1481,7 @@
             <!-- Header -->
             <header class="header">
                 <h1 id="page-title">System / Tasks</h1>
+                <button onclick="window.soulSeekarrApp.debugAlbums()" style="margin-left: auto; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Debug Albums</button>
             </header>
 
             <!-- Page Content -->
@@ -2936,16 +2944,22 @@
                     });
                 }
                 
-                // Build album cover HTML - use artwork if available, fallback to icon
-                const coverHtml = album.album_art_url 
-                    ? `<img src="${this.escapeHtml(album.album_art_url)}" alt="Album cover" class="album-cover-img" onerror="this.onerror=null; this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                       <div class="album-cover-icon" style="display:none;">💿</div>`
-                    : `<div class="album-cover-icon">💿</div>`;
+                // Build album cover with background image
+                let coverClass = 'album-cover';
+                let coverStyle = '';
+                let iconHtml = '';
+                
+                if (album.album_art_url && album.album_art_url !== 'null' && album.album_art_url.trim() !== '') {
+                    coverClass += ' has-image';
+                    coverStyle = `background-image: url('${album.album_art_url}');`;
+                } else {
+                    iconHtml = '<div class="album-cover-icon">💿</div>';
+                }
                 
                 return `
                     <div class="album-card ${expiryClass}" onclick="window.soulSeekarrApp.openTracksModal('${this.escapeHtml(albumKey)}', '${this.escapeHtml(album.artist)}', '${this.escapeHtml(album.album)}')">
-                        <div class="album-cover">
-                            ${coverHtml}
+                        <div class="${coverClass}" style="${coverStyle}">
+                            ${iconHtml}
                             <div class="album-expiry-badge ${expiryClass}">
                                 ${expiryLabel}
                             </div>
@@ -3650,6 +3664,39 @@
                     }
                 } catch (error) {
                     this.showNotification(`Error disconnecting from Tidal: ${error.message}`, 'error');
+                }
+            }
+
+            async debugAlbums() {
+                try {
+                    const response = await fetch('/debug/albums');
+                    const data = await response.json();
+                    
+                    console.log('=== ALBUM DEBUG DATA ===');
+                    console.log('Stats:', data.stats);
+                    console.log('Sample Albums:', data.sample_albums);
+                    console.log('Sample Art URLs:', data.sample_art_urls);
+                    console.log('Albums Missing Art:', data.missing_art_albums);
+                    
+                    // Show alert with summary
+                    const stats = data.stats;
+                    const message = `Debug Results:
+Total Albums: ${stats.total}
+Albums with Art: ${stats.with_art}
+Albums without Art: ${stats.without_art}
+Sample Art URLs: ${data.sample_art_urls.length}
+
+Missing Art Examples:
+${data.missing_art_albums.map(a => `- ${a.artist} - ${a.album}`).join('\n')}
+
+${data.help || ''}
+
+Check console for detailed data.`;
+                    
+                    alert(message);
+                } catch (error) {
+                    console.error('Debug error:', error);
+                    alert('Debug failed - check console');
                 }
             }
         }

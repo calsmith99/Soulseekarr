@@ -15,3 +15,6 @@ volumes:
     - :/logs:rw
 
 When interacting with navidrome, we should be using the subsonic api.
+
+
+We cannot run the application locally with python, you should instead prompt me to restart the docker container and what I should be looking for in the logs to ensure it is running correctly.

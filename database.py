@@ -842,10 +842,14 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get active expiring albums (not starred, not deleted)
+            # Get active expiring albums with actual track counts
             cursor.execute("""
-                SELECT * FROM expiring_albums 
-                WHERE status = 'pending' AND is_starred = FALSE
+                SELECT ea.*, 
+                       COUNT(at.id) as actual_file_count
+                FROM expiring_albums ea
+                LEFT JOIN album_tracks at ON ea.id = at.album_id
+                WHERE ea.status = 'pending' AND ea.is_starred = FALSE
+                GROUP BY ea.id
             """)
             
             albums = {}
@@ -859,16 +863,23 @@ class DatabaseManager:
                 days_since_detected = (datetime.now() - first_detected).days
                 days_until_expiry = cleanup_days - days_since_detected
                 
+                # Use actual file count from tracks table, fallback to stored count
+                actual_file_count = album_dict.get('actual_file_count', 0)
+                stored_file_count = album_dict['file_count']
+                display_file_count = actual_file_count if actual_file_count > 0 else stored_file_count
+                
                 albums[album_key] = {
                     'artist': album_dict['artist'],
                     'album': album_dict['album'],
                     'directory': album_dict['directory'],
-                    'album_art_url': album_dict.get('album_art_url'),
+                    'album_art_url': album_dict.get('album_art_url'),  # Use original Navidrome URL
                     'oldest_file_days': album_dict['oldest_file_days'],
                     'days_until_expiry': days_until_expiry,  # Calculated from first_detected
                     'days_since_detected': days_since_detected,
                     'first_detected': album_dict['first_detected'],  # Include for frontend
-                    'file_count': album_dict['file_count'],
+                    'file_count': display_file_count,  # Use actual count from tracks
+                    'stored_file_count': stored_file_count,  # Original for debugging
+                    'actual_file_count': actual_file_count,  # Actual from tracks table
                     'total_size_mb': album_dict['total_size_mb'],
                     'is_starred': album_dict['is_starred'],
                     'will_expire': days_until_expiry <= 0,
@@ -994,7 +1005,7 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT at.* 
+                SELECT at.*, ea.first_detected
                 FROM album_tracks at
                 JOIN expiring_albums ea ON at.album_id = ea.id
                 WHERE ea.album_key = ?
@@ -1005,6 +1016,11 @@ class DatabaseManager:
             for row in cursor.fetchall():
                 track = dict(row)
                 track['last_modified'] = datetime.fromisoformat(track['last_modified'])
+                
+                # Recalculate days_old from last_modified timestamp
+                days_old = (datetime.now() - track['last_modified']).days
+                track['days_old'] = days_old
+                
                 tracks.append(track)
             
             return tracks

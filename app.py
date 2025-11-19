@@ -1205,6 +1205,14 @@ def get_expiring_albums():
     try:
         # Get from database
         summary = db.get_expiring_albums_summary()
+        
+        # Debug logging
+        logger.debug(f"Returning {len(summary.get('albums', []))} albums")
+        if summary.get('albums'):
+            first_album = list(summary['albums'].values())[0] if isinstance(summary['albums'], dict) else summary['albums'][0]
+            logger.debug(f"First album sample: {first_album}")
+            logger.debug(f"First album art URL: {first_album.get('album_art_url')}")
+        
         return jsonify(summary)
     except Exception as e:
         logger.error(f"Error getting expiring albums: {e}")
@@ -1234,6 +1242,109 @@ def get_album_tracks(album_key):
         })
     except Exception as e:
         logger.error(f"Error getting album tracks: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/album-art/<path:album_key>')
+def get_album_art(album_key):
+    """Proxy album art through Flask to handle authentication"""
+    try:
+        # Get album art URL from database
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT album_art_url FROM expiring_albums WHERE album_key = ?", (album_key,))
+            result = cursor.fetchone()
+            
+            if not result or not result[0]:
+                return '', 404
+                
+            album_art_url = result[0]
+            
+            # Fetch the image from Navidrome
+            import requests
+            response = requests.get(album_art_url, timeout=10)
+            
+            if response.status_code == 200:
+                # Return the image with proper headers
+                return Response(
+                    response.content,
+                    mimetype=response.headers.get('Content-Type', 'image/jpeg'),
+                    headers={
+                        'Cache-Control': 'public, max-age=3600',  # Cache for 1 hour
+                        'Content-Length': len(response.content)
+                    }
+                )
+            else:
+                return '', 404
+                
+    except Exception as e:
+        logger.error(f"Error serving album art for {album_key}: {e}")
+        return '', 500
+
+@app.route('/debug/albums')
+def debug_albums():
+    """Debug endpoint to examine album data and art URLs."""
+    try:
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get sample of expiring albums with art info
+            cursor.execute("""
+                SELECT album_key, artist, album, album_art_url, file_count
+                FROM expiring_albums 
+                WHERE status = 'pending' 
+                LIMIT 10
+            """)
+            
+            albums = []
+            for row in cursor.fetchall():
+                album = dict(row)
+                albums.append(album)
+            
+            # Get count of albums with/without art
+            cursor.execute("""
+                SELECT 
+                    COUNT(CASE WHEN album_art_url IS NOT NULL AND album_art_url != '' THEN 1 END) as with_art,
+                    COUNT(CASE WHEN album_art_url IS NULL OR album_art_url = '' THEN 1 END) as without_art,
+                    COUNT(*) as total
+                FROM expiring_albums 
+                WHERE status = 'pending'
+            """)
+            
+            stats = dict(cursor.fetchone())
+            
+            # Get sample art URLs
+            cursor.execute("""
+                SELECT DISTINCT album_art_url 
+                FROM expiring_albums 
+                WHERE album_art_url IS NOT NULL AND album_art_url != ''
+                LIMIT 5
+            """)
+            
+            art_urls = [row[0] for row in cursor.fetchall()]
+            
+            # Test album art retrieval for albums without art
+            missing_art_albums = []
+            cursor.execute("""
+                SELECT artist, album
+                FROM expiring_albums 
+                WHERE (album_art_url IS NULL OR album_art_url = '') 
+                AND status = 'pending'
+                LIMIT 3
+            """)
+            
+            for row in cursor.fetchall():
+                artist, album = row
+                missing_art_albums.append({'artist': artist, 'album': album})
+            
+            return jsonify({
+                'sample_albums': albums,
+                'stats': stats,
+                'sample_art_urls': art_urls,
+                'missing_art_albums': missing_art_albums,
+                'help': 'Albums without art might need file_expiry_cleanup.py to be re-run to populate album art URLs'
+            })
+    except Exception as e:
+        logger.error(f"Debug albums error: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Helper function to ensure playlists have active flags
