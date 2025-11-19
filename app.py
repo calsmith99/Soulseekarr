@@ -1232,7 +1232,8 @@ def get_album_tracks(album_key):
                 'track_title': track['track_title'],
                 'file_size_mb': round(track['file_size_mb'], 2),
                 'days_old': track['days_old'],
-                'last_modified': track['last_modified'].isoformat()
+                'last_modified': track['last_modified'].isoformat(),
+                'is_starred': track.get('is_starred', False)
             })
         
         return jsonify({

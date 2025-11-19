@@ -1481,7 +1481,6 @@
             <!-- Header -->
             <header class="header">
                 <h1 id="page-title">System / Tasks</h1>
-                <button onclick="window.soulSeekarrApp.debugAlbums()" style="margin-left: auto; padding: 8px 16px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">Debug Albums</button>
             </header>
 
             <!-- Page Content -->
@@ -3090,9 +3089,10 @@
                     <table class="tracks-table">
                         <thead>
                             <tr>
-                                <th style="width: 40%;">Track</th>
-                                <th style="width: 20%; text-align: right;">Size</th>
-                                <th style="width: 20%; text-align: center;">Age</th>
+                                <th style="width: 35%;">Track</th>
+                                <th style="width: 15%; text-align: right;">Size</th>
+                                <th style="width: 15%; text-align: center;">Age</th>
+                                <th style="width: 15%; text-align: center;">Status</th>
                                 <th style="width: 20%;">Modified</th>
                             </tr>
                         </thead>
@@ -3102,6 +3102,9 @@
                 sortedTracks.forEach(track => {
                     const ageClass = this.getTrackAgeClass(track.days_old);
                     const modifiedDate = new Date(track.last_modified);
+                    const starredStatus = track.is_starred ? 
+                        '<span style="color: #ffd700;">⭐ Protected</span>' : 
+                        '<span style="color: #dc3545;">❌ Will Delete</span>';
                     
                     html += `
                         <tr>
@@ -3112,6 +3115,9 @@
                             <td class="track-size">${this.formatSize(track.file_size_mb)}</td>
                             <td class="track-age">
                                 <span class="track-age-badge ${ageClass}">${track.days_old}d</span>
+                            </td>
+                            <td style="text-align: center; font-size: 12px;">
+                                ${starredStatus}
                             </td>
                             <td style="color: var(--text-secondary); font-size: 12px;">
                                 ${modifiedDate.toLocaleDateString()}
@@ -3664,39 +3670,6 @@
                     }
                 } catch (error) {
                     this.showNotification(`Error disconnecting from Tidal: ${error.message}`, 'error');
-                }
-            }
-
-            async debugAlbums() {
-                try {
-                    const response = await fetch('/debug/albums');
-                    const data = await response.json();
-                    
-                    console.log('=== ALBUM DEBUG DATA ===');
-                    console.log('Stats:', data.stats);
-                    console.log('Sample Albums:', data.sample_albums);
-                    console.log('Sample Art URLs:', data.sample_art_urls);
-                    console.log('Albums Missing Art:', data.missing_art_albums);
-                    
-                    // Show alert with summary
-                    const stats = data.stats;
-                    const message = `Debug Results:
-Total Albums: ${stats.total}
-Albums with Art: ${stats.with_art}
-Albums without Art: ${stats.without_art}
-Sample Art URLs: ${data.sample_art_urls.length}
-
-Missing Art Examples:
-${data.missing_art_albums.map(a => `- ${a.artist} - ${a.album}`).join('\n')}
-
-${data.help || ''}
-
-Check console for detailed data.`;
-                    
-                    alert(message);
-                } catch (error) {
-                    console.error('Debug error:', error);
-                    alert('Debug failed - check console');
                 }
             }
         }

@@ -159,6 +159,8 @@ class FileOrganiser:
             'albums_incomplete': 0,
             'albums_moved': 0,
             'files_moved': 0,
+            'files_quality_upgraded': 0,  # Files replaced with higher quality versions
+            'files_quality_kept_existing': 0,  # Existing files kept due to better quality
             'owned_albums_checked': 0,
             'owned_missing_tracks': 0,
             'system_files_removed': 0,
@@ -1220,6 +1222,8 @@ class FileOrganiser:
         logger.info(f"Incomplete albums:        {self.stats['albums_incomplete']}")
         logger.info(f"Albums moved:             {self.stats['albums_moved']}")
         logger.info(f"Files moved:              {self.stats['files_moved']}")
+        logger.info(f"Files upgraded (quality): {self.stats['files_quality_upgraded']}")
+        logger.info(f"Files kept (better):      {self.stats['files_quality_kept_existing']}")
         logger.info(f"Source dirs removed:      {self.stats['source_dirs_removed']}")
         logger.info(f"Owned albums checked:     {self.stats['owned_albums_checked']}")
         logger.info(f"Owned missing tracks:     {self.stats['owned_missing_tracks']}")
@@ -1455,8 +1459,34 @@ class FileOrganiser:
                 continue
             
             if target_file.exists():
-                logger.info(f"      ⚠️  Target exists, skipping: {file_path.name}")
-                continue
+                # Compare quality and keep the better version
+                should_replace = self._compare_and_handle_duplicate(file_path, target_file)
+                if should_replace:
+                    logger.info(f"      🔄 Replacing lower quality file: {file_path.name}")
+                    try:
+                        # Remove the lower quality target file
+                        target_file.unlink()
+                        logger.info(f"        ✅ Removed lower quality target")
+                        self.stats['files_quality_upgraded'] += 1
+                    except Exception as e:
+                        logger.error(f"        ❌ Failed to remove target file: {e}")
+                        self.stats['errors'] += 1
+                        continue
+                else:
+                    logger.info(f"      ⚠️  Keeping existing better quality file: {file_path.name}")
+                    # Remove the source file since target is better
+                    try:
+                        file_path.unlink()
+                        logger.info(f"        ✅ Removed lower quality source file")
+                        self.stats['files_quality_kept_existing'] += 1
+                        # Don't need to move anything, but count as processed
+                        files_moved += 1
+                        source_directories_to_check.add(file_path.parent)
+                        continue
+                    except Exception as e:
+                        logger.error(f"        ❌ Failed to remove source file: {e}")
+                        self.stats['errors'] += 1
+                        continue
             
             try:
                 # Track the source directory before moving the file
@@ -1550,6 +1580,79 @@ class FileOrganiser:
                 break
         
         return directories_removed
+    
+    def _get_audio_quality_score(self, file_path: Path) -> float:
+        """Calculate quality score for audio file comparison."""
+        try:
+            audio = MutagenFile(file_path)
+            if not audio or not audio.info:
+                return 0.0
+            
+            score = 0.0
+            
+            # Check if it's a lossless format
+            file_ext = file_path.suffix.lower()
+            lossless_formats = {'.flac', '.alac', '.wav', '.aiff', '.ape', '.wv'}
+            is_lossless = file_ext in lossless_formats
+            
+            # Lossless formats get a huge boost
+            if is_lossless:
+                score += 100000
+            
+            # Bitrate contributes significantly
+            bitrate = getattr(audio.info, 'bitrate', 0)
+            if bitrate:
+                score += bitrate / 1000  # Convert to kbps
+            
+            # Sample rate contributes
+            sample_rate = getattr(audio.info, 'sample_rate', 0)
+            if sample_rate:
+                score += sample_rate / 100
+            
+            # File size as tiebreaker (larger usually means better quality)
+            file_size = file_path.stat().st_size
+            score += file_size / (1024 * 1024)  # Convert to MB
+            
+            return score
+            
+        except Exception as e:
+            logger.warning(f"Could not get quality score for {file_path}: {e}")
+            # Return file size as fallback
+            try:
+                return file_path.stat().st_size / (1024 * 1024)
+            except:
+                return 0.0
+    
+    def _compare_and_handle_duplicate(self, source_file: Path, target_file: Path) -> bool:
+        """Compare two files and keep the better quality version.
+        
+        Returns True if source should replace target, False if target should be kept.
+        """
+        try:
+            source_score = self._get_audio_quality_score(source_file)
+            target_score = self._get_audio_quality_score(target_file)
+            
+            logger.info(f"      Quality comparison: {source_file.name}")
+            logger.info(f"        Source score: {source_score:.2f}")
+            logger.info(f"        Target score: {target_score:.2f}")
+            
+            if source_score > target_score:
+                logger.info(f"      ✅ Source is better quality, will replace target")
+                return True
+            else:
+                logger.info(f"      ❌ Target is better quality, keeping existing file")
+                return False
+                
+        except Exception as e:
+            logger.warning(f"Error comparing files {source_file} vs {target_file}: {e}")
+            # Fallback: compare file sizes
+            try:
+                source_size = source_file.stat().st_size
+                target_size = target_file.stat().st_size
+                logger.info(f"      Fallback: comparing file sizes ({source_size} vs {target_size})")
+                return source_size > target_size
+            except:
+                return False
     
     def _fix_permissions(self, path: Path) -> None:
         """Fix file/directory permissions."""
