@@ -1227,8 +1227,10 @@ class FileExpiryCleanup:
         })
         
         # Step 1: Authenticate with Navidrome
+        step_start = datetime.now()
         print()
         print("🔐 Step 1: Authenticating with Navidrome...")
+        self.logger.info("PROGRESS: [1/6] 17% - Authenticating with Navidrome")
         auth_success = self.authenticate_navidrome()
         
         if not auth_success:
@@ -1244,9 +1246,15 @@ class FileExpiryCleanup:
             
             return False
         
+        step_duration = (datetime.now() - step_start).total_seconds()
+        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        self.logger.info("")
+        
         # Step 2: Get starred content
+        step_start = datetime.now()
         print()
         print("⭐ Step 2: Fetching starred content from Navidrome...")
+        self.logger.info("PROGRESS: [2/6] 33% - Fetching starred content from Navidrome")
         starred_success = self.get_starred_content()
         
         if not starred_success:
@@ -1265,9 +1273,15 @@ class FileExpiryCleanup:
             print(f"      📀 {len(self.starred_albums)} starred albums")
             print(f"      🎵 {len(self.starred_tracks)} starred songs")
         
+        step_duration = (datetime.now() - step_start).total_seconds()
+        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        self.logger.info("")
+        
         # Step 3: Clean music directories
+        step_start = datetime.now()
         print()
         print("🧹 Step 3: Cleaning expired music files...")
+        self.logger.info("PROGRESS: [3/6] 50% - Cleaning expired music files")
         
         # Clean incomplete music directory
         if os.path.exists(self.incomplete_dir):
@@ -1281,22 +1295,44 @@ class FileExpiryCleanup:
         else:
             print(f"    ⚠️  Not owned music directory not found: {self.not_owned_dir}")
         
+        step_duration = (datetime.now() - step_start).total_seconds()
+        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        self.logger.info("")
+        
         # Step 4: Remove macOS metadata files
+        step_start = datetime.now()
         print()
         print("🍎 Step 4: Removing macOS metadata files...")
+        self.logger.info("PROGRESS: [4/6] 67% - Removing macOS metadata files")
         self.remove_mac_metadata_files(self.incomplete_dir)
         self.remove_mac_metadata_files(self.not_owned_dir)
         
+        step_duration = (datetime.now() - step_start).total_seconds()
+        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        self.logger.info("")
+        
         # Step 5: Remove empty directories
+        step_start = datetime.now()
         print()
         print("📁 Step 5: Removing empty music directories...")
+        self.logger.info("PROGRESS: [5/6] 83% - Removing empty directories")
         self.remove_empty_directories(self.incomplete_dir)
         self.remove_empty_directories(self.not_owned_dir)
         
+        step_duration = (datetime.now() - step_start).total_seconds()
+        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        self.logger.info("")
+        
         # Step 6: Save album expiry cache for UI
+        step_start = datetime.now()
         print()
         print("💾 Step 6: Saving album expiry data to database...")
+        self.logger.info("PROGRESS: [6/6] 100% - Saving album expiry data to database")
         self.save_album_expiry_cache()
+        
+        step_duration = (datetime.now() - step_start).total_seconds()
+        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
+        self.logger.info("")
         
         # Print summary
         print()
