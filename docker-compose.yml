@@ -2,68 +2,129 @@ version: '3.8'
 
 services:
   soulseekarr:
+    # Base image: Python 3.11 on Alpine Linux (lightweight)
     image: python:3.11-alpine
     container_name: soulseekarr
+    
+    # Web UI port mapping: host:container
     ports:
-      - "5000:5000"
+      - "5000:5000"  # Access web UI at http://localhost:5000
+    
+    # Volume mounts: host_path:container_path[:permissions]
+    # IMPORTANT: Paths on the LEFT (host) must be customized for your system
+    # Paths on the RIGHT (container) are used by scripts - DO NOT CHANGE
     volumes:
-      # Music directories - customize the LEFT side (host paths) for your system
+      # === Music Library Directories ===
+      # /media/Owned - Protected music library (read-only in scripts)
       - /mnt/storage/Music/Owned:/media/Owned
+      
+      # /media/Not_Owned - Complete organized albums (read-write)
       - /mnt/storage/Music/Not_Owned:/media/Not_Owned
+      
+      # /media/Incomplete - Incomplete albums (read-write)
       - /mnt/storage/Music/Incomplete:/media/Incomplete
+      
+      # /downloads/completed - New downloads from slskd (read-write)
       - /mnt/storage/Downloads/slskd/completed:/downloads/completed
       
-      # Application and logs - customize the LEFT side for your system  
+      # === Application Files ===
+      # /data - Application code, database, cache files (read-write)
       - /mnt/storage/AppData/navidrome-cleanup:/data
+      
+      # /logs - Script execution logs (read-write, explicitly writable)
       - /mnt/storage/AppData/navidrome-cleanup/logs:/logs:rw
     
-    # Increase memory limits for MusicBrainz dependency installation
+    # Memory limits: Required for MusicBrainz dependency compilation
+    # Can be adjusted if installation fails due to memory constraints
     deploy:
       resources:
         limits:
-          memory: ${MEMORY_LIMIT:-1G}
+          memory: ${MEMORY_LIMIT:-1G}    # Maximum memory (default 1GB)
         reservations:
-          memory: 512M
+          memory: 512M                   # Reserved memory
     
     environment:
-      # User and permissions
-      - PUID=${PUID:-1000}
-      - PGID=${PGID:-1000}
-      - TZ=${TZ:-UTC}
+      # === Container User Configuration ===
+      # File ownership: Set to match your host user's UID/GID
+      # Find yours with: id -u (UID) and id -g (GID)
+      - PUID=${PUID:-1000}               # User ID (default 1000)
+      - PGID=${PGID:-1000}               # Group ID (default 1000)
+      - TZ=${TZ:-UTC}                    # Timezone (e.g., America/New_York)
       
-      # Web UI Configuration
-      - PORT=5000
-      - HOST=0.0.0.0
-      - FLASK_ENV=${FLASK_ENV:-production}
+      # === Flask Application Configuration ===
+      - PORT=5000                        # Flask port (must match ports mapping above)
+      - HOST=0.0.0.0                     # Bind to all interfaces (required for Docker)
+      - FLASK_ENV=${FLASK_ENV:-production}  # Flask environment mode
       
-      # Navidrome
+      # === Navidrome Configuration (Subsonic API) ===
+      # Required for starred album monitoring and expiry protection
+      # Get these from your Navidrome Settings > Users
+      - NAVIDROME_URL=${NAVIDROME_URL}   # e.g., http://192.168.1.100:4533
+      - NAVIDROME_USERNAME=${NAVIDROME_USERNAME}  # Navidrome username
+      - NAVIDROME_PASSWORD=${NAVIDROME_PASSWORD}  # Navidrome password
+      
+      # Legacy aliases (for backward compatibility)
       - USER=${NAVIDROME_USERNAME:-user}
       - PASS=${NAVIDROME_PASSWORD:-pass}
       - BASE_URL=${NAVIDROME_URL:-http://192.168.1.x:4533}
       
-      # Lidarr
-      - LIDARR_URL=${LIDARR_URL}
-      - LIDARR_API_KEY=${LIDARR_API_KEY}
-      - NAVIDROME_URL=${NAVIDROME_URL}
-      - NAVIDROME_USERNAME=${NAVIDROME_USERNAME}
-      - NAVIDROME_PASSWORD=${NAVIDROME_PASSWORD}
-      - SLSKD_URL=${SLSKD_URL}
-      - SLSKD_API_KEY=${SLSKD_API_KEY}
+      # === Lidarr Configuration ===
+      # Required for artist/album management and monitoring
+      # API Key: Settings > General > Security > API Key
+      - LIDARR_URL=${LIDARR_URL}         # e.g., http://192.168.1.100:8686
+      - LIDARR_API_KEY=${LIDARR_API_KEY} # Lidarr API key
       
-      # Processing Settings
-      - CLEANUP_DAYS=${CLEANUP_DAYS:-30}
-      - MAX_CONCURRENT_DOWNLOADS=${MAX_CONCURRENT_DOWNLOADS:-3}
-      - DOWNLOAD_TIMEOUT_MINUTES=${DOWNLOAD_TIMEOUT_MINUTES:-30}
+      # === slskd Configuration (Soulseek) ===
+      # Required for downloading music from Soulseek network
+      # API Key: Settings > Application > API Key
+      - SLSKD_URL=${SLSKD_URL}           # e.g., http://192.168.1.100:5030
+      - SLSKD_API_KEY=${SLSKD_API_KEY}   # slskd API key
       
-      # Audio Fingerprinting Configuration for enhanced metadata fixing
-      - ACOUSTID_API_KEY=${ACOUSTID_API_KEY:-}  # Get free API key from https://acoustid.org/
-      - MUSICBRAINZ_APP_NAME=${MUSICBRAINZ_APP_NAME:-soulseekarr}
-      - MUSICBRAINZ_CONTACT_EMAIL=${MUSICBRAINZ_CONTACT_EMAIL:-admin@localhost}
+      # === Processing Settings ===
+      # Control script behavior - can be overridden via web UI settings
+      - CLEANUP_DAYS=${CLEANUP_DAYS:-30}  # Days before files expire (if not starred)
+      - MAX_CONCURRENT_DOWNLOADS=${MAX_CONCURRENT_DOWNLOADS:-3}  # Simultaneous downloads
+      - DOWNLOAD_TIMEOUT_MINUTES=${DOWNLOAD_TIMEOUT_MINUTES:-30}  # Download timeout
       
-      # Logging
-      - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      - VERBOSE_LOGGING=${VERBOSE_LOGGING:-false}
+      # === MusicBrainz Configuration (Optional) ===
+      # Enhanced metadata matching and audio fingerprinting
+      # Get free API key from https://acoustid.org/
+      - ACOUSTID_API_KEY=${ACOUSTID_API_KEY:-}  # AcoustID API key (optional)
+      - MUSICBRAINZ_APP_NAME=${MUSICBRAINZ_APP_NAME:-soulseekarr}  # App identifier
+      - MUSICBRAINZ_CONTACT_EMAIL=${MUSICBRAINZ_CONTACT_EMAIL:-admin@localhost}  # Contact email
+      
+      # === Logging Configuration ===
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}     # INFO, DEBUG, WARNING, ERROR, CRITICAL
+      - VERBOSE_LOGGING=${VERBOSE_LOGGING:-false}  # Enable detailed logging
     
+    # Working directory inside container (where entrypoint.sh runs)
     working_dir: /data
+    
+    # Container initialization script
+    # See entrypoint.sh for dependency installation and startup logic
     entrypoint: ["/data/entrypoint.sh"]
+    
+    # Restart policy: always restart unless explicitly stopped
     restart: unless-stopped
+
+# === Testing Workflow (Portainer) ===
+# After making changes to application code:
+# 1. Files auto-sync (mounted volume)
+# 2. In Portainer, select "soulseekarr" container
+# 3. Click "Restart" to reload code
+# 4. Check "Logs" for:
+#    - "Database initialized successfully"
+#    - "Running on http://0.0.0.0:5000"
+#    - Any migration messages
+# 5. Access web UI at http://localhost:5000
+#
+# For database changes:
+#    Look for "Running migration to add..." messages
+#
+# For new scripts:
+#    Look for "Discovered script: [Name]"
+#
+# Common Issues:
+#    - "Database is locked" → WAL mode should prevent, check logs
+#    - "Module not found" → Check requirements.txt includes dependency
+#    - "Permission denied" → Check PUID/PGID match host user
