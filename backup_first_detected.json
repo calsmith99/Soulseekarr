@@ -1,0 +1,6467 @@
+[
+    {
+        "artist": "Don Broco",
+        "album": "Technology",
+        "first_detected": "2025-11-09 21:47:19.173146"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Kentucky",
+        "first_detected": "2025-11-09 21:47:19.712278"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Sorceress",
+        "first_detected": "2025-11-09 21:47:19.867175"
+    },
+    {
+        "artist": "Heart of a Coward",
+        "album": "Severance",
+        "first_detected": "2025-11-09 21:47:21.666608"
+    },
+    {
+        "artist": "All Time Low",
+        "album": "Everyone\u2019s Talking!",
+        "first_detected": "2025-11-09 21:47:21.676758"
+    },
+    {
+        "artist": "Betraying the Martyrs",
+        "album": "Rapture",
+        "first_detected": "2025-11-09 21:47:21.685811"
+    },
+    {
+        "artist": "Tool",
+        "album": "10,000 Days",
+        "first_detected": "2025-11-09 21:47:21.722287"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "The Joy of Motion",
+        "first_detected": "2025-11-09 21:47:21.768915"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Atmosphere",
+        "first_detected": "2025-11-09 21:47:21.778799"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Elements",
+        "first_detected": "2025-11-09 21:47:21.788957"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Tides",
+        "first_detected": "2025-11-09 21:47:21.800314"
+    },
+    {
+        "artist": "Monuments",
+        "album": "The Amanuensis",
+        "first_detected": "2025-11-09 21:47:21.811974"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "TRUE POWER",
+        "first_detected": "2025-11-09 21:47:21.832452"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Magic Mountain",
+        "first_detected": "2025-11-09 21:47:21.875309"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Blood & Chemistry",
+        "first_detected": "2025-11-09 21:47:21.885147"
+    },
+    {
+        "artist": "Psychedelic Porn Crumpets",
+        "album": "High Visceral {Part One}",
+        "first_detected": "2025-11-09 21:47:21.894149"
+    },
+    {
+        "artist": "Psychedelic Porn Crumpets",
+        "album": "Pogo Rodeo",
+        "first_detected": "2025-11-09 21:47:21.903158"
+    },
+    {
+        "artist": "Tame Impala",
+        "album": "Deadbeat",
+        "first_detected": "2025-11-09 21:47:21.966265"
+    },
+    {
+        "artist": "PALESKIN",
+        "album": "Joy Is Temporary, Pain Is Constant",
+        "first_detected": "2025-11-09 21:47:22.034148"
+    },
+    {
+        "artist": "Igorrr",
+        "album": "Amen",
+        "first_detected": "2025-11-09 21:47:22.096527"
+    },
+    {
+        "artist": "Set It Off",
+        "album": "Elsewhere",
+        "first_detected": "2025-11-09 21:47:22.104682"
+    },
+    {
+        "artist": "Finger Eleven",
+        "album": "Last Night on Earth",
+        "first_detected": "2025-11-14 01:35:41.413944"
+    },
+    {
+        "artist": "Infected Mushroom",
+        "album": "Vicious Delicious",
+        "first_detected": "2025-11-14 01:35:53.848537"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Technology",
+        "first_detected": "2025-11-14 01:35:55.023743"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "TRAUMA",
+        "first_detected": "2025-11-14 01:35:55.629785"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Kentucky",
+        "first_detected": "2025-11-14 01:36:01.405787"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Sorceress",
+        "first_detected": "2025-11-14 01:36:05.423932"
+    },
+    {
+        "artist": "Haken",
+        "album": "Affinity",
+        "first_detected": "2025-11-14 01:36:19.370940"
+    },
+    {
+        "artist": "Heart of a Coward",
+        "album": "This Place Only Brings Death",
+        "first_detected": "2025-11-14 01:36:22.546161"
+    },
+    {
+        "artist": "Heart of a Coward",
+        "album": "Severance",
+        "first_detected": "2025-11-14 01:36:22.988510"
+    },
+    {
+        "artist": "All Time Low",
+        "album": "Everyone\u2019s Talking!",
+        "first_detected": "2025-11-14 01:36:23.203918"
+    },
+    {
+        "artist": "Betraying the Martyrs",
+        "album": "Rapture",
+        "first_detected": "2025-11-14 01:36:23.359279"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "Heroine",
+        "first_detected": "2025-11-14 01:36:23.480413"
+    },
+    {
+        "artist": "Black Orchid Empire",
+        "album": "Semaphore",
+        "first_detected": "2025-11-14 01:36:23.594853"
+    },
+    {
+        "artist": "Tool",
+        "album": "Lateralus",
+        "first_detected": "2025-11-14 01:36:23.734554"
+    },
+    {
+        "artist": "Tool",
+        "album": "10,000 Days",
+        "first_detected": "2025-11-14 01:36:23.868035"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Weightless",
+        "first_detected": "2025-11-14 01:36:24.194105"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "The Joy of Motion",
+        "first_detected": "2025-11-14 01:36:24.430732"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Atmosphere",
+        "first_detected": "2025-11-14 01:36:24.572485"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Elements",
+        "first_detected": "2025-11-14 01:36:24.983329"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Tides",
+        "first_detected": "2025-11-14 01:36:25.192959"
+    },
+    {
+        "artist": "Monuments",
+        "album": "The Amanuensis",
+        "first_detected": "2025-11-14 01:36:25.373098"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Amazing Things",
+        "first_detected": "2025-11-14 01:36:25.579065"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "TRUE POWER",
+        "first_detected": "2025-11-14 01:36:25.756694"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Folklore and Superstition",
+        "first_detected": "2025-11-14 01:36:26.240672"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Magic Mountain",
+        "first_detected": "2025-11-14 01:36:26.379900"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Landslide",
+        "first_detected": "2025-11-14 01:36:26.515347"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Blood & Chemistry",
+        "first_detected": "2025-11-14 01:36:26.589496"
+    },
+    {
+        "artist": "Psychedelic Porn Crumpets",
+        "album": "High Visceral {Part One}",
+        "first_detected": "2025-11-14 01:36:27.010199"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Escapology",
+        "first_detected": "2025-11-14 01:36:28.060933"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Mylo Xyloto",
+        "first_detected": "2025-11-14 01:36:28.227041"
+    },
+    {
+        "artist": "Tame Impala",
+        "album": "Deadbeat",
+        "first_detected": "2025-11-14 01:36:28.386541"
+    },
+    {
+        "artist": "PALESKIN",
+        "album": "Joy Is Temporary, Pain Is Constant",
+        "first_detected": "2025-11-14 01:36:29.030526"
+    },
+    {
+        "artist": "Gojira",
+        "album": "L\u2019Enfant sauvage",
+        "first_detected": "2025-11-14 01:36:29.152090"
+    },
+    {
+        "artist": "Igorrr",
+        "album": "Amen",
+        "first_detected": "2025-11-14 01:36:29.404686"
+    },
+    {
+        "artist": "Set It Off",
+        "album": "Elsewhere",
+        "first_detected": "2025-11-14 01:36:29.551933"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Melancholia Hymns",
+        "first_detected": "2025-11-16 22:23:44.276952"
+    },
+    {
+        "artist": "Thrice",
+        "album": "To Be Everywhere Is To Be Nowhere",
+        "first_detected": "2025-11-16 22:23:45.977540"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Matter (Revel)",
+        "first_detected": "2025-11-16 22:23:46.241873"
+    },
+    {
+        "artist": "I built the Sky",
+        "album": "The Sky Is Not the Limit",
+        "first_detected": "2025-11-16 22:23:47.262188"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Touch",
+        "first_detected": "2025-11-16 22:23:47.747708"
+    },
+    {
+        "artist": "Ghost",
+        "album": "Skelet\u00e1",
+        "first_detected": "2025-11-16 23:21:41.373749"
+    },
+    {
+        "artist": "Northlane",
+        "album": "Node: Reloaded",
+        "first_detected": "2025-11-16 23:24:46.608462"
+    },
+    {
+        "artist": "PALESKIN",
+        "album": "Euphoric End",
+        "first_detected": "2025-11-17 00:06:03.790532"
+    },
+    {
+        "artist": "Syncatto",
+        "album": "Fiction",
+        "first_detected": "2025-11-17 00:06:04.859314"
+    },
+    {
+        "artist": "The Pineapple Thief",
+        "album": "It Leads To This",
+        "first_detected": "2025-11-17 00:06:05.622507"
+    },
+    {
+        "artist": "MIRAR",
+        "album": "Ascension",
+        "first_detected": "2025-11-17 00:06:06.574099"
+    },
+    {
+        "artist": "Igorrr",
+        "album": "Spirituality and Distortion",
+        "first_detected": "2025-11-17 00:06:08.013595"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Parrhesia",
+        "first_detected": "2025-11-17 00:06:20.200206"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "BODIES",
+        "first_detected": "2025-11-17 00:06:22.205024"
+    },
+    {
+        "artist": "Animals As Leaders",
+        "album": "Animals As Leaders",
+        "first_detected": "2025-11-17 09:11:21.566070"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Attention Attention",
+        "first_detected": "2025-11-17 09:11:30.307726"
+    },
+    {
+        "artist": "Animals As Leaders",
+        "album": "Weightless",
+        "first_detected": "2025-11-17 09:11:32.931052"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "One",
+        "first_detected": "2025-11-17 09:11:36.022320"
+    },
+    {
+        "artist": "Monuments",
+        "album": "In Stasis",
+        "first_detected": "2025-11-17 09:11:37.550534"
+    },
+    {
+        "artist": "Animals As Leaders",
+        "album": "The Madness Of Many",
+        "first_detected": "2025-11-17 09:11:44.310162"
+    },
+    {
+        "artist": "Animals As Leaders",
+        "album": "Parrhesia",
+        "first_detected": "2025-11-17 09:11:51.915127"
+    },
+    {
+        "artist": "Orbit Culture",
+        "album": "Death Above Life",
+        "first_detected": "2025-11-17 09:11:57.233131"
+    },
+    {
+        "artist": "TesseracT",
+        "album": "War of Being",
+        "first_detected": "2025-11-17 09:11:57.663229"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "The Dark Pool",
+        "first_detected": "2025-11-17 09:11:58.478865"
+    },
+    {
+        "artist": "MIRAR",
+        "album": "Mare",
+        "first_detected": "2025-11-17 09:12:00.667095"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Oh Wonder (10 Years On)",
+        "first_detected": "2025-11-17 11:16:07.917019"
+    },
+    {
+        "artist": "Tesseract",
+        "album": "War Of Being",
+        "first_detected": "2025-11-17 11:16:10.398096"
+    },
+    {
+        "artist": "Dizzy",
+        "album": "The Sun and Her Scorch",
+        "first_detected": "2025-11-17 11:16:12.338079"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "Use Me (Deluxe)",
+        "first_detected": "2025-11-17 11:16:13.169361"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Us And Them [Deluxe]",
+        "first_detected": "2025-11-17 11:16:13.726707"
+    },
+    {
+        "artist": "Fit For An Autopsy",
+        "album": "The Nothing That Is",
+        "first_detected": "2025-11-17 11:16:15.671746"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Amaryllis",
+        "first_detected": "2025-11-17 11:16:19.374403"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Weightless",
+        "first_detected": "2025-11-17 11:16:46.068807"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "The Madness of Many",
+        "first_detected": "2025-11-17 11:16:46.102281"
+    },
+    {
+        "artist": "Fit for an Autopsy",
+        "album": "The Nothing That Is",
+        "first_detected": "2025-11-17 12:08:17.749683"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "Use Me",
+        "first_detected": "2025-11-17 12:08:17.998078"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "ATTENTION ATTENTION",
+        "first_detected": "2025-11-17 12:38:15.935729"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "The Sound Of Madness",
+        "first_detected": "2025-11-17 13:13:22.328285"
+    },
+    {
+        "artist": "Fit For An Autopsy",
+        "album": "Absolute Hope Absolute Hell",
+        "first_detected": "2025-11-17 13:13:22.455821"
+    },
+    {
+        "artist": "Stoned Jesus",
+        "album": "Seven Thunders Roar (Anniversary Deluxe Edition)",
+        "first_detected": "2025-11-17 13:13:26.672504"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Us and Them (Deluxe Edition)",
+        "first_detected": "2025-11-17 13:13:28.155696"
+    },
+    {
+        "artist": "Northlane",
+        "album": "Alien (Deluxe Edition)",
+        "first_detected": "2025-11-18 14:45:17.750195"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "All We Know Of Heaven, All We Need Of Hell",
+        "first_detected": "2025-11-18 14:45:18.070228"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Dream Theater",
+        "first_detected": "2025-11-18 14:45:19.156145"
+    },
+    {
+        "artist": "Fit For An Autopsy",
+        "album": "The Great Collapse",
+        "first_detected": "2025-11-18 14:45:21.764356"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Threat To Survival",
+        "first_detected": "2025-11-18 14:45:23.063558"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Parasomnia",
+        "first_detected": "2025-11-18 22:22:51.290511"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "BODIES",
+        "first_detected": "2025-11-18 22:42:34.389229"
+    },
+    {
+        "artist": "Tool",
+        "album": "Lateralus",
+        "first_detected": "2025-11-18 22:42:34.700745"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "TRAUMA",
+        "first_detected": "2025-11-18 22:42:36.330507"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Melancholia Hymns",
+        "first_detected": "2025-11-18 22:42:36.781458"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Escapology",
+        "first_detected": "2025-11-18 22:42:37.323439"
+    },
+    {
+        "artist": "Northlane",
+        "album": "Node: Reloaded",
+        "first_detected": "2025-11-18 22:42:37.769610"
+    },
+    {
+        "artist": "Gojira",
+        "album": "L\u2019Enfant sauvage",
+        "first_detected": "2025-11-18 22:42:38.277640"
+    },
+    {
+        "artist": "Igorrr",
+        "album": "Spirituality and Distortion",
+        "first_detected": "2025-11-18 22:42:38.439189"
+    },
+    {
+        "artist": "Heart of a Coward",
+        "album": "This Place Only Brings Death",
+        "first_detected": "2025-11-18 22:42:38.913207"
+    },
+    {
+        "artist": "Fit For An Autopsy",
+        "album": "The Sea of Tragic Beasts",
+        "first_detected": "2025-11-18 23:09:51.862975"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Octavarium",
+        "first_detected": "2025-11-18 23:10:02.016113"
+    },
+    {
+        "artist": "Bilmuri",
+        "album": "AMERICAN MOTOR SPORTS (420cc EDITION)",
+        "first_detected": "2025-11-18 23:10:09.485967"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Between the Devil & the Deep Blue Sea",
+        "first_detected": "2025-11-18 23:10:12.037139"
+    },
+    {
+        "artist": "Finger Eleven",
+        "album": "Adrenaline",
+        "first_detected": "2025-11-18 23:10:54.140498"
+    },
+    {
+        "artist": "Killswitch Engage",
+        "album": "The End of Heartache",
+        "first_detected": "2025-11-18 23:10:54.453515"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill",
+        "first_detected": "2025-11-18 23:11:03.126225"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Amaryllis",
+        "first_detected": "2025-11-18 23:13:11.711222"
+    },
+    {
+        "artist": "Killswitch Engage",
+        "album": "The End of Heartache",
+        "first_detected": "2025-11-18 23:13:50.708769"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Oh Wonder (10 Years On)",
+        "first_detected": "2025-11-18 23:13:51.973791"
+    },
+    {
+        "artist": "Orbit Culture",
+        "album": "Death Above Life",
+        "first_detected": "2025-11-18 23:13:54.407467"
+    },
+    {
+        "artist": "PALESKIN",
+        "album": "Euphoric End",
+        "first_detected": "2025-11-18 23:13:55.483947"
+    },
+    {
+        "artist": "The Pineapple Thief",
+        "album": "It Leads to This",
+        "first_detected": "2025-11-19 01:22:00.796352"
+    },
+    {
+        "artist": "Fit for an Autopsy",
+        "album": "Oh What the Future Holds",
+        "first_detected": "2025-11-19 01:24:52.343701"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Magma",
+        "first_detected": "2025-11-19 01:24:54.187189"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill",
+        "first_detected": "2025-11-20 00:39:56.891681"
+    },
+    {
+        "artist": "Monuments",
+        "album": "Gnosis",
+        "first_detected": "2025-11-20 00:39:58.529089"
+    },
+    {
+        "artist": "Stoned Jesus",
+        "album": "Seven Thunders Roar (Anniversary Deluxe Edition)",
+        "first_detected": "2025-11-20 00:40:08.496806"
+    },
+    {
+        "artist": "Infected Mushroom",
+        "album": "REBORN",
+        "first_detected": "2025-11-20 00:40:08.695788"
+    },
+    {
+        "artist": "Mirar",
+        "album": "Mare",
+        "first_detected": "2025-11-20 00:40:33.601551"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "What You Want",
+        "first_detected": "2025-11-21 22:38:57.890825"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen",
+        "first_detected": "2025-11-21 22:38:58.376109"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "All We Know of Heaven, All We Need of Hell",
+        "first_detected": "2025-11-21 22:39:59.811613"
+    },
+    {
+        "artist": "Florence + the Machine",
+        "album": "Everybody Scream",
+        "first_detected": "2025-11-21 22:40:01.040920"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Live at Hellfest 2016",
+        "first_detected": "2025-11-21 22:40:46.723660"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Us and Them (Deluxe Edition)",
+        "first_detected": "2025-11-21 23:06:49.272501"
+    },
+    {
+        "artist": "Thrice",
+        "album": "To Be Everywhere Is to Be Nowhere",
+        "first_detected": "2025-11-21 23:07:38.399513"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "In and Out of Consciousness: Greatest Hits 1990-2010",
+        "first_detected": "2025-11-21 23:07:38.486308"
+    },
+    {
+        "artist": "Northlane",
+        "album": "Alien (deluxe edition)",
+        "first_detected": "2025-11-21 23:07:39.511888"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "Ummagumma",
+        "first_detected": "2025-11-23 01:37:30.090738"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "In Absentia",
+        "first_detected": "2025-11-23 01:37:34.450628"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Signify",
+        "first_detected": "2025-11-23 01:37:34.791251"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Division Bell: The High Resolution Remasters",
+        "first_detected": "2025-11-23 01:37:34.920537"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "The Path of Totality",
+        "first_detected": "2025-11-23 01:37:42.776131"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "Violent Nature",
+        "first_detected": "2025-11-23 01:37:45.617052"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "A Saucerful of Secrets",
+        "first_detected": "2025-11-23 01:37:49.886931"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "The Ultimate Collection",
+        "first_detected": "2025-11-23 01:37:58.033690"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "Got Your Six",
+        "first_detected": "2025-11-23 01:38:04.044515"
+    },
+    {
+        "artist": "Korn",
+        "album": "Requiem Mass",
+        "first_detected": "2025-11-23 01:38:25.315858"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "EVERGREEN",
+        "first_detected": "2025-11-23 01:38:28.998642"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Asylum",
+        "first_detected": "2025-11-23 01:38:29.780245"
+    },
+    {
+        "artist": "Poppy",
+        "album": "I Disagree (more)",
+        "first_detected": "2025-11-23 01:39:22.553760"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Planet Zero",
+        "first_detected": "2025-11-23 01:39:23.907838"
+    },
+    {
+        "artist": "Slipknot",
+        "album": "We Are Not Your Kind",
+        "first_detected": "2025-11-23 01:39:25.608913"
+    },
+    {
+        "artist": "Orbit Culture",
+        "album": "Descent",
+        "first_detected": "2025-11-23 01:39:27.997443"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Blood Sugar Sex Magik",
+        "first_detected": "2025-11-23 01:39:29.799534"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Ten Thousand Fists",
+        "first_detected": "2025-11-23 01:39:35.326619"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Parachutes",
+        "first_detected": "2025-11-23 01:39:35.439290"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Homework (25th Anniversary Edition)",
+        "first_detected": "2025-11-23 01:39:40.038183"
+    },
+    {
+        "artist": "Bury Tomorrow",
+        "album": "Black Flame (Deluxe)",
+        "first_detected": "2025-11-23 01:39:41.804542"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Unlimited Love",
+        "first_detected": "2025-11-23 01:39:45.452673"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Mountains",
+        "first_detected": "2025-11-23 01:39:47.375340"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Paradigm Shift",
+        "first_detected": "2025-11-23 01:40:27.039283"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident",
+        "first_detected": "2025-11-23 01:40:30.445251"
+    },
+    {
+        "artist": "Unprocessed",
+        "album": "Artificial Void",
+        "first_detected": "2025-11-23 01:40:32.628525"
+    },
+    {
+        "artist": "VOLA",
+        "album": "Applause of a Distant Crowd",
+        "first_detected": "2025-11-23 01:40:33.262812"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Immortalized",
+        "first_detected": "2025-11-23 01:40:35.257830"
+    },
+    {
+        "artist": "Tool",
+        "album": "\u00c6nima",
+        "first_detected": "2025-11-23 01:40:44.725763"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Stupid Dream",
+        "first_detected": "2025-11-23 01:40:47.555704"
+    },
+    {
+        "artist": "Static\u2010X",
+        "album": "Cannibal",
+        "first_detected": "2025-11-23 01:40:59.600513"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Leave a Whisper",
+        "first_detected": "2025-11-23 01:41:41.304353"
+    },
+    {
+        "artist": "Katatonia",
+        "album": "Nightmares as Extensions of the Waking State",
+        "first_detected": "2025-11-23 01:41:43.922653"
+    },
+    {
+        "artist": "Bilmuri",
+        "album": "AMERICAN MOTOR SPORTS",
+        "first_detected": "2025-11-23 01:43:02.934400"
+    },
+    {
+        "artist": "Psychedelic Porn Crumpets",
+        "album": "Pogo Rodeo",
+        "first_detected": "2025-11-23 01:44:01.137356"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Horizons/West",
+        "first_detected": "2025-11-23 01:44:09.243331"
+    },
+    {
+        "artist": "I Built the Sky",
+        "album": "The Sky Is Not the Limit",
+        "first_detected": "2025-11-23 01:44:23.348858"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen (Vinyl LP)",
+        "first_detected": "2025-11-23 13:44:56.198665"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "Issues (CD1)",
+        "first_detected": "2025-11-23 13:44:56.404851"
+    },
+    {
+        "artist": "Korn",
+        "album": "Requiem (Declipped)",
+        "first_detected": "2025-11-23 13:44:58.037964"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident (RR 7857-7)",
+        "first_detected": "2025-11-23 13:44:58.379549"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Greatest Hits",
+        "first_detected": "2025-11-23 13:44:58.432754"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Metallica (Sterling)",
+        "first_detected": "2025-11-23 13:44:59.236237"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Origin",
+        "first_detected": "2025-11-23 13:44:59.345475"
+    },
+    {
+        "artist": "Korn",
+        "album": "Untouchables",
+        "first_detected": "2025-11-23 13:45:00.982564"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Metallica  (EU Vertigo)",
+        "first_detected": "2025-11-23 13:45:01.357457"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Lost In Paradise (Single)",
+        "first_detected": "2025-11-23 13:45:04.988484"
+    },
+    {
+        "artist": "Static\u2010X",
+        "album": "Shadow Zone",
+        "first_detected": "2025-11-23 13:45:05.791916"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Metallica (2008 CB)",
+        "first_detected": "2025-11-23 13:45:06.154610"
+    },
+    {
+        "artist": "I Built the Sky",
+        "album": "I Built the Sky",
+        "first_detected": "2025-11-23 13:45:06.658234"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Images and Words",
+        "first_detected": "2025-11-23 13:45:07.416340"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen (20th anniversary)",
+        "first_detected": "2025-11-23 13:45:08.155800"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Hardwired\u2026To Self-Destruct",
+        "first_detected": "2025-11-23 13:45:08.505980"
+    },
+    {
+        "artist": "Florence + the Machine",
+        "album": "Lungs",
+        "first_detected": "2025-11-23 13:45:10.162052"
+    },
+    {
+        "artist": "Korn",
+        "album": "Issues",
+        "first_detected": "2025-11-23 13:45:12.427372"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Random Access Memories",
+        "first_detected": "2025-11-23 13:45:12.775533"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Mystary (EP)",
+        "first_detected": "2025-11-23 13:45:13.177707"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Anywhere But Home (Limited Edition) DVD",
+        "first_detected": "2025-11-23 13:45:16.105805"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Homework",
+        "first_detected": "2025-11-23 13:45:16.254418"
+    },
+    {
+        "artist": "Poppy",
+        "album": "I Disagree",
+        "first_detected": "2025-11-23 13:45:16.807209"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Load (Remastered Deluxe Box Set)",
+        "first_detected": "2025-11-23 13:45:16.912774"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen (Japanese Edition)",
+        "first_detected": "2025-11-23 13:45:17.336077"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Live in Buenos Aires",
+        "first_detected": "2025-11-23 13:45:17.651398"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Horizons/East",
+        "first_detected": "2025-11-23 13:45:17.804012"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Us And Them",
+        "first_detected": "2025-11-23 13:45:18.547658"
+    },
+    {
+        "artist": "Metallica",
+        "album": "St. Anger",
+        "first_detected": "2025-11-23 13:45:19.062917"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "MTV Unplugged",
+        "first_detected": "2025-11-23 13:45:19.416669"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Indestructible",
+        "first_detected": "2025-11-23 13:45:21.559861"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "My Immortal",
+        "first_detected": "2025-11-23 13:45:22.074646"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "Untouchables",
+        "first_detected": "2025-11-23 13:45:22.919627"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Octane Twisted CD1",
+        "first_detected": "2025-11-23 13:45:23.226775"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Live 2012",
+        "first_detected": "2025-11-23 13:45:23.371276"
+    },
+    {
+        "artist": "Bury Tomorrow",
+        "album": "Black Flame",
+        "first_detected": "2025-11-23 13:45:23.626266"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "My Immortal (CD Maxi-Single)",
+        "first_detected": "2025-11-23 13:45:23.792378"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Heaven and Earth",
+        "first_detected": "2025-11-23 13:45:23.877610"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Anywhere But Home",
+        "first_detected": "2025-11-23 13:45:23.944889"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident (Disc 1)",
+        "first_detected": "2025-11-23 13:45:24.155719"
+    },
+    {
+        "artist": "Tool",
+        "album": "Undertow",
+        "first_detected": "2025-11-23 13:45:24.459025"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Metallica",
+        "first_detected": "2025-11-23 13:46:15.246096"
+    },
+    {
+        "artist": "Korn",
+        "album": "MTV Unplugged",
+        "first_detected": "2025-11-23 13:46:15.888665"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Anywhere But Home (Limited Edition) CD",
+        "first_detected": "2025-11-23 13:46:16.297057"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Synthesis (2 Vinyl LP)",
+        "first_detected": "2025-11-23 13:46:16.778312"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen (European Edition)",
+        "first_detected": "2025-11-23 13:46:17.484440"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Indo Silver Club",
+        "first_detected": "2025-11-23 13:46:17.639278"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "Untouchables (2LP 24Bit - 192kHz)",
+        "first_detected": "2025-11-23 13:46:22.808570"
+    },
+    {
+        "artist": "Ihlo",
+        "album": "Union",
+        "first_detected": "2025-11-23 13:46:24.012461"
+    },
+    {
+        "artist": "System of a Down",
+        "album": "Mezmerize",
+        "first_detected": "2025-11-23 13:46:24.214560"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident CD2",
+        "first_detected": "2025-11-23 13:46:25.127085"
+    },
+    {
+        "artist": "Static-X",
+        "album": "Project: Regeneration Vol.1",
+        "first_detected": "2025-11-23 13:46:25.875815"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Paradigm Shift",
+        "first_detected": "2025-11-23 13:46:26.413211"
+    },
+    {
+        "artist": "I built the Sky",
+        "album": "The Quiet Place Away",
+        "first_detected": "2025-11-23 13:46:34.329035"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Evanescence (EP)",
+        "first_detected": "2025-11-23 13:46:34.933641"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident CD1",
+        "first_detected": "2025-11-23 13:46:35.776008"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Load",
+        "first_detected": "2025-11-23 13:46:37.180898"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "On The Sunday Of Life...",
+        "first_detected": "2025-11-23 13:46:37.822239"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Octane Twisted CD2",
+        "first_detected": "2025-11-23 13:46:38.215741"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Metallica (24bit 44khz)",
+        "first_detected": "2025-11-23 13:46:38.476233"
+    },
+    {
+        "artist": "The Prodigy",
+        "album": "Their Law - The Singles 1990-2005",
+        "first_detected": "2025-11-23 13:46:38.689973"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "The Ultimate Collection (Fallen - Vinyl LP)",
+        "first_detected": "2025-11-23 13:46:40.253579"
+    },
+    {
+        "artist": "Static-X",
+        "album": "Shadow Zone / X-Posed (CD, Japanese Limited Edition)",
+        "first_detected": "2025-11-23 13:46:40.369791"
+    },
+    {
+        "artist": "Metallica",
+        "album": "Hardwired\u2026To Self\u2010Destruct (CD 1)",
+        "first_detected": "2025-11-23 13:46:40.818222"
+    },
+    {
+        "artist": "Haken",
+        "album": "Fauna",
+        "first_detected": "2025-11-23 13:46:42.445611"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "My Immortal (CD Single)",
+        "first_detected": "2025-11-23 13:46:42.688206"
+    },
+    {
+        "artist": "Static-X",
+        "album": "Beneath... Between... Beyond... (CD, Compilation, Repress)",
+        "first_detected": "2025-11-23 13:46:42.785724"
+    },
+    {
+        "artist": "Static-X",
+        "album": "Beneath... Between... Beyond... (CD, Compilation)",
+        "first_detected": "2025-11-23 13:46:42.894646"
+    },
+    {
+        "artist": "Three Days Grace",
+        "album": "Three Days Grace",
+        "first_detected": "2025-11-23 13:46:43.535240"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Synthesis (Japanese Limited Deluxe Edition)",
+        "first_detected": "2025-11-23 13:46:43.604211"
+    },
+    {
+        "artist": "Florence + The Machine",
+        "album": "Everybody Scream (Chamber Version)",
+        "first_detected": "2025-11-23 13:46:44.211266"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "The Ultimate Collection (Origin - Vinyl LP)",
+        "first_detected": "2025-11-23 13:46:45.582488"
+    },
+    {
+        "artist": "Korn",
+        "album": "Take a Look in the Mirror",
+        "first_detected": "2025-11-23 13:46:47.417501"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "A Rush of Blood to the Head",
+        "first_detected": "2025-11-23 13:46:47.662105"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Believe",
+        "first_detected": "2025-11-23 13:46:47.816770"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "Renaissance",
+        "first_detected": "2025-11-23 13:46:48.002537"
+    },
+    {
+        "artist": "Spiritbox",
+        "album": "Rotoscope",
+        "first_detected": "2025-11-23 13:46:48.286553"
+    },
+    {
+        "artist": "Korn",
+        "album": "Issues",
+        "first_detected": "2025-11-23 13:46:49.132943"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "The Way Of The Fist",
+        "first_detected": "2025-11-23 13:46:49.339555"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Palms",
+        "first_detected": "2025-11-23 13:46:49.526993"
+    },
+    {
+        "artist": "Korn",
+        "album": "Requiem",
+        "first_detected": "2025-11-23 13:47:49.299566"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Division Bell",
+        "first_detected": "2025-11-23 13:47:50.119380"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "Ummagumma",
+        "first_detected": "2025-11-23 13:47:50.171898"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Homework",
+        "first_detected": "2025-11-23 13:47:50.557054"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Path of Totality",
+        "first_detected": "2025-11-23 13:47:51.305330"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Piper at the Gates of Dawn",
+        "first_detected": "2025-12-15 22:44:40.300887"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Fortitude",
+        "first_detected": "2025-12-15 22:44:40.549722"
+    },
+    {
+        "artist": "Jeff Buckley",
+        "album": "Grace",
+        "first_detected": "2025-12-15 22:44:40.859135"
+    },
+    {
+        "artist": "Peach Pit",
+        "album": "Being So Normal",
+        "first_detected": "2025-12-15 22:44:41.066571"
+    },
+    {
+        "artist": "Khruangbin",
+        "album": "Texas Moon",
+        "first_detected": "2025-12-15 22:44:41.316032"
+    },
+    {
+        "artist": "Glass Animals",
+        "album": "How to Be a Human Being",
+        "first_detected": "2025-12-15 22:44:41.866341"
+    },
+    {
+        "artist": "Pendulum",
+        "album": "Elemental",
+        "first_detected": "2025-12-15 22:44:42.314212"
+    },
+    {
+        "artist": "Mac Miller",
+        "album": "Swimming",
+        "first_detected": "2025-12-15 22:44:42.929894"
+    },
+    {
+        "artist": "BROCKHAMPTON",
+        "album": "GINGER",
+        "first_detected": "2025-12-15 22:44:43.122234"
+    },
+    {
+        "artist": "Bring Me the Horizon",
+        "album": "Drown (Live from Maida Vale)",
+        "first_detected": "2025-12-15 22:44:43.350633"
+    },
+    {
+        "artist": "The Kid LAROI",
+        "album": "F*CK LOVE 3: OVER YOU",
+        "first_detected": "2025-12-15 22:44:43.604029"
+    },
+    {
+        "artist": "Mr.Kitty",
+        "album": "Time",
+        "first_detected": "2025-12-15 22:44:43.837076"
+    },
+    {
+        "artist": "HIM",
+        "album": "Dark Light",
+        "first_detected": "2025-12-15 22:44:44.063169"
+    },
+    {
+        "artist": "Vendredi Sur Mer",
+        "album": "Premiers Emois",
+        "first_detected": "2025-12-15 22:44:44.715118"
+    },
+    {
+        "artist": "Bon Jovi",
+        "album": "Slippery When Wet",
+        "first_detected": "2025-12-15 22:44:45.008145"
+    },
+    {
+        "artist": "Pentakill",
+        "album": "II: Grasp of the Undying",
+        "first_detected": "2025-12-15 22:44:45.230562"
+    },
+    {
+        "artist": "Justice",
+        "album": "Audio, Video, Disco.",
+        "first_detected": "2025-12-15 22:44:46.065494"
+    },
+    {
+        "artist": "Iron Maiden",
+        "album": "Seventh Son of a Seventh Son (2015 Remaster)",
+        "first_detected": "2025-12-15 22:44:46.726196"
+    },
+    {
+        "artist": "Testament",
+        "album": "The Ritual",
+        "first_detected": "2025-12-15 22:44:47.084605"
+    },
+    {
+        "artist": "The Contortionist",
+        "album": "Our Bones",
+        "first_detected": "2025-12-15 22:44:47.595746"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Dark Side Of The Moon",
+        "first_detected": "2025-12-15 22:44:48.803724"
+    },
+    {
+        "artist": "Souls of Mischief",
+        "album": "93 'til Infinity",
+        "first_detected": "2025-12-15 22:44:49.076611"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "Blue Weekend",
+        "first_detected": "2025-12-15 22:44:49.806426"
+    },
+    {
+        "artist": "The Monkees",
+        "album": "The Monkees 50 [3CD]",
+        "first_detected": "2025-12-15 22:44:50.324157"
+    },
+    {
+        "artist": "A$AP Rocky",
+        "album": "Sundress",
+        "first_detected": "2025-12-15 22:44:50.932542"
+    },
+    {
+        "artist": "Sylvan Esso",
+        "album": "What Now",
+        "first_detected": "2025-12-15 22:44:51.397309"
+    },
+    {
+        "artist": "Still Woozy",
+        "album": "If This Isn\u2019t Nice, I Don\u2019t Know What Is",
+        "first_detected": "2025-12-15 22:44:51.540535"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man on the Moon III: The Chosen",
+        "first_detected": "2025-12-15 22:44:51.745213"
+    },
+    {
+        "artist": "Duckwrth",
+        "album": "Crush",
+        "first_detected": "2025-12-15 22:44:51.895928"
+    },
+    {
+        "artist": "Biig Piig",
+        "album": "Oh No / Liahr",
+        "first_detected": "2025-12-15 22:44:52.041397"
+    },
+    {
+        "artist": "The Killers",
+        "album": "Day & Age",
+        "first_detected": "2025-12-15 22:44:53.516317"
+    },
+    {
+        "artist": "Mike Posner",
+        "album": "At Night, Alone.",
+        "first_detected": "2025-12-15 22:44:53.738875"
+    },
+    {
+        "artist": "cute girls doing cute things",
+        "album": "cutie jams vol. 2",
+        "first_detected": "2025-12-15 22:44:54.103352"
+    },
+    {
+        "artist": "girl in red",
+        "album": "if i could make it go quiet",
+        "first_detected": "2025-12-15 22:44:54.289745"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "Remember That You Will Die",
+        "first_detected": "2025-12-15 22:44:54.603228"
+    },
+    {
+        "artist": "Boston",
+        "album": "Boston",
+        "first_detected": "2025-12-15 22:44:54.924947"
+    },
+    {
+        "artist": "alt-J",
+        "album": "An Awesome Wave",
+        "first_detected": "2025-12-15 22:44:55.479549"
+    },
+    {
+        "artist": "As It Is",
+        "album": "The Great Depression",
+        "first_detected": "2025-12-15 22:44:55.718563"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "INSANO",
+        "first_detected": "2025-12-15 22:44:55.873421"
+    },
+    {
+        "artist": "Yellow Days",
+        "album": "The Way Things Change",
+        "first_detected": "2025-12-15 22:44:56.070630"
+    },
+    {
+        "artist": "Plini",
+        "album": "Other Things",
+        "first_detected": "2025-12-15 22:44:56.421526"
+    },
+    {
+        "artist": "Jay-Z",
+        "album": "Unplugged",
+        "first_detected": "2025-12-15 22:44:56.797885"
+    },
+    {
+        "artist": "Sipper",
+        "album": "Losers",
+        "first_detected": "2025-12-15 22:44:56.946129"
+    },
+    {
+        "artist": "Alter Bridge",
+        "album": "Blackbird",
+        "first_detected": "2025-12-15 22:44:57.443143"
+    },
+    {
+        "artist": "Ember & Kronic",
+        "album": "The Annual 2015",
+        "first_detected": "2025-12-15 22:44:57.659220"
+    },
+    {
+        "artist": "Deftones",
+        "album": "Koi No Yokan",
+        "first_detected": "2025-12-15 22:44:58.041412"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Better Man: Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-15 22:44:58.343921"
+    },
+    {
+        "artist": "Still Corners",
+        "album": "Slow Air",
+        "first_detected": "2025-12-15 22:44:58.667309"
+    },
+    {
+        "artist": "The Goo Goo Dolls",
+        "album": "Deadpool & Wolverine Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-15 22:44:58.983181"
+    },
+    {
+        "artist": "iann dior",
+        "album": "on to better things",
+        "first_detected": "2025-12-15 22:44:59.053146"
+    },
+    {
+        "artist": "Highly Suspect",
+        "album": "MCID",
+        "first_detected": "2025-12-15 22:44:59.357729"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "22 Break",
+        "first_detected": "2025-12-15 22:44:59.563643"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Oh Wonder",
+        "first_detected": "2025-12-15 22:44:59.968550"
+    },
+    {
+        "artist": "Clean Bandit, Zara Larsson",
+        "album": "What Is Love? (Deluxe Edition)",
+        "first_detected": "2025-12-15 22:45:00.442165"
+    },
+    {
+        "artist": "Busted",
+        "album": "2000's Pop Hits",
+        "first_detected": "2025-12-15 22:45:00.847577"
+    },
+    {
+        "artist": "Will Smith",
+        "album": "Big Willie Style",
+        "first_detected": "2025-12-15 22:45:01.208356"
+    },
+    {
+        "artist": "Flo Rida",
+        "album": "Wild Ones",
+        "first_detected": "2025-12-15 22:45:01.582185"
+    },
+    {
+        "artist": "Kirinji",
+        "album": "cherish",
+        "first_detected": "2025-12-15 22:45:02.387074"
+    },
+    {
+        "artist": "Bryson Tiller",
+        "album": "Killer Instinct",
+        "first_detected": "2025-12-15 22:45:02.718312"
+    },
+    {
+        "artist": "Sports",
+        "album": "Naked All The Time",
+        "first_detected": "2025-12-15 22:45:03.119582"
+    },
+    {
+        "artist": "KIRINJI",
+        "album": "Steppin' Out",
+        "first_detected": "2025-12-15 22:45:04.005760"
+    },
+    {
+        "artist": "girlfriends",
+        "album": "Girlfriends",
+        "first_detected": "2025-12-15 22:45:04.299025"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "MTV Party to Go \u201998",
+        "first_detected": "2025-12-15 22:45:04.681087"
+    },
+    {
+        "artist": "Portishead",
+        "album": "Dummy",
+        "first_detected": "2025-12-15 22:45:04.923280"
+    },
+    {
+        "artist": "John Carpenter",
+        "album": "The Fog: Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-15 22:45:05.033853"
+    },
+    {
+        "artist": "\u305f\u304b\u3084\u3093",
+        "album": "Bad example",
+        "first_detected": "2025-12-15 22:45:05.149322"
+    },
+    {
+        "artist": "88rising",
+        "album": "Head In The Clouds II",
+        "first_detected": "2025-12-15 22:45:05.378105"
+    },
+    {
+        "artist": "Dayseeker",
+        "album": "Dark Sun",
+        "first_detected": "2025-12-15 22:45:05.804259"
+    },
+    {
+        "artist": "Archive",
+        "album": "Noise",
+        "first_detected": "2025-12-15 22:45:06.103452"
+    },
+    {
+        "artist": "Dr. Dre",
+        "album": "The Chronic",
+        "first_detected": "2025-12-15 22:45:06.826507"
+    },
+    {
+        "artist": "Dave Brubeck Quartet",
+        "album": "Time Out",
+        "first_detected": "2025-12-15 22:45:07.091230"
+    },
+    {
+        "artist": "Dido",
+        "album": "Life for rent",
+        "first_detected": "2025-12-15 22:45:07.818741"
+    },
+    {
+        "artist": "Trinidad Cardona",
+        "album": "Rhythm Radio November 2017",
+        "first_detected": "2025-12-15 22:45:07.905321"
+    },
+    {
+        "artist": "Elbow",
+        "album": "The Seldom Seen Kid (Bonus Tracks Version)",
+        "first_detected": "2025-12-15 22:45:08.185352"
+    },
+    {
+        "artist": "Blink-182",
+        "album": "Blink-182",
+        "first_detected": "2025-12-15 22:45:08.442915"
+    },
+    {
+        "artist": "Laura Marling",
+        "album": "Once I Was An Eagle",
+        "first_detected": "2025-12-15 22:45:08.670732"
+    },
+    {
+        "artist": "Against the Current",
+        "album": "In Our Bones",
+        "first_detected": "2025-12-15 22:45:09.367423"
+    },
+    {
+        "artist": "Romy",
+        "album": "Mid Air",
+        "first_detected": "2025-12-15 22:45:09.955311"
+    },
+    {
+        "artist": "Landon Cube; 24KGoldn",
+        "album": "Eighties",
+        "first_detected": "2025-12-15 22:45:10.001879"
+    },
+    {
+        "artist": "Max Pope",
+        "album": "Counting Sheep",
+        "first_detected": "2025-12-15 22:45:10.204975"
+    },
+    {
+        "artist": "Kyuss",
+        "album": "Welcome To Sky Valley",
+        "first_detected": "2025-12-15 22:45:10.601831"
+    },
+    {
+        "artist": "Childish Gambino",
+        "album": "Because the Internet",
+        "first_detected": "2025-12-15 22:45:11.195720"
+    },
+    {
+        "artist": "ScHoolboy Q",
+        "album": "Oxymoron",
+        "first_detected": "2025-12-15 22:45:12.040784"
+    },
+    {
+        "artist": "Crowded House",
+        "album": "Crowded House",
+        "first_detected": "2025-12-15 22:45:12.241459"
+    },
+    {
+        "artist": "Bob Marley & The Wailers",
+        "album": "Confrontation",
+        "first_detected": "2025-12-15 22:45:12.619322"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man On The Moon: The End Of Day (Deluxe Edition)",
+        "first_detected": "2025-12-15 22:45:12.897133"
+    },
+    {
+        "artist": "Ice Cube",
+        "album": "Lethal Injection",
+        "first_detected": "2025-12-15 22:45:13.192292"
+    },
+    {
+        "artist": "Jorja Smith",
+        "album": "Black Panther: The Album (music from and inspired by)",
+        "first_detected": "2025-12-15 22:45:13.391052"
+    },
+    {
+        "artist": "Lil Uzi Vert",
+        "album": "Luv Is Rage",
+        "first_detected": "2025-12-15 22:45:13.673788"
+    },
+    {
+        "artist": "Glass Animals",
+        "album": "I Don't Wanna Talk (I Just Wanna Dance)",
+        "first_detected": "2025-12-15 22:45:13.890655"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man On The Moon II: The Legend Of Mr. Rager",
+        "first_detected": "2025-12-15 22:45:14.213538"
+    },
+    {
+        "artist": "Joji",
+        "album": "BALLADS 1",
+        "first_detected": "2025-12-15 22:45:14.505040"
+    },
+    {
+        "artist": "Juice WRLD",
+        "album": "Legends Never Die",
+        "first_detected": "2025-12-15 22:45:15.386099"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Hollywood's Bleeding",
+        "first_detected": "2025-12-15 22:45:16.531397"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "The Getaway",
+        "first_detected": "2025-12-15 22:45:16.839085"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "Sundowning",
+        "first_detected": "2025-12-15 22:45:17.127695"
+    },
+    {
+        "artist": "Childish Gambino",
+        "album": "Camp",
+        "first_detected": "2025-12-15 22:45:17.422921"
+    },
+    {
+        "artist": "half\u2022alive",
+        "album": "Now, Not Yet",
+        "first_detected": "2025-12-15 22:45:18.035816"
+    },
+    {
+        "artist": "MF DOOM",
+        "album": "Operation: Doomsday",
+        "first_detected": "2025-12-15 22:45:18.366019"
+    },
+    {
+        "artist": "Djo",
+        "album": "DECIDE",
+        "first_detected": "2025-12-15 22:45:18.543213"
+    },
+    {
+        "artist": "M83",
+        "album": "Hurry Up, We\u2019re Dreaming",
+        "first_detected": "2025-12-15 22:45:19.276035"
+    },
+    {
+        "artist": "Toto",
+        "album": "Toto",
+        "first_detected": "2025-12-15 22:45:19.556771"
+    },
+    {
+        "artist": "Blackstreet (feat. Dr. Dre)",
+        "album": "No Diggity",
+        "first_detected": "2025-12-15 22:45:19.840368"
+    },
+    {
+        "artist": "easy life",
+        "album": "frank",
+        "first_detected": "2025-12-15 22:45:20.019111"
+    },
+    {
+        "artist": "Aaryan Shah",
+        "album": "The Arrival: Part I",
+        "first_detected": "2025-12-15 22:45:20.425980"
+    },
+    {
+        "artist": "The Who",
+        "album": "The Who Hits 50!",
+        "first_detected": "2025-12-15 22:45:20.608866"
+    },
+    {
+        "artist": "Now Thats What I Call",
+        "album": "Now That's What I Call Music! 73",
+        "first_detected": "2025-12-15 22:45:20.848547"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Now That's What I Call Music! 112",
+        "first_detected": "2025-12-15 22:45:21.071911"
+    },
+    {
+        "artist": "AURORA",
+        "album": "Running With the Wolves",
+        "first_detected": "2025-12-15 22:45:21.289935"
+    },
+    {
+        "artist": "TesseracT",
+        "album": "Polaris/Errai",
+        "first_detected": "2025-12-15 22:45:21.947323"
+    },
+    {
+        "artist": "Blink-182",
+        "album": "NINE",
+        "first_detected": "2025-12-15 22:45:22.283697"
+    },
+    {
+        "artist": "Kids See Ghosts",
+        "album": "Kids See Ghosts",
+        "first_detected": "2025-12-15 22:45:22.707883"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Hotline Miami 2: Wrong Number",
+        "first_detected": "2025-12-15 22:45:23.329291"
+    },
+    {
+        "artist": "Mazzy Star",
+        "album": "So Tonight That I Might See",
+        "first_detected": "2025-12-15 22:45:24.105061"
+    },
+    {
+        "artist": "Martin Solveig",
+        "album": "Smash",
+        "first_detected": "2025-12-15 22:45:24.493202"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry's House",
+        "first_detected": "2025-12-15 22:45:24.684635"
+    },
+    {
+        "artist": "A Tribe Called Quest",
+        "album": "The Low End Theory",
+        "first_detected": "2025-12-15 22:45:25.036941"
+    },
+    {
+        "artist": "Last Dinosaurs",
+        "album": "Flying",
+        "first_detected": "2025-12-15 22:45:25.237098"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "HELLBOY",
+        "first_detected": "2025-12-15 22:45:25.386628"
+    },
+    {
+        "artist": "Martin Garrix",
+        "album": "Loop",
+        "first_detected": "2025-12-15 22:45:25.730740"
+    },
+    {
+        "artist": "Thundercat",
+        "album": "It Is What It Is",
+        "first_detected": "2025-12-15 22:45:26.039722"
+    },
+    {
+        "artist": "Snow Patrol",
+        "album": "Final Straw",
+        "first_detected": "2025-12-15 22:45:26.545277"
+    },
+    {
+        "artist": "Oasis",
+        "album": "(What\u2019s the Story) Morning Glory?",
+        "first_detected": "2025-12-15 22:45:27.106005"
+    },
+    {
+        "artist": "mgk",
+        "album": "Tickets to My Downfall",
+        "first_detected": "2025-12-15 22:45:27.634783"
+    },
+    {
+        "artist": "Two Feet",
+        "album": "Call Me, I Still Love You",
+        "first_detected": "2025-12-15 22:45:28.532224"
+    },
+    {
+        "artist": "Bruno Major",
+        "album": "A Song For Every Moon",
+        "first_detected": "2025-12-15 22:45:29.418931"
+    },
+    {
+        "artist": "Grimes",
+        "album": "Miss Anthropocene (Deluxe Edition)",
+        "first_detected": "2025-12-15 22:45:30.062085"
+    },
+    {
+        "artist": "Travis Scott",
+        "album": "Rodeo",
+        "first_detected": "2025-12-15 22:45:30.758570"
+    },
+    {
+        "artist": "Paramore",
+        "album": "Brand New Eyes",
+        "first_detected": "2025-12-15 22:45:31.043482"
+    },
+    {
+        "artist": "clipping.",
+        "album": "CLPPNG",
+        "first_detected": "2025-12-15 22:45:31.278605"
+    },
+    {
+        "artist": "Adam Jensen",
+        "album": "The Mystic",
+        "first_detected": "2025-12-15 22:45:31.476299"
+    },
+    {
+        "artist": "Anomalie",
+        "album": "M\u00e9tropole 1|2",
+        "first_detected": "2025-12-15 22:45:31.719945"
+    },
+    {
+        "artist": "Sonder",
+        "album": "Into",
+        "first_detected": "2025-12-15 22:45:32.186600"
+    },
+    {
+        "artist": "Lil Xan",
+        "album": "Total Xanarchy",
+        "first_detected": "2025-12-15 22:45:32.388047"
+    },
+    {
+        "artist": "ROSAL\u00cdA",
+        "album": "MOTOMAMI",
+        "first_detected": "2025-12-15 22:45:32.703906"
+    },
+    {
+        "artist": "Empire of the Sun",
+        "album": "We Are the People",
+        "first_detected": "2025-12-15 22:45:33.019458"
+    },
+    {
+        "artist": "Charlotte Gainsbourg",
+        "album": "Rest",
+        "first_detected": "2025-12-15 22:45:33.365115"
+    },
+    {
+        "artist": "Method Man",
+        "album": "I\u2019ll Be There for You",
+        "first_detected": "2025-12-15 22:45:33.664131"
+    },
+    {
+        "artist": "Dua Lipa",
+        "album": "Future Nostalgia: The Moonlight Edition",
+        "first_detected": "2025-12-15 22:45:33.870638"
+    },
+    {
+        "artist": "Memorist",
+        "album": "ONI//KIJO",
+        "first_detected": "2025-12-15 22:45:34.327609"
+    },
+    {
+        "artist": "Sting",
+        "album": "Ten Summoner's Tales CD",
+        "first_detected": "2025-12-15 22:45:34.704192"
+    },
+    {
+        "artist": "The Lumineers",
+        "album": "III",
+        "first_detected": "2025-12-15 22:45:34.906645"
+    },
+    {
+        "artist": "Funk Fiction",
+        "album": "Aquatic Ambience",
+        "first_detected": "2025-12-15 22:45:35.071714"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Dark Side Of The Moon (2011 Remastered Version)",
+        "first_detected": "2025-12-15 22:45:35.549006"
+    },
+    {
+        "artist": "Kenny Loggins",
+        "album": "Grand Theft Auto V: Los Santos Rock Radio",
+        "first_detected": "2025-12-15 22:45:35.895267"
+    },
+    {
+        "artist": "Incubus",
+        "album": "Enjoy Incubus",
+        "first_detected": "2025-12-15 22:45:36.410310"
+    },
+    {
+        "artist": "The Game",
+        "album": "The R.E.D. Album",
+        "first_detected": "2025-12-15 22:45:36.628671"
+    },
+    {
+        "artist": "Zero 9:36",
+        "album": "You Will Not Be Saved EP",
+        "first_detected": "2025-12-15 22:45:37.021288"
+    },
+    {
+        "artist": "Trippie Redd",
+        "album": "Pegasus: Neon Shark Vs Pegasus Presented by Travis Barker",
+        "first_detected": "2025-12-15 22:45:37.105621"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "This Place Will Become Your Tomb",
+        "first_detected": "2025-12-15 22:45:37.337917"
+    },
+    {
+        "artist": "RITCHRD",
+        "album": "Tape Cinco",
+        "first_detected": "2025-12-15 22:45:37.429193"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Ghost Reveries",
+        "first_detected": "2025-12-15 22:45:37.887810"
+    },
+    {
+        "artist": "Steven Wilson",
+        "album": "The Harmony Codex",
+        "first_detected": "2025-12-15 22:45:38.212319"
+    },
+    {
+        "artist": "Alexx",
+        "album": "Duvet",
+        "first_detected": "2025-12-15 22:45:38.401657"
+    },
+    {
+        "artist": "\u041a\u0438\u043d\u043e",
+        "album": "\u0413\u0440\u0443\u043f\u043f\u0430 \u043a\u0440\u043e\u0432\u0438",
+        "first_detected": "2025-12-15 22:45:40.369414"
+    },
+    {
+        "artist": "Jurassic 5",
+        "album": "Power In Numbers",
+        "first_detected": "2025-12-15 22:45:43.287320"
+    },
+    {
+        "artist": "Playgrounded",
+        "album": "The Death of Death",
+        "first_detected": "2025-12-15 22:45:57.631885"
+    },
+    {
+        "artist": "Xxxtentacion",
+        "album": "17",
+        "first_detected": "2025-12-15 22:46:07.121354"
+    },
+    {
+        "artist": "Led Zeppelin",
+        "album": "Physical Graffiti (1994 Remaster)",
+        "first_detected": "2025-12-15 22:46:08.251425"
+    },
+    {
+        "artist": "Aaron Smith; Krono",
+        "album": "Dancin (feat. Luvli) (Krono Remix)",
+        "first_detected": "2025-12-15 22:46:08.482696"
+    },
+    {
+        "artist": "Mk.gee",
+        "album": "A Museum of Contradiction",
+        "first_detected": "2025-12-15 22:46:08.729080"
+    },
+    {
+        "artist": "Mobb Deep",
+        "album": "The Infamous",
+        "first_detected": "2025-12-15 22:46:09.202199"
+    },
+    {
+        "artist": "Dave Brubeck",
+        "album": "24 Classic Original Recordings",
+        "first_detected": "2025-12-15 22:46:09.415936"
+    },
+    {
+        "artist": "Omar Apollo",
+        "album": "Erase",
+        "first_detected": "2025-12-15 22:46:09.696473"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Phineas and Ferb\u2010ulous: The Ultimate Album",
+        "first_detected": "2025-12-15 22:46:09.863182"
+    },
+    {
+        "artist": "twenty one pilots",
+        "album": "TOPxMM",
+        "first_detected": "2025-12-15 22:46:10.178168"
+    },
+    {
+        "artist": "Foo Fighters",
+        "album": "Chasing Birds",
+        "first_detected": "2025-12-15 22:46:10.703492"
+    },
+    {
+        "artist": "Angel Vivaldi",
+        "album": "Away With Words, Part 1 - EP",
+        "first_detected": "2025-12-15 22:46:10.810569"
+    },
+    {
+        "artist": "Oliver Tree",
+        "album": "Ugly Is Beautiful",
+        "first_detected": "2025-12-15 22:46:11.084064"
+    },
+    {
+        "artist": "BETWEEN FRIENDS",
+        "album": "we just need some time together",
+        "first_detected": "2025-12-15 22:46:11.439787"
+    },
+    {
+        "artist": "Royal Blood",
+        "album": "Typhoons",
+        "first_detected": "2025-12-15 22:46:11.785657"
+    },
+    {
+        "artist": "Billie Eilish",
+        "album": "Happier Than Ever",
+        "first_detected": "2025-12-15 22:46:11.978402"
+    },
+    {
+        "artist": "Florida Georgia Line",
+        "album": "Anything Goes",
+        "first_detected": "2025-12-15 22:46:12.360652"
+    },
+    {
+        "artist": "Moonchild",
+        "album": "Voyager",
+        "first_detected": "2025-12-15 22:46:12.702926"
+    },
+    {
+        "artist": "Area21, Martin Garrix, Maejor",
+        "album": "Followers",
+        "first_detected": "2025-12-15 22:46:12.968938"
+    },
+    {
+        "artist": "Tame Impala",
+        "album": "Borderline",
+        "first_detected": "2025-12-15 22:46:13.999595"
+    },
+    {
+        "artist": "Natasha Bedingfield",
+        "album": "N. B.",
+        "first_detected": "2025-12-15 22:46:15.119589"
+    },
+    {
+        "artist": "Duckwrth",
+        "album": "SuperGood",
+        "first_detected": "2025-12-15 22:46:15.565806"
+    },
+    {
+        "artist": "Joji",
+        "album": "Nectar",
+        "first_detected": "2025-12-15 22:46:15.860378"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Stoney",
+        "first_detected": "2025-12-15 22:46:16.670536"
+    },
+    {
+        "artist": "Metronomy",
+        "album": "405 - Metronomy x Biig Piig",
+        "first_detected": "2025-12-15 22:46:16.922380"
+    },
+    {
+        "artist": "\u4e9c\u862d\u77e5\u5b50",
+        "album": "\u6d6e\u904a\u7a7a\u9593",
+        "first_detected": "2025-12-15 22:46:17.432033"
+    },
+    {
+        "artist": "Rich Brian",
+        "album": "The Sailor",
+        "first_detected": "2025-12-15 22:46:17.677412"
+    },
+    {
+        "artist": "The Notorious B.I.G.",
+        "album": "Ready to Die (The Remaster)",
+        "first_detected": "2025-12-15 22:46:17.827212"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "New Levels New Devils",
+        "first_detected": "2025-12-15 22:46:18.219590"
+    },
+    {
+        "artist": "Tremonti",
+        "album": "Dust",
+        "first_detected": "2025-12-15 22:46:18.516113"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Bravo Hits 71",
+        "first_detected": "2025-12-15 22:46:18.772905"
+    },
+    {
+        "artist": "Coolio",
+        "album": "Gangsta\u2019s Paradise",
+        "first_detected": "2025-12-15 22:46:19.032633"
+    },
+    {
+        "artist": "Yves Tumor",
+        "album": "Heaven to a Tortured Mind",
+        "first_detected": "2025-12-15 22:46:19.238974"
+    },
+    {
+        "artist": "Miley Cyrus",
+        "album": "Bangerz",
+        "first_detected": "2025-12-15 22:46:19.475296"
+    },
+    {
+        "artist": "Ichika Nito",
+        "album": "I",
+        "first_detected": "2025-12-15 22:46:19.704927"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry Styles",
+        "first_detected": "2025-12-15 22:46:19.937747"
+    },
+    {
+        "artist": "Fatboy Slim",
+        "album": "You've Come A Long Way, Baby (2008 10th Anniversary Edition)",
+        "first_detected": "2025-12-15 22:46:20.297550"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "first_detected": "2025-12-15 22:46:20.817446"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Californication",
+        "first_detected": "2025-12-15 22:46:20.862872"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "By the Way",
+        "first_detected": "2025-12-15 22:46:20.960974"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Leave a Whisper",
+        "first_detected": "2025-12-15 22:46:22.300535"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "The Sound Of Madness",
+        "first_detected": "2025-12-15 22:46:22.396860"
+    },
+    {
+        "artist": "Alice In Chains",
+        "album": "Dirt (Mov)",
+        "first_detected": "2025-12-15 22:46:22.421862"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "CLOSURE / CONTINUATION",
+        "first_detected": "2025-12-15 22:46:22.588814"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Deadwing",
+        "first_detected": "2025-12-15 22:46:22.715415"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Fear of a Blank Planet",
+        "first_detected": "2025-12-15 22:46:22.745946"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Lightbulb Sun (Reissue 2008)",
+        "first_detected": "2025-12-15 22:46:22.814315"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "American Capitalist",
+        "first_detected": "2025-12-15 22:46:23.012054"
+    },
+    {
+        "artist": "Tool",
+        "album": "Fear Inoculum",
+        "first_detected": "2025-12-15 22:46:38.680629"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Under Rug Swept",
+        "first_detected": "2025-12-15 22:46:38.970450"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill Acoustic",
+        "first_detected": "2025-12-15 22:46:38.994103"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Automatic",
+        "first_detected": "2025-12-15 22:46:39.392895"
+    },
+    {
+        "artist": "Dm Dokuro",
+        "album": "The Tale of a Cruel World (Calamity Original Game Soundtrack)",
+        "first_detected": "2025-12-15 22:46:39.613210"
+    },
+    {
+        "artist": "Tesseract",
+        "album": "Altered State",
+        "first_detected": "2025-12-15 22:46:39.707320"
+    },
+    {
+        "artist": "Florence and the Machine",
+        "album": "Lungs",
+        "first_detected": "2025-12-15 22:46:39.734064"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "White Noise",
+        "first_detected": "2025-12-15 22:46:45.850159"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Serenity of Suffering",
+        "first_detected": "2025-12-15 22:46:45.962384"
+    },
+    {
+        "artist": "Korn",
+        "album": "Follow The Leader",
+        "first_detected": "2025-12-15 22:46:46.038944"
+    },
+    {
+        "artist": "Korn",
+        "album": "Korn",
+        "first_detected": "2025-12-15 22:46:46.073044"
+    },
+    {
+        "artist": "Korn",
+        "album": "Requiem",
+        "first_detected": "2025-12-15 22:46:46.103654"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Nothing",
+        "first_detected": "2025-12-15 22:46:46.172357"
+    },
+    {
+        "artist": "Korn",
+        "album": "Untitled CD",
+        "first_detected": "2025-12-15 22:46:46.197402"
+    },
+    {
+        "artist": "Korn",
+        "album": "Life Is Peachy",
+        "first_detected": "2025-12-15 22:46:46.239206"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "X&Y",
+        "first_detected": "2025-12-15 22:46:46.438067"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Terra Incognita",
+        "first_detected": "2025-12-15 22:46:53.078405"
+    },
+    {
+        "artist": "Haken",
+        "album": "Vector",
+        "first_detected": "2025-12-15 22:46:53.839662"
+    },
+    {
+        "artist": "Haken",
+        "album": "Aquarius",
+        "first_detected": "2025-12-15 22:46:53.915515"
+    },
+    {
+        "artist": "Archive",
+        "album": "Noise",
+        "first_detected": "2025-12-15 23:06:34.267718"
+    },
+    {
+        "artist": "Jeff Buckley",
+        "album": "Grace",
+        "first_detected": "2025-12-15 23:06:38.841308"
+    },
+    {
+        "artist": "Glass Animals",
+        "album": "I Don't Wanna Talk (I Just Wanna Dance)",
+        "first_detected": "2025-12-15 23:06:41.459177"
+    },
+    {
+        "artist": "Glass Animals",
+        "album": "How to Be a Human Being",
+        "first_detected": "2025-12-15 23:06:44.024570"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Leave a Whisper",
+        "first_detected": "2025-12-15 23:06:46.532669"
+    },
+    {
+        "artist": "Biig Piig",
+        "album": "Oh No / Liahr",
+        "first_detected": "2025-12-15 23:06:50.289451"
+    },
+    {
+        "artist": "Jay-Z",
+        "album": "Unplugged",
+        "first_detected": "2025-12-15 23:06:52.287874"
+    },
+    {
+        "artist": "Trinidad Cardona",
+        "album": "Rhythm Radio November 2017",
+        "first_detected": "2025-12-15 23:06:53.688415"
+    },
+    {
+        "artist": "Mr.Kitty",
+        "album": "Time",
+        "first_detected": "2025-12-15 23:06:55.658133"
+    },
+    {
+        "artist": "Bring Me the Horizon",
+        "album": "Drown (Live from Maida Vale)",
+        "first_detected": "2025-12-15 23:06:59.377749"
+    },
+    {
+        "artist": "Jurassic 5",
+        "album": "Power In Numbers",
+        "first_detected": "2025-12-15 23:07:03.496541"
+    },
+    {
+        "artist": "Charlotte Gainsbourg",
+        "album": "Rest",
+        "first_detected": "2025-12-15 23:07:03.920493"
+    },
+    {
+        "artist": "Rich Brian",
+        "album": "The Sailor",
+        "first_detected": "2025-12-15 23:07:06.705465"
+    },
+    {
+        "artist": "Mk.gee",
+        "album": "A Museum of Contradiction",
+        "first_detected": "2025-12-15 23:07:09.320740"
+    },
+    {
+        "artist": "Kyuss",
+        "album": "Welcome To Sky Valley",
+        "first_detected": "2025-12-15 23:07:12.614650"
+    },
+    {
+        "artist": "Lil Xan",
+        "album": "Total Xanarchy",
+        "first_detected": "2025-12-15 23:07:17.656588"
+    },
+    {
+        "artist": "\u305f\u304b\u3084\u3093",
+        "album": "Bad example",
+        "first_detected": "2025-12-15 23:07:19.383296"
+    },
+    {
+        "artist": "Paramore",
+        "album": "Brand New Eyes",
+        "first_detected": "2025-12-15 23:07:21.697173"
+    },
+    {
+        "artist": "BROCKHAMPTON",
+        "album": "GINGER",
+        "first_detected": "2025-12-15 23:07:23.268191"
+    },
+    {
+        "artist": "BETWEEN FRIENDS",
+        "album": "we just need some time together",
+        "first_detected": "2025-12-15 23:07:23.836123"
+    },
+    {
+        "artist": "iann dior",
+        "album": "on to better things",
+        "first_detected": "2025-12-15 23:07:27.366809"
+    },
+    {
+        "artist": "Martin Solveig",
+        "album": "Smash",
+        "first_detected": "2025-12-15 23:07:29.323433"
+    },
+    {
+        "artist": "KIRINJI",
+        "album": "Steppin' Out",
+        "first_detected": "2025-12-15 23:07:32.581354"
+    },
+    {
+        "artist": "Ember & Kronic",
+        "album": "The Annual 2015",
+        "first_detected": "2025-12-15 23:07:34.222229"
+    },
+    {
+        "artist": "The Goo Goo Dolls",
+        "album": "Deadpool & Wolverine Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-15 23:07:34.249936"
+    },
+    {
+        "artist": "Lil Uzi Vert",
+        "album": "Luv Is Rage",
+        "first_detected": "2025-12-15 23:07:38.514336"
+    },
+    {
+        "artist": "RITCHRD",
+        "album": "Tape Cinco",
+        "first_detected": "2025-12-15 23:07:40.947386"
+    },
+    {
+        "artist": "Unprocessed",
+        "album": "Artificial Void",
+        "first_detected": "2025-12-15 23:07:45.978644"
+    },
+    {
+        "artist": "Bryson Tiller",
+        "album": "Killer Instinct",
+        "first_detected": "2025-12-15 23:07:48.152337"
+    },
+    {
+        "artist": "Area21, Martin Garrix, Maejor",
+        "album": "Followers",
+        "first_detected": "2025-12-15 23:07:49.860984"
+    },
+    {
+        "artist": "girlfriends",
+        "album": "Girlfriends",
+        "first_detected": "2025-12-15 23:07:54.894772"
+    },
+    {
+        "artist": "Toto",
+        "album": "Toto",
+        "first_detected": "2025-12-15 23:07:59.079309"
+    },
+    {
+        "artist": "Pentakill",
+        "album": "II: Grasp of the Undying",
+        "first_detected": "2025-12-15 23:08:01.456786"
+    },
+    {
+        "artist": "Snow Patrol",
+        "album": "Final Straw",
+        "first_detected": "2025-12-15 23:08:04.937633"
+    },
+    {
+        "artist": "Ichika Nito",
+        "album": "I",
+        "first_detected": "2025-12-15 23:08:08.687690"
+    },
+    {
+        "artist": "Max Pope",
+        "album": "Counting Sheep",
+        "first_detected": "2025-12-15 23:08:11.250947"
+    },
+    {
+        "artist": "Tool",
+        "album": "Fear Inoculum",
+        "first_detected": "2025-12-15 23:08:15.600959"
+    },
+    {
+        "artist": "Will Smith",
+        "album": "Big Willie Style",
+        "first_detected": "2025-12-15 23:08:18.728501"
+    },
+    {
+        "artist": "The Killers",
+        "album": "Day & Age",
+        "first_detected": "2025-12-15 23:08:19.408331"
+    },
+    {
+        "artist": "Alter Bridge",
+        "album": "Blackbird",
+        "first_detected": "2025-12-15 23:08:19.481202"
+    },
+    {
+        "artist": "Royal Blood",
+        "album": "Typhoons",
+        "first_detected": "2025-12-15 23:08:20.531198"
+    },
+    {
+        "artist": "Dua Lipa",
+        "album": "Future Nostalgia: The Moonlight Edition",
+        "first_detected": "2025-12-15 23:08:21.243501"
+    },
+    {
+        "artist": "ScHoolboy Q",
+        "album": "Oxymoron",
+        "first_detected": "2025-12-15 23:08:21.383411"
+    },
+    {
+        "artist": "VOLA",
+        "album": "Applause of a Distant Crowd",
+        "first_detected": "2025-12-15 23:08:21.596901"
+    },
+    {
+        "artist": "Mobb Deep",
+        "album": "The Infamous",
+        "first_detected": "2025-12-15 23:08:21.701564"
+    },
+    {
+        "artist": "The Kid LAROI",
+        "album": "F*CK LOVE 3: OVER YOU",
+        "first_detected": "2025-12-15 23:08:22.571299"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Oh Wonder",
+        "first_detected": "2025-12-15 23:08:22.622588"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "22 Break",
+        "first_detected": "2025-12-15 23:08:22.907088"
+    },
+    {
+        "artist": "Bob Marley & The Wailers",
+        "album": "Confrontation",
+        "first_detected": "2025-12-15 23:08:23.418164"
+    },
+    {
+        "artist": "clipping.",
+        "album": "CLPPNG",
+        "first_detected": "2025-12-15 23:08:23.663239"
+    },
+    {
+        "artist": "Now Thats What I Call",
+        "album": "Now That's What I Call Music! 73",
+        "first_detected": "2025-12-15 23:08:23.858734"
+    },
+    {
+        "artist": "Steven Wilson",
+        "album": "The Harmony Codex",
+        "first_detected": "2025-12-15 23:08:23.968431"
+    },
+    {
+        "artist": "Thundercat",
+        "album": "It Is What It Is",
+        "first_detected": "2025-12-15 23:08:24.219385"
+    },
+    {
+        "artist": "Florence + The Machine",
+        "album": "Everybody Scream (Chamber Version)",
+        "first_detected": "2025-12-15 23:08:24.482811"
+    },
+    {
+        "artist": "Bruno Major",
+        "album": "A Song For Every Moon",
+        "first_detected": "2025-12-15 23:08:24.766512"
+    },
+    {
+        "artist": "A$AP Rocky",
+        "album": "Sundress",
+        "first_detected": "2025-12-15 23:08:24.831034"
+    },
+    {
+        "artist": "twenty one pilots",
+        "album": "TOPxMM",
+        "first_detected": "2025-12-15 23:08:24.872220"
+    },
+    {
+        "artist": "Moonchild",
+        "album": "Voyager",
+        "first_detected": "2025-12-15 23:08:24.904610"
+    },
+    {
+        "artist": "Clean Bandit, Zara Larsson",
+        "album": "What Is Love? (Deluxe Edition)",
+        "first_detected": "2025-12-15 23:08:24.973897"
+    },
+    {
+        "artist": "Kenny Loggins",
+        "album": "Grand Theft Auto V: Los Santos Rock Radio",
+        "first_detected": "2025-12-15 23:08:25.031405"
+    },
+    {
+        "artist": "Flo Rida",
+        "album": "Wild Ones",
+        "first_detected": "2025-12-15 23:08:25.115340"
+    },
+    {
+        "artist": "Florida Georgia Line",
+        "album": "Anything Goes",
+        "first_detected": "2025-12-15 23:08:25.160157"
+    },
+    {
+        "artist": "Juice WRLD",
+        "album": "Legends Never Die",
+        "first_detected": "2025-12-15 23:08:25.232258"
+    },
+    {
+        "artist": "MF DOOM",
+        "album": "Operation: Doomsday",
+        "first_detected": "2025-12-15 23:08:25.323565"
+    },
+    {
+        "artist": "John Carpenter",
+        "album": "The Fog: Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-15 23:08:25.677272"
+    },
+    {
+        "artist": "Djo",
+        "album": "DECIDE",
+        "first_detected": "2025-12-15 23:08:25.743236"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry Styles",
+        "first_detected": "2025-12-15 23:08:25.788194"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry's House",
+        "first_detected": "2025-12-15 23:08:25.916188"
+    },
+    {
+        "artist": "ROSAL\u00cdA",
+        "album": "MOTOMAMI",
+        "first_detected": "2025-12-15 23:08:26.048749"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Stoney",
+        "first_detected": "2025-12-15 23:08:26.323194"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Hollywood's Bleeding",
+        "first_detected": "2025-12-15 23:08:26.390991"
+    },
+    {
+        "artist": "Ice Cube",
+        "album": "Lethal Injection",
+        "first_detected": "2025-12-15 23:08:26.642580"
+    },
+    {
+        "artist": "Led Zeppelin",
+        "album": "Physical Graffiti (1994 Remaster)",
+        "first_detected": "2025-12-15 23:08:26.686831"
+    },
+    {
+        "artist": "Highly Suspect",
+        "album": "MCID",
+        "first_detected": "2025-12-15 23:08:28.332960"
+    },
+    {
+        "artist": "HIM",
+        "album": "Dark Light",
+        "first_detected": "2025-12-15 23:08:28.419147"
+    },
+    {
+        "artist": "TesseracT",
+        "album": "Polaris/Errai",
+        "first_detected": "2025-12-15 23:08:29.350005"
+    },
+    {
+        "artist": "Dido",
+        "album": "Life for rent",
+        "first_detected": "2025-12-15 23:08:29.401109"
+    },
+    {
+        "artist": "Zero 9:36",
+        "album": "You Will Not Be Saved EP",
+        "first_detected": "2025-12-15 23:08:29.501282"
+    },
+    {
+        "artist": "Sports",
+        "album": "Naked All The Time",
+        "first_detected": "2025-12-15 23:08:29.563279"
+    },
+    {
+        "artist": "Against the Current",
+        "album": "In Our Bones",
+        "first_detected": "2025-12-15 23:08:29.685019"
+    },
+    {
+        "artist": "Florence + the Machine",
+        "album": "Everybody Scream",
+        "first_detected": "2025-12-15 23:08:29.731484"
+    },
+    {
+        "artist": "Childish Gambino",
+        "album": "Camp",
+        "first_detected": "2025-12-15 23:08:29.868528"
+    },
+    {
+        "artist": "Childish Gambino",
+        "album": "Because the Internet",
+        "first_detected": "2025-12-15 23:08:29.928040"
+    },
+    {
+        "artist": "Crowded House",
+        "album": "Crowded House",
+        "first_detected": "2025-12-15 23:08:30.004165"
+    },
+    {
+        "artist": "Vendredi Sur Mer",
+        "album": "Premiers Emois",
+        "first_detected": "2025-12-15 23:08:30.062244"
+    },
+    {
+        "artist": "Yellow Days",
+        "album": "The Way Things Change",
+        "first_detected": "2025-12-15 23:08:30.129202"
+    },
+    {
+        "artist": "Oliver Tree",
+        "album": "Ugly Is Beautiful",
+        "first_detected": "2025-12-15 23:08:30.169745"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Landslide",
+        "first_detected": "2025-12-15 23:08:30.212191"
+    },
+    {
+        "artist": "Xxxtentacion",
+        "album": "17",
+        "first_detected": "2025-12-15 23:08:30.252678"
+    },
+    {
+        "artist": "Plini",
+        "album": "Other Things",
+        "first_detected": "2025-12-15 23:08:30.375907"
+    },
+    {
+        "artist": "The Lumineers",
+        "album": "III",
+        "first_detected": "2025-12-15 23:08:30.468428"
+    },
+    {
+        "artist": "Aaryan Shah",
+        "album": "The Arrival: Part I",
+        "first_detected": "2025-12-15 23:08:30.702613"
+    },
+    {
+        "artist": "Laura Marling",
+        "album": "Once I Was An Eagle",
+        "first_detected": "2025-12-15 23:08:32.121108"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "This Place Will Become Your Tomb",
+        "first_detected": "2025-12-15 23:08:32.390988"
+    },
+    {
+        "artist": "\u041a\u0438\u043d\u043e",
+        "album": "\u0413\u0440\u0443\u043f\u043f\u0430 \u043a\u0440\u043e\u0432\u0438",
+        "first_detected": "2025-12-15 23:08:33.267159"
+    },
+    {
+        "artist": "88rising",
+        "album": "Head In The Clouds II",
+        "first_detected": "2025-12-15 23:08:34.170991"
+    },
+    {
+        "artist": "alt-J",
+        "album": "An Awesome Wave",
+        "first_detected": "2025-12-15 23:08:35.591393"
+    },
+    {
+        "artist": "Mazzy Star",
+        "album": "So Tonight That I Might See",
+        "first_detected": "2025-12-15 23:08:38.179989"
+    },
+    {
+        "artist": "Dr. Dre",
+        "album": "The Chronic",
+        "first_detected": "2025-12-15 23:08:38.996780"
+    },
+    {
+        "artist": "As It Is",
+        "album": "The Great Depression",
+        "first_detected": "2025-12-15 23:08:39.700442"
+    },
+    {
+        "artist": "Two Feet",
+        "album": "Call Me, I Still Love You",
+        "first_detected": "2025-12-15 23:08:42.421901"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Ghost Reveries",
+        "first_detected": "2025-12-15 23:08:43.132509"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "All We Know of Heaven, All We Need of Hell",
+        "first_detected": "2025-12-15 23:08:44.469061"
+    },
+    {
+        "artist": "Yves Tumor",
+        "album": "Heaven to a Tortured Mind",
+        "first_detected": "2025-12-15 23:08:44.989434"
+    },
+    {
+        "artist": "The Game",
+        "album": "The R.E.D. Album",
+        "first_detected": "2025-12-15 23:08:45.532855"
+    },
+    {
+        "artist": "Mike Posner",
+        "album": "At Night, Alone.",
+        "first_detected": "2025-12-15 23:08:46.323964"
+    },
+    {
+        "artist": "Pendulum",
+        "album": "Elemental",
+        "first_detected": "2025-12-15 23:08:47.502165"
+    },
+    {
+        "artist": "Kids See Ghosts",
+        "album": "Kids See Ghosts",
+        "first_detected": "2025-12-15 23:08:48.031118"
+    },
+    {
+        "artist": "Funk Fiction",
+        "album": "Aquatic Ambience",
+        "first_detected": "2025-12-15 23:08:48.953629"
+    },
+    {
+        "artist": "Duckwrth",
+        "album": "SuperGood",
+        "first_detected": "2025-12-15 23:08:49.117665"
+    },
+    {
+        "artist": "Duckwrth",
+        "album": "Crush",
+        "first_detected": "2025-12-15 23:08:49.551084"
+    },
+    {
+        "artist": "Still Woozy",
+        "album": "If This Isn\u2019t Nice, I Don\u2019t Know What Is",
+        "first_detected": "2025-12-15 23:08:50.305098"
+    },
+    {
+        "artist": "Method Man",
+        "album": "I\u2019ll Be There for You",
+        "first_detected": "2025-12-15 23:08:50.761582"
+    },
+    {
+        "artist": "Justice",
+        "album": "Audio, Video, Disco.",
+        "first_detected": "2025-12-15 23:08:51.539800"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "HELLBOY",
+        "first_detected": "2025-12-15 23:08:52.023446"
+    },
+    {
+        "artist": "Metronomy",
+        "album": "405 - Metronomy x Biig Piig",
+        "first_detected": "2025-12-15 23:08:52.781316"
+    },
+    {
+        "artist": "Testament",
+        "album": "The Ritual",
+        "first_detected": "2025-12-15 23:08:53.201623"
+    },
+    {
+        "artist": "Deftones",
+        "album": "Koi No Yokan",
+        "first_detected": "2025-12-15 23:08:53.387426"
+    },
+    {
+        "artist": "Khruangbin",
+        "album": "Texas Moon",
+        "first_detected": "2025-12-15 23:08:54.749300"
+    },
+    {
+        "artist": "Empire of the Sun",
+        "album": "We Are the People",
+        "first_detected": "2025-12-15 23:08:55.271365"
+    },
+    {
+        "artist": "Joji",
+        "album": "Nectar",
+        "first_detected": "2025-12-15 23:08:56.771855"
+    },
+    {
+        "artist": "Joji",
+        "album": "BALLADS 1",
+        "first_detected": "2025-12-15 23:08:57.512732"
+    },
+    {
+        "artist": "Tremonti",
+        "album": "Dust",
+        "first_detected": "2025-12-15 23:08:57.995199"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Better Man: Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-15 23:08:58.312249"
+    },
+    {
+        "artist": "cute girls doing cute things",
+        "album": "cutie jams vol. 2",
+        "first_detected": "2025-12-15 23:08:59.057683"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Hotline Miami 2: Wrong Number",
+        "first_detected": "2025-12-15 23:08:59.450929"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Now That's What I Call Music! 112",
+        "first_detected": "2025-12-15 23:09:00.457859"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Phineas and Ferb\u2010ulous: The Ultimate Album",
+        "first_detected": "2025-12-15 23:09:01.772329"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Bravo Hits 71",
+        "first_detected": "2025-12-15 23:09:02.430028"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "MTV Party to Go \u201998",
+        "first_detected": "2025-12-15 23:09:02.465367"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "Blue Weekend",
+        "first_detected": "2025-12-15 23:09:02.754058"
+    },
+    {
+        "artist": "girl in red",
+        "album": "if i could make it go quiet",
+        "first_detected": "2025-12-15 23:09:03.643769"
+    },
+    {
+        "artist": "Elbow",
+        "album": "The Seldom Seen Kid (Bonus Tracks Version)",
+        "first_detected": "2025-12-15 23:09:04.023747"
+    },
+    {
+        "artist": "Aaron Smith; Krono",
+        "album": "Dancin (feat. Luvli) (Krono Remix)",
+        "first_detected": "2025-12-15 23:09:04.766341"
+    },
+    {
+        "artist": "Incubus",
+        "album": "Enjoy Incubus",
+        "first_detected": "2025-12-15 23:09:04.932038"
+    },
+    {
+        "artist": "Dave Brubeck Quartet",
+        "album": "Time Out",
+        "first_detected": "2025-12-15 23:09:05.363545"
+    },
+    {
+        "artist": "The Contortionist",
+        "album": "Our Bones",
+        "first_detected": "2025-12-15 23:09:05.754485"
+    },
+    {
+        "artist": "Billie Eilish",
+        "album": "Happier Than Ever",
+        "first_detected": "2025-12-15 23:09:06.250779"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Dark Side Of The Moon (2011 Remastered Version)",
+        "first_detected": "2025-12-15 23:09:06.676697"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Dark Side Of The Moon",
+        "first_detected": "2025-12-15 23:09:07.282034"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "Ummagumma",
+        "first_detected": "2025-12-15 23:09:07.431313"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Piper at the Gates of Dawn",
+        "first_detected": "2025-12-15 23:09:08.499162"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "first_detected": "2025-12-15 23:09:08.873314"
+    },
+    {
+        "artist": "mgk",
+        "album": "Tickets to My Downfall",
+        "first_detected": "2025-12-15 23:09:09.937526"
+    },
+    {
+        "artist": "Blackstreet (feat. Dr. Dre)",
+        "album": "No Diggity",
+        "first_detected": "2025-12-15 23:09:10.376535"
+    },
+    {
+        "artist": "Sipper",
+        "album": "Losers",
+        "first_detected": "2025-12-15 23:09:10.761002"
+    },
+    {
+        "artist": "Tame Impala",
+        "album": "Borderline",
+        "first_detected": "2025-12-15 23:09:11.484564"
+    },
+    {
+        "artist": "Miley Cyrus",
+        "album": "Bangerz",
+        "first_detected": "2025-12-15 23:09:11.926214"
+    },
+    {
+        "artist": "Still Corners",
+        "album": "Slow Air",
+        "first_detected": "2025-12-15 23:09:12.299775"
+    },
+    {
+        "artist": "Anomalie",
+        "album": "M\u00e9tropole 1|2",
+        "first_detected": "2025-12-15 23:09:13.108158"
+    },
+    {
+        "artist": "The Monkees",
+        "album": "The Monkees 50 [3CD]",
+        "first_detected": "2025-12-15 23:09:13.271668"
+    },
+    {
+        "artist": "Fatboy Slim",
+        "album": "You've Come A Long Way, Baby (2008 10th Anniversary Edition)",
+        "first_detected": "2025-12-15 23:09:13.731712"
+    },
+    {
+        "artist": "A Tribe Called Quest",
+        "album": "The Low End Theory",
+        "first_detected": "2025-12-15 23:09:14.462140"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Random Access Memories",
+        "first_detected": "2025-12-15 23:09:15.062171"
+    },
+    {
+        "artist": "Souls of Mischief",
+        "album": "93 'til Infinity",
+        "first_detected": "2025-12-15 23:09:16.220359"
+    },
+    {
+        "artist": "Sting",
+        "album": "Ten Summoner's Tales CD",
+        "first_detected": "2025-12-15 23:09:17.023185"
+    },
+    {
+        "artist": "Martin Garrix",
+        "album": "Loop",
+        "first_detected": "2025-12-15 23:09:17.847394"
+    },
+    {
+        "artist": "Busted",
+        "album": "2000's Pop Hits",
+        "first_detected": "2025-12-15 23:09:18.379911"
+    },
+    {
+        "artist": "Travis Scott",
+        "album": "Rodeo",
+        "first_detected": "2025-12-15 23:09:18.751317"
+    },
+    {
+        "artist": "Landon Cube; 24KGoldn",
+        "album": "Eighties",
+        "first_detected": "2025-12-15 23:09:19.268480"
+    },
+    {
+        "artist": "Sylvan Esso",
+        "album": "What Now",
+        "first_detected": "2025-12-15 23:09:19.585225"
+    },
+    {
+        "artist": "Kirinji",
+        "album": "cherish",
+        "first_detected": "2025-12-15 23:09:22.210047"
+    },
+    {
+        "artist": "Dave Brubeck",
+        "album": "24 Classic Original Recordings",
+        "first_detected": "2025-12-15 23:09:23.370356"
+    },
+    {
+        "artist": "Jorja Smith",
+        "album": "Black Panther: The Album (music from and inspired by)",
+        "first_detected": "2025-12-15 23:09:25.328564"
+    },
+    {
+        "artist": "Omar Apollo",
+        "album": "Erase",
+        "first_detected": "2025-12-15 23:09:25.858669"
+    },
+    {
+        "artist": "Adam Jensen",
+        "album": "The Mystic",
+        "first_detected": "2025-12-15 23:09:26.057371"
+    },
+    {
+        "artist": "Sonder",
+        "album": "Into",
+        "first_detected": "2025-12-15 23:09:28.972983"
+    },
+    {
+        "artist": "Iron Maiden",
+        "album": "Seventh Son of a Seventh Son (2015 Remaster)",
+        "first_detected": "2025-12-15 23:09:29.169514"
+    },
+    {
+        "artist": "Natasha Bedingfield",
+        "album": "N. B.",
+        "first_detected": "2025-12-15 23:09:29.529494"
+    },
+    {
+        "artist": "AURORA",
+        "album": "Running With the Wolves",
+        "first_detected": "2025-12-15 23:09:30.419471"
+    },
+    {
+        "artist": "Memorist",
+        "album": "ONI//KIJO",
+        "first_detected": "2025-12-15 23:09:30.800150"
+    },
+    {
+        "artist": "Angel Vivaldi",
+        "album": "Away With Words, Part 1 - EP",
+        "first_detected": "2025-12-15 23:09:31.185343"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Fortitude",
+        "first_detected": "2025-12-15 23:09:31.229223"
+    },
+    {
+        "artist": "easy life",
+        "album": "frank",
+        "first_detected": "2025-12-15 23:09:31.343598"
+    },
+    {
+        "artist": "The Notorious B.I.G.",
+        "album": "Ready to Die (The Remaster)",
+        "first_detected": "2025-12-15 23:09:31.383502"
+    },
+    {
+        "artist": "Boston",
+        "album": "Boston",
+        "first_detected": "2025-12-15 23:09:31.478379"
+    },
+    {
+        "artist": "Trippie Redd",
+        "album": "Pegasus: Neon Shark Vs Pegasus Presented by Travis Barker",
+        "first_detected": "2025-12-15 23:09:31.587412"
+    },
+    {
+        "artist": "Oasis",
+        "album": "(What\u2019s the Story) Morning Glory?",
+        "first_detected": "2025-12-15 23:09:31.697147"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "Remember That You Will Die",
+        "first_detected": "2025-12-15 23:09:31.741964"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "New Levels New Devils",
+        "first_detected": "2025-12-15 23:09:31.792207"
+    },
+    {
+        "artist": "\u4e9c\u862d\u77e5\u5b50",
+        "album": "\u6d6e\u904a\u7a7a\u9593",
+        "first_detected": "2025-12-15 23:09:31.885839"
+    },
+    {
+        "artist": "Coolio",
+        "album": "Gangsta\u2019s Paradise",
+        "first_detected": "2025-12-15 23:09:31.969136"
+    },
+    {
+        "artist": "Mac Miller",
+        "album": "Swimming",
+        "first_detected": "2025-12-15 23:09:32.035784"
+    },
+    {
+        "artist": "Romy",
+        "album": "Mid Air",
+        "first_detected": "2025-12-15 23:09:32.148274"
+    },
+    {
+        "artist": "Blink-182",
+        "album": "Blink-182",
+        "first_detected": "2025-12-15 23:09:32.545547"
+    },
+    {
+        "artist": "Blink-182",
+        "album": "NINE",
+        "first_detected": "2025-12-15 23:09:32.683044"
+    },
+    {
+        "artist": "Foo Fighters",
+        "album": "Chasing Birds",
+        "first_detected": "2025-12-15 23:09:32.754782"
+    },
+    {
+        "artist": "Portishead",
+        "album": "Dummy",
+        "first_detected": "2025-12-15 23:09:32.857583"
+    },
+    {
+        "artist": "Last Dinosaurs",
+        "album": "Flying",
+        "first_detected": "2025-12-15 23:09:37.903677"
+    },
+    {
+        "artist": "Peach Pit",
+        "album": "Being So Normal",
+        "first_detected": "2025-12-15 23:09:38.963647"
+    },
+    {
+        "artist": "half\u2022alive",
+        "album": "Now, Not Yet",
+        "first_detected": "2025-12-15 23:09:39.026669"
+    },
+    {
+        "artist": "M83",
+        "album": "Hurry Up, We\u2019re Dreaming",
+        "first_detected": "2025-12-15 23:09:39.291409"
+    },
+    {
+        "artist": "The Who",
+        "album": "The Who Hits 50!",
+        "first_detected": "2025-12-15 23:09:39.363679"
+    },
+    {
+        "artist": "Alexx",
+        "album": "Duvet",
+        "first_detected": "2025-12-15 23:09:39.938218"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "INSANO",
+        "first_detected": "2025-12-15 23:09:40.084183"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man On The Moon II: The Legend Of Mr. Rager",
+        "first_detected": "2025-12-15 23:09:40.161188"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man on the Moon III: The Chosen",
+        "first_detected": "2025-12-15 23:09:40.229151"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man On The Moon: The End Of Day (Deluxe Edition)",
+        "first_detected": "2025-12-15 23:09:41.127940"
+    },
+    {
+        "artist": "Bon Jovi",
+        "album": "Slippery When Wet",
+        "first_detected": "2025-12-15 23:09:41.245150"
+    },
+    {
+        "artist": "Grimes",
+        "album": "Miss Anthropocene (Deluxe Edition)",
+        "first_detected": "2025-12-15 23:09:42.006115"
+    },
+    {
+        "artist": "The Pineapple Thief",
+        "album": "It Leads To This",
+        "first_detected": "2025-12-15 23:09:42.194413"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Californication",
+        "first_detected": "2025-12-15 23:09:42.278610"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Blood Sugar Sex Magik",
+        "first_detected": "2025-12-15 23:09:42.378436"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "The Getaway",
+        "first_detected": "2025-12-15 23:09:42.582397"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Unlimited Love",
+        "first_detected": "2025-12-15 23:09:43.069588"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "By the Way",
+        "first_detected": "2025-12-15 23:09:43.276832"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Ten Thousand Fists",
+        "first_detected": "2025-12-15 23:09:43.387995"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Indestructible",
+        "first_detected": "2025-12-15 23:09:43.532854"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Immortalized",
+        "first_detected": "2025-12-15 23:09:43.685124"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Asylum",
+        "first_detected": "2025-12-15 23:09:43.874540"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Believe",
+        "first_detected": "2025-12-15 23:09:44.042978"
+    },
+    {
+        "artist": "Finger Eleven",
+        "album": "Last Night on Earth",
+        "first_detected": "2025-12-15 23:09:44.189975"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "ATTENTION ATTENTION",
+        "first_detected": "2025-12-15 23:09:44.383361"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "The Sound Of Madness",
+        "first_detected": "2025-12-15 23:09:44.465851"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Planet Zero",
+        "first_detected": "2025-12-15 23:09:44.579324"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Threat To Survival",
+        "first_detected": "2025-12-15 23:09:44.816150"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "The Path of Totality",
+        "first_detected": "2025-12-15 23:09:45.186468"
+    },
+    {
+        "artist": "Dizzy",
+        "album": "The Sun and Her Scorch",
+        "first_detected": "2025-12-15 23:09:45.578560"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Stupid Dream",
+        "first_detected": "2025-12-15 23:09:45.926898"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident",
+        "first_detected": "2025-12-15 23:09:46.074940"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Lightbulb Sun (Reissue 2008)",
+        "first_detected": "2025-12-15 23:09:47.013051"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Fear of a Blank Planet",
+        "first_detected": "2025-12-15 23:09:47.169968"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Signify",
+        "first_detected": "2025-12-15 23:09:48.031319"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "CLOSURE / CONTINUATION",
+        "first_detected": "2025-12-15 23:09:48.162150"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "The Dark Pool",
+        "first_detected": "2025-12-15 23:09:48.291802"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "Heroine",
+        "first_detected": "2025-12-15 23:09:48.477328"
+    },
+    {
+        "artist": "Black Orchid Empire",
+        "album": "Semaphore",
+        "first_detected": "2025-12-15 23:09:48.730128"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "American Capitalist",
+        "first_detected": "2025-12-15 23:09:48.883342"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "The Way Of The Fist",
+        "first_detected": "2025-12-15 23:09:49.103471"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "Got Your Six",
+        "first_detected": "2025-12-15 23:09:49.233396"
+    },
+    {
+        "artist": "Tool",
+        "album": "\u00c6nima",
+        "first_detected": "2025-12-15 23:09:49.410976"
+    },
+    {
+        "artist": "Tool",
+        "album": "Undertow",
+        "first_detected": "2025-12-15 23:09:49.484525"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "The Madness of Many",
+        "first_detected": "2025-12-15 23:09:50.006719"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Weightless",
+        "first_detected": "2025-12-15 23:09:50.134375"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Parrhesia",
+        "first_detected": "2025-12-15 23:09:50.281101"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill",
+        "first_detected": "2025-12-15 23:09:50.562304"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Under Rug Swept",
+        "first_detected": "2025-12-15 23:09:50.709363"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill Acoustic",
+        "first_detected": "2025-12-15 23:09:50.851558"
+    },
+    {
+        "artist": "Ghost",
+        "album": "Skelet\u00e1",
+        "first_detected": "2025-12-15 23:09:50.996491"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Mountains",
+        "first_detected": "2025-12-15 23:09:51.583116"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Touch",
+        "first_detected": "2025-12-15 23:09:51.755167"
+    },
+    {
+        "artist": "Monuments",
+        "album": "Gnosis",
+        "first_detected": "2025-12-15 23:09:51.969715"
+    },
+    {
+        "artist": "Monuments",
+        "album": "In Stasis",
+        "first_detected": "2025-12-15 23:09:52.103050"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Amazing Things",
+        "first_detected": "2025-12-15 23:09:52.401580"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Automatic",
+        "first_detected": "2025-12-15 23:09:52.468198"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "Violent Nature",
+        "first_detected": "2025-12-15 23:09:52.986475"
+    },
+    {
+        "artist": "Fit For An Autopsy",
+        "album": "The Great Collapse",
+        "first_detected": "2025-12-15 23:09:53.299477"
+    },
+    {
+        "artist": "Bilmuri",
+        "album": "AMERICAN MOTOR SPORTS",
+        "first_detected": "2025-12-15 23:09:53.388986"
+    },
+    {
+        "artist": "Playgrounded",
+        "album": "The Death of Death",
+        "first_detected": "2025-12-15 23:09:53.452261"
+    },
+    {
+        "artist": "Dayseeker",
+        "album": "Dark Sun",
+        "first_detected": "2025-12-15 23:09:53.531030"
+    },
+    {
+        "artist": "Dm Dokuro",
+        "album": "The Tale of a Cruel World (Calamity Original Game Soundtrack)",
+        "first_detected": "2025-12-15 23:09:53.674493"
+    },
+    {
+        "artist": "TesseracT",
+        "album": "War of Being",
+        "first_detected": "2025-12-15 23:09:54.203250"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Between the Devil & the Deep Blue Sea",
+        "first_detected": "2025-12-15 23:09:54.485077"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Folklore and Superstition",
+        "first_detected": "2025-12-15 23:09:54.619736"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Octavarium",
+        "first_detected": "2025-12-15 23:09:54.956711"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Dream Theater",
+        "first_detected": "2025-12-15 23:09:55.069751"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Parasomnia",
+        "first_detected": "2025-12-15 23:09:55.192603"
+    },
+    {
+        "artist": "Katatonia",
+        "album": "Nightmares as Extensions of the Waking State",
+        "first_detected": "2025-12-15 23:09:55.696700"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "Sundowning",
+        "first_detected": "2025-12-15 23:09:55.827808"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "One",
+        "first_detected": "2025-12-15 23:09:55.974885"
+    },
+    {
+        "artist": "Orbit Culture",
+        "album": "Descent",
+        "first_detected": "2025-12-15 23:09:56.039179"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "EVERGREEN",
+        "first_detected": "2025-12-15 23:09:56.494440"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "Use Me",
+        "first_detected": "2025-12-15 23:09:56.560603"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "White Noise",
+        "first_detected": "2025-12-15 23:09:56.746876"
+    },
+    {
+        "artist": "Alice In Chains",
+        "album": "Dirt (Mov)",
+        "first_detected": "2025-12-15 23:09:57.045536"
+    },
+    {
+        "artist": "Tesseract",
+        "album": "Altered State",
+        "first_detected": "2025-12-15 23:09:57.360052"
+    },
+    {
+        "artist": "Korn",
+        "album": "Issues",
+        "first_detected": "2025-12-15 23:09:57.770763"
+    },
+    {
+        "artist": "Korn",
+        "album": "Life Is Peachy",
+        "first_detected": "2025-12-15 23:09:57.967985"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Serenity of Suffering",
+        "first_detected": "2025-12-15 23:09:58.141093"
+    },
+    {
+        "artist": "Korn",
+        "album": "Korn",
+        "first_detected": "2025-12-15 23:09:58.297571"
+    },
+    {
+        "artist": "Korn",
+        "album": "Requiem",
+        "first_detected": "2025-12-15 23:09:58.798255"
+    },
+    {
+        "artist": "Korn",
+        "album": "Untitled CD",
+        "first_detected": "2025-12-15 23:09:59.092870"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Paradigm Shift",
+        "first_detected": "2025-12-15 23:09:59.495572"
+    },
+    {
+        "artist": "Korn",
+        "album": "Follow The Leader",
+        "first_detected": "2025-12-15 23:09:59.630317"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Nothing",
+        "first_detected": "2025-12-15 23:09:59.915314"
+    },
+    {
+        "artist": "Florence and the Machine",
+        "album": "Lungs",
+        "first_detected": "2025-12-15 23:10:00.104776"
+    },
+    {
+        "artist": "Thrice",
+        "album": "To Be Everywhere Is to Be Nowhere",
+        "first_detected": "2025-12-15 23:10:00.326669"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Horizons/East",
+        "first_detected": "2025-12-15 23:10:00.434485"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Horizons/West",
+        "first_detected": "2025-12-15 23:10:00.502085"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Mylo Xyloto",
+        "first_detected": "2025-12-15 23:10:00.825040"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "X&Y",
+        "first_detected": "2025-12-15 23:10:00.988870"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "A Rush of Blood to the Head",
+        "first_detected": "2025-12-15 23:10:01.139565"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen",
+        "first_detected": "2025-12-15 23:10:01.279327"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "What You Want",
+        "first_detected": "2025-12-15 23:10:01.414920"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "A Saucerful of Secrets",
+        "first_detected": "2025-12-15 23:10:01.571896"
+    },
+    {
+        "artist": "Slipknot",
+        "album": "We Are Not Your Kind",
+        "first_detected": "2025-12-15 23:10:02.046697"
+    },
+    {
+        "artist": "Fit for an Autopsy",
+        "album": "Oh What the Future Holds",
+        "first_detected": "2025-12-15 23:10:02.209870"
+    },
+    {
+        "artist": "Fit for an Autopsy",
+        "album": "The Nothing That Is",
+        "first_detected": "2025-12-15 23:10:02.343504"
+    },
+    {
+        "artist": "Infected Mushroom",
+        "album": "Vicious Delicious",
+        "first_detected": "2025-12-15 23:10:02.648685"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Magma",
+        "first_detected": "2025-12-15 23:10:02.967565"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Terra Incognita",
+        "first_detected": "2025-12-15 23:10:03.109803"
+    },
+    {
+        "artist": "I Built the Sky",
+        "album": "The Sky Is Not the Limit",
+        "first_detected": "2025-12-15 23:10:03.375099"
+    },
+    {
+        "artist": "MIRAR",
+        "album": "Ascension",
+        "first_detected": "2025-12-15 23:10:03.547949"
+    },
+    {
+        "artist": "MIRAR",
+        "album": "Mare",
+        "first_detected": "2025-12-15 23:10:03.713302"
+    },
+    {
+        "artist": "Haken",
+        "album": "Affinity",
+        "first_detected": "2025-12-15 23:10:03.803086"
+    },
+    {
+        "artist": "Haken",
+        "album": "Vector",
+        "first_detected": "2025-12-15 23:10:03.913652"
+    },
+    {
+        "artist": "Haken",
+        "album": "Fauna",
+        "first_detected": "2025-12-15 23:10:04.223857"
+    },
+    {
+        "artist": "Syncatto",
+        "album": "Fiction",
+        "first_detected": "2025-12-15 23:10:04.492769"
+    },
+    {
+        "artist": "Kasabian",
+        "album": "West Ryder Pauper Lunatic Asylum",
+        "first_detected": "2025-12-15 23:29:34.363579"
+    },
+    {
+        "artist": "Dayglow",
+        "album": "Fuzzybrain",
+        "first_detected": "2025-12-15 23:29:35.107699"
+    },
+    {
+        "artist": "Run the Jewels",
+        "album": "RTJ4",
+        "first_detected": "2025-12-15 23:29:35.436930"
+    },
+    {
+        "artist": "Tim Hecker",
+        "album": "The North Water (Original Score)",
+        "first_detected": "2025-12-15 23:29:35.776419"
+    },
+    {
+        "artist": "Ed Sheeran",
+        "album": "= (Tour Edition)",
+        "first_detected": "2025-12-15 23:29:36.046303"
+    },
+    {
+        "artist": "Drake",
+        "album": "Take Care",
+        "first_detected": "2025-12-15 23:29:36.395786"
+    },
+    {
+        "artist": "Deezer",
+        "album": "100% H.E.R",
+        "first_detected": "2025-12-15 23:29:36.624299"
+    },
+    {
+        "artist": "Drake",
+        "album": "Scary Hours 2",
+        "first_detected": "2025-12-15 23:29:37.194636"
+    },
+    {
+        "artist": "Muse",
+        "album": "Black Holes And Revelations",
+        "first_detected": "2025-12-15 23:29:37.436343"
+    },
+    {
+        "artist": "Jonathan Wolff",
+        "album": "Seinfeld (Original Television Soundtrack)",
+        "first_detected": "2025-12-15 23:29:37.546052"
+    },
+    {
+        "artist": "KIRINJI",
+        "album": "crepuscular",
+        "first_detected": "2025-12-15 23:29:37.741231"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Greatest Hits",
+        "first_detected": "2025-12-15 23:29:38.013627"
+    },
+    {
+        "artist": "Baroness",
+        "album": "Yellow & Green (cd2)",
+        "first_detected": "2025-12-15 23:29:38.181634"
+    },
+    {
+        "artist": "Stoneside.",
+        "album": "The Water",
+        "first_detected": "2025-12-15 23:29:38.426760"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "EVERYBODY'S EVERYTHING",
+        "first_detected": "2025-12-15 23:29:38.889255"
+    },
+    {
+        "artist": "2Pac",
+        "album": "All Eyez on Me",
+        "first_detected": "2025-12-15 23:29:39.172168"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "My Love Is Cool",
+        "first_detected": "2025-12-15 23:29:40.419861"
+    },
+    {
+        "artist": "Thirty Seconds to Mars",
+        "album": "This Is War",
+        "first_detected": "2025-12-15 23:29:40.784875"
+    },
+    {
+        "artist": "Journey",
+        "album": "Frontiers",
+        "first_detected": "2025-12-15 23:29:41.738089"
+    },
+    {
+        "artist": "Catch Your Breath",
+        "album": "Shame On Me (Deluxe Edition)",
+        "first_detected": "2025-12-15 23:29:41.941407"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Now That's What I Call Music 9 (Original)",
+        "first_detected": "2025-12-15 23:29:42.105310"
+    },
+    {
+        "artist": "Joji",
+        "album": "SMITHEREENS",
+        "first_detected": "2025-12-15 23:29:42.370409"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "Visions Of A Life",
+        "first_detected": "2025-12-15 23:29:42.869620"
+    },
+    {
+        "artist": "A$AP Rocky",
+        "album": "D.M.B.",
+        "first_detected": "2025-12-15 23:29:43.155365"
+    },
+    {
+        "artist": "WWE",
+        "album": "WWE: You Can't See Me",
+        "first_detected": "2025-12-15 23:29:43.399671"
+    },
+    {
+        "artist": "Pattern-Seeking Animals",
+        "album": "Prehensile Tales",
+        "first_detected": "2025-12-15 23:29:44.021004"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Stadium Arcadium",
+        "first_detected": "2025-12-15 23:29:44.479943"
+    },
+    {
+        "artist": "Mild High Club",
+        "album": "Skiptracing",
+        "first_detected": "2025-12-15 23:29:44.684621"
+    },
+    {
+        "artist": "SG Lewis",
+        "album": "Dusk",
+        "first_detected": "2025-12-15 23:29:44.841228"
+    },
+    {
+        "artist": "Coheed and Cambria",
+        "album": "Good Apollo I'm Burning Star IV Volume One: From Fear Through The Eyes Of Madness",
+        "first_detected": "2025-12-15 23:29:45.273851"
+    },
+    {
+        "artist": "Cane Hill",
+        "album": "Kill The Sun",
+        "first_detected": "2025-12-15 23:29:45.633364"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Clocks [Holland]",
+        "first_detected": "2025-12-15 23:29:45.938551"
+    },
+    {
+        "artist": "Ed Sheeran",
+        "album": "No.6 Collaborations Project",
+        "first_detected": "2025-12-15 23:29:46.283433"
+    },
+    {
+        "artist": "Mystic Diversions",
+        "album": "Milchbar Seaside Season (compiled  by Blank&Jones)",
+        "first_detected": "2025-12-15 23:29:46.629333"
+    },
+    {
+        "artist": "Unlike Pluto",
+        "album": "Technicolor Daydream",
+        "first_detected": "2025-12-15 23:29:47.077560"
+    },
+    {
+        "artist": "Mac Ayres",
+        "album": "Drive Slow",
+        "first_detected": "2025-12-15 23:29:47.350507"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Damnation",
+        "first_detected": "2025-12-15 23:29:48.096117"
+    },
+    {
+        "artist": "Khalid, Swae Lee",
+        "album": "Black Panther The Album Music From And Inspired By",
+        "first_detected": "2025-12-15 23:29:48.271626"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "The Singles 1999\u20132006",
+        "first_detected": "2025-12-15 23:29:48.962296"
+    },
+    {
+        "artist": "Train",
+        "album": "Drops of Jupiter",
+        "first_detected": "2025-12-15 23:29:49.360349"
+    },
+    {
+        "artist": "Hatchie",
+        "album": "Giving the World Away",
+        "first_detected": "2025-12-15 23:29:49.866454"
+    },
+    {
+        "artist": "Last Dinosaurs",
+        "album": "Yumeno Garden",
+        "first_detected": "2025-12-15 23:29:50.301463"
+    },
+    {
+        "artist": "Alfie Templeman",
+        "album": "Stop Thinking (About Me)",
+        "first_detected": "2025-12-15 23:29:50.739453"
+    },
+    {
+        "artist": "Matt Champion",
+        "album": "Mansions",
+        "first_detected": "2025-12-15 23:29:51.026058"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Ultralife",
+        "first_detected": "2025-12-15 23:29:51.336593"
+    },
+    {
+        "artist": "Stoned Jesus",
+        "album": "Seven Thunders Roar",
+        "first_detected": "2025-12-15 23:30:31.050109"
+    },
+    {
+        "artist": "Taylor Swift",
+        "album": "folklore",
+        "first_detected": "2025-12-16 00:02:16.128891"
+    },
+    {
+        "artist": "Frank Turner",
+        "album": "England Keep My Bones",
+        "first_detected": "2025-12-16 00:02:16.339194"
+    },
+    {
+        "artist": "Grey Daze",
+        "album": "Amends...Stripped",
+        "first_detected": "2025-12-16 00:02:16.970687"
+    },
+    {
+        "artist": "N.W.A",
+        "album": "The Best Of N.W.A: The Strength Of Street Knowledge",
+        "first_detected": "2025-12-16 00:02:17.303234"
+    },
+    {
+        "artist": "88rising",
+        "album": "Head In The Clouds",
+        "first_detected": "2025-12-16 00:02:17.483330"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "Come Over When You're Sober, Pt. 1",
+        "first_detected": "2025-12-16 00:02:17.911578"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Viva la Vida or Death and All His Friends",
+        "first_detected": "2025-12-16 00:02:18.184685"
+    },
+    {
+        "artist": "MF DOOM",
+        "album": "MM..FOOD",
+        "first_detected": "2025-12-16 00:02:18.383197"
+    },
+    {
+        "artist": "Bob Marley & The Wailers",
+        "album": "Exodus",
+        "first_detected": "2025-12-16 00:02:18.960310"
+    },
+    {
+        "artist": "Afroman",
+        "album": "The Good Times",
+        "first_detected": "2025-12-16 00:02:19.153778"
+    },
+    {
+        "artist": "Yeah Yeah Yeahs",
+        "album": "Cool It Down",
+        "first_detected": "2025-12-16 00:02:19.660401"
+    },
+    {
+        "artist": "Sewerslvt",
+        "album": "Mr. Kill Myself - Single",
+        "first_detected": "2025-12-16 00:02:20.536832"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "Two",
+        "first_detected": "2025-12-16 00:02:20.851826"
+    },
+    {
+        "artist": "Frank Turner",
+        "album": "Songbook",
+        "first_detected": "2025-12-16 00:02:21.129357"
+    },
+    {
+        "artist": "Coolio",
+        "album": "Gangsta's Paradise (25th Anniversary - Remastered)",
+        "first_detected": "2025-12-16 00:02:21.828183"
+    },
+    {
+        "artist": "Razorlight",
+        "album": "Bravo Hits 56",
+        "first_detected": "2025-12-16 00:02:22.055458"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "In Absentia (Remastered)",
+        "first_detected": "2025-12-16 00:02:23.145660"
+    },
+    {
+        "artist": "Scissor Sisters",
+        "album": "Scissor Sisters",
+        "first_detected": "2025-12-16 00:02:23.398972"
+    },
+    {
+        "artist": "JAWNY",
+        "album": "It\u2019s Never Fair, Always True",
+        "first_detected": "2025-12-16 00:02:24.150154"
+    },
+    {
+        "artist": "Seekae",
+        "album": "The Worry (10th Anniversary Edition)",
+        "first_detected": "2025-12-16 00:02:24.428619"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Stoney (Complete Edition)",
+        "first_detected": "2025-12-16 00:02:24.668422"
+    },
+    {
+        "artist": "Bon Jovi",
+        "album": "Cross Road: The Best Of Bon Jovi [Original CD]",
+        "first_detected": "2025-12-16 00:02:24.994859"
+    },
+    {
+        "artist": "Getter, Party Nails",
+        "album": "Visceral",
+        "first_detected": "2025-12-16 00:02:25.371099"
+    },
+    {
+        "artist": "Michael Franti & Spearhead",
+        "album": "All Rebel Rockers",
+        "first_detected": "2025-12-16 00:02:25.632966"
+    },
+    {
+        "artist": "Karmanjakah",
+        "album": "Ancient Skills EP",
+        "first_detected": "2025-12-16 00:02:25.943026"
+    },
+    {
+        "artist": "Scissor Sisters",
+        "album": "Comfortably Numb",
+        "first_detected": "2025-12-16 00:02:26.272835"
+    },
+    {
+        "artist": "Rejjie Snow",
+        "album": "Dear Annie",
+        "first_detected": "2025-12-16 00:02:26.441561"
+    },
+    {
+        "artist": "DoorHead",
+        "album": "Compendium.",
+        "first_detected": "2025-12-16 00:02:26.735438"
+    },
+    {
+        "artist": "Frank Sinatra",
+        "album": "Nothing But The Best (2008 Remastered)",
+        "first_detected": "2025-12-16 00:02:27.294071"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Stadium Arcadium",
+        "first_detected": "2025-12-16 09:25:28.140269"
+    },
+    {
+        "artist": "Mild High Club",
+        "album": "Skiptracing",
+        "first_detected": "2025-12-16 09:25:28.174224"
+    },
+    {
+        "artist": "Archive",
+        "album": "Noise",
+        "first_detected": "2025-12-16 09:25:28.204032"
+    },
+    {
+        "artist": "Jeff Buckley",
+        "album": "Grace",
+        "first_detected": "2025-12-16 09:25:28.232452"
+    },
+    {
+        "artist": "Glass Animals",
+        "album": "I Don't Wanna Talk (I Just Wanna Dance)",
+        "first_detected": "2025-12-16 09:25:28.246443"
+    },
+    {
+        "artist": "Glass Animals",
+        "album": "How to Be a Human Being",
+        "first_detected": "2025-12-16 09:25:28.275495"
+    },
+    {
+        "artist": "Grey Daze",
+        "album": "Amends...Stripped",
+        "first_detected": "2025-12-16 09:25:28.291915"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Leave a Whisper",
+        "first_detected": "2025-12-16 09:25:28.340523"
+    },
+    {
+        "artist": "Biig Piig",
+        "album": "Oh No / Liahr",
+        "first_detected": "2025-12-16 09:25:28.358392"
+    },
+    {
+        "artist": "Jay-Z",
+        "album": "Unplugged",
+        "first_detected": "2025-12-16 09:25:28.372261"
+    },
+    {
+        "artist": "Tim Hecker",
+        "album": "The North Water (Original Score)",
+        "first_detected": "2025-12-16 09:25:28.404620"
+    },
+    {
+        "artist": "Coheed and Cambria",
+        "album": "Good Apollo I'm Burning Star IV Volume One: From Fear Through The Eyes Of Madness",
+        "first_detected": "2025-12-16 09:25:28.417367"
+    },
+    {
+        "artist": "Trinidad Cardona",
+        "album": "Rhythm Radio November 2017",
+        "first_detected": "2025-12-16 09:25:28.431641"
+    },
+    {
+        "artist": "Mr.Kitty",
+        "album": "Time",
+        "first_detected": "2025-12-16 09:25:28.456835"
+    },
+    {
+        "artist": "Bring Me the Horizon",
+        "album": "Drown (Live from Maida Vale)",
+        "first_detected": "2025-12-16 09:25:28.475190"
+    },
+    {
+        "artist": "Jurassic 5",
+        "album": "Power In Numbers",
+        "first_detected": "2025-12-16 09:25:28.508836"
+    },
+    {
+        "artist": "Charlotte Gainsbourg",
+        "album": "Rest",
+        "first_detected": "2025-12-16 09:25:28.537904"
+    },
+    {
+        "artist": "Thirty Seconds to Mars",
+        "album": "This Is War",
+        "first_detected": "2025-12-16 09:25:28.570689"
+    },
+    {
+        "artist": "Taylor Swift",
+        "album": "folklore",
+        "first_detected": "2025-12-16 09:25:28.608709"
+    },
+    {
+        "artist": "Stoneside.",
+        "album": "The Water",
+        "first_detected": "2025-12-16 09:25:28.622305"
+    },
+    {
+        "artist": "Rich Brian",
+        "album": "The Sailor",
+        "first_detected": "2025-12-16 09:25:28.651175"
+    },
+    {
+        "artist": "Hatchie",
+        "album": "Giving the World Away",
+        "first_detected": "2025-12-16 09:25:28.679864"
+    },
+    {
+        "artist": "Mk.gee",
+        "album": "A Museum of Contradiction",
+        "first_detected": "2025-12-16 09:25:28.706115"
+    },
+    {
+        "artist": "Kyuss",
+        "album": "Welcome To Sky Valley",
+        "first_detected": "2025-12-16 09:25:28.734019"
+    },
+    {
+        "artist": "Lil Xan",
+        "album": "Total Xanarchy",
+        "first_detected": "2025-12-16 09:25:28.768130"
+    },
+    {
+        "artist": "\u305f\u304b\u3084\u3093",
+        "album": "Bad example",
+        "first_detected": "2025-12-16 09:25:28.782131"
+    },
+    {
+        "artist": "Paramore",
+        "album": "Brand New Eyes",
+        "first_detected": "2025-12-16 09:25:28.813539"
+    },
+    {
+        "artist": "BROCKHAMPTON",
+        "album": "GINGER",
+        "first_detected": "2025-12-16 09:25:28.841783"
+    },
+    {
+        "artist": "BETWEEN FRIENDS",
+        "album": "we just need some time together",
+        "first_detected": "2025-12-16 09:25:28.864621"
+    },
+    {
+        "artist": "iann dior",
+        "album": "on to better things",
+        "first_detected": "2025-12-16 09:25:28.900481"
+    },
+    {
+        "artist": "Martin Solveig",
+        "album": "Smash",
+        "first_detected": "2025-12-16 09:25:28.930119"
+    },
+    {
+        "artist": "KIRINJI",
+        "album": "Steppin' Out",
+        "first_detected": "2025-12-16 09:25:28.951098"
+    },
+    {
+        "artist": "KIRINJI",
+        "album": "crepuscular",
+        "first_detected": "2025-12-16 09:25:28.972780"
+    },
+    {
+        "artist": "JAWNY",
+        "album": "It\u2019s Never Fair, Always True",
+        "first_detected": "2025-12-16 09:25:28.996788"
+    },
+    {
+        "artist": "Train",
+        "album": "Drops of Jupiter",
+        "first_detected": "2025-12-16 09:25:29.025858"
+    },
+    {
+        "artist": "Ember & Kronic",
+        "album": "The Annual 2015",
+        "first_detected": "2025-12-16 09:25:29.039475"
+    },
+    {
+        "artist": "The Goo Goo Dolls",
+        "album": "Deadpool & Wolverine Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-16 09:25:29.052116"
+    },
+    {
+        "artist": "Lil Uzi Vert",
+        "album": "Luv Is Rage",
+        "first_detected": "2025-12-16 09:25:29.079963"
+    },
+    {
+        "artist": "RITCHRD",
+        "album": "Tape Cinco",
+        "first_detected": "2025-12-16 09:25:29.093740"
+    },
+    {
+        "artist": "Unprocessed",
+        "album": "Artificial Void",
+        "first_detected": "2025-12-16 09:25:29.121223"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "On The Sunday Of Life...",
+        "first_detected": "2025-12-16 09:25:29.136740"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Deadwing",
+        "first_detected": "2025-12-16 09:25:29.186111"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "In Absentia (Remastered)",
+        "first_detected": "2025-12-16 09:25:29.225692"
+    },
+    {
+        "artist": "Bryson Tiller",
+        "album": "Killer Instinct",
+        "first_detected": "2025-12-16 09:25:29.278389"
+    },
+    {
+        "artist": "Area21, Martin Garrix, Maejor",
+        "album": "Followers",
+        "first_detected": "2025-12-16 09:25:29.294796"
+    },
+    {
+        "artist": "girlfriends",
+        "album": "Girlfriends",
+        "first_detected": "2025-12-16 09:25:29.328368"
+    },
+    {
+        "artist": "SG Lewis",
+        "album": "Dusk",
+        "first_detected": "2025-12-16 09:25:29.351623"
+    },
+    {
+        "artist": "Toto",
+        "album": "Toto",
+        "first_detected": "2025-12-16 09:25:29.383006"
+    },
+    {
+        "artist": "Pentakill",
+        "album": "II: Grasp of the Undying",
+        "first_detected": "2025-12-16 09:25:29.410497"
+    },
+    {
+        "artist": "Kasabian",
+        "album": "West Ryder Pauper Lunatic Asylum",
+        "first_detected": "2025-12-16 09:25:29.440044"
+    },
+    {
+        "artist": "Snow Patrol",
+        "album": "Final Straw",
+        "first_detected": "2025-12-16 09:25:29.489134"
+    },
+    {
+        "artist": "Ichika Nito",
+        "album": "I",
+        "first_detected": "2025-12-16 09:25:29.513657"
+    },
+    {
+        "artist": "Max Pope",
+        "album": "Counting Sheep",
+        "first_detected": "2025-12-16 09:25:29.541018"
+    },
+    {
+        "artist": "Tool",
+        "album": "Fear Inoculum",
+        "first_detected": "2025-12-16 09:25:29.568543"
+    },
+    {
+        "artist": "Will Smith",
+        "album": "Big Willie Style",
+        "first_detected": "2025-12-16 09:25:29.602105"
+    },
+    {
+        "artist": "The Killers",
+        "album": "Day & Age",
+        "first_detected": "2025-12-16 09:25:29.630564"
+    },
+    {
+        "artist": "Alter Bridge",
+        "album": "Blackbird",
+        "first_detected": "2025-12-16 09:25:29.661664"
+    },
+    {
+        "artist": "Royal Blood",
+        "album": "Typhoons",
+        "first_detected": "2025-12-16 09:25:29.690607"
+    },
+    {
+        "artist": "Ed Sheeran",
+        "album": "No.6 Collaborations Project",
+        "first_detected": "2025-12-16 09:25:29.724873"
+    },
+    {
+        "artist": "Ed Sheeran",
+        "album": "= (Tour Edition)",
+        "first_detected": "2025-12-16 09:25:29.741325"
+    },
+    {
+        "artist": "Dua Lipa",
+        "album": "Future Nostalgia: The Moonlight Edition",
+        "first_detected": "2025-12-16 09:25:29.757406"
+    },
+    {
+        "artist": "ScHoolboy Q",
+        "album": "Oxymoron",
+        "first_detected": "2025-12-16 09:25:29.789598"
+    },
+    {
+        "artist": "VOLA",
+        "album": "Applause of a Distant Crowd",
+        "first_detected": "2025-12-16 09:25:29.817510"
+    },
+    {
+        "artist": "Mobb Deep",
+        "album": "The Infamous",
+        "first_detected": "2025-12-16 09:25:29.852426"
+    },
+    {
+        "artist": "The Kid LAROI",
+        "album": "F*CK LOVE 3: OVER YOU",
+        "first_detected": "2025-12-16 09:25:29.866135"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Ultralife",
+        "first_detected": "2025-12-16 09:25:29.900256"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Oh Wonder",
+        "first_detected": "2025-12-16 09:25:29.935469"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "22 Break",
+        "first_detected": "2025-12-16 09:25:29.959458"
+    },
+    {
+        "artist": "Bob Marley & The Wailers",
+        "album": "Confrontation",
+        "first_detected": "2025-12-16 09:25:29.979926"
+    },
+    {
+        "artist": "Bob Marley & The Wailers",
+        "album": "Exodus",
+        "first_detected": "2025-12-16 09:25:30.021153"
+    },
+    {
+        "artist": "clipping.",
+        "album": "CLPPNG",
+        "first_detected": "2025-12-16 09:25:30.052493"
+    },
+    {
+        "artist": "Now Thats What I Call",
+        "album": "Now That's What I Call Music! 73",
+        "first_detected": "2025-12-16 09:25:30.066017"
+    },
+    {
+        "artist": "Steven Wilson",
+        "album": "The Harmony Codex",
+        "first_detected": "2025-12-16 09:25:30.096745"
+    },
+    {
+        "artist": "Thundercat",
+        "album": "It Is What It Is",
+        "first_detected": "2025-12-16 09:25:30.127657"
+    },
+    {
+        "artist": "Thundercat",
+        "album": "It Is What It Is",
+        "first_detected": "2025-12-16 09:25:30.160320"
+    },
+    {
+        "artist": "Matt Champion",
+        "album": "Mansions",
+        "first_detected": "2025-12-16 09:25:30.181294"
+    },
+    {
+        "artist": "Florence + The Machine",
+        "album": "Everybody Scream (Chamber Version)",
+        "first_detected": "2025-12-16 09:25:30.196861"
+    },
+    {
+        "artist": "Drake",
+        "album": "Scary Hours 2",
+        "first_detected": "2025-12-16 09:25:30.218743"
+    },
+    {
+        "artist": "Drake",
+        "album": "Take Care",
+        "first_detected": "2025-12-16 09:25:30.256337"
+    },
+    {
+        "artist": "Bruno Major",
+        "album": "A Song For Every Moon",
+        "first_detected": "2025-12-16 09:25:30.288817"
+    },
+    {
+        "artist": "A$AP Rocky",
+        "album": "Sundress",
+        "first_detected": "2025-12-16 09:25:30.310869"
+    },
+    {
+        "artist": "A$AP Rocky",
+        "album": "D.M.B.",
+        "first_detected": "2025-12-16 09:25:30.333271"
+    },
+    {
+        "artist": "twenty one pilots",
+        "album": "TOPxMM",
+        "first_detected": "2025-12-16 09:25:30.349467"
+    },
+    {
+        "artist": "Moonchild",
+        "album": "Voyager",
+        "first_detected": "2025-12-16 09:25:30.381160"
+    },
+    {
+        "artist": "Clean Bandit, Zara Larsson",
+        "album": "What Is Love? (Deluxe Edition)",
+        "first_detected": "2025-12-16 09:25:30.396661"
+    },
+    {
+        "artist": "Catch Your Breath",
+        "album": "Shame On Me (Deluxe Edition)",
+        "first_detected": "2025-12-16 09:25:30.411543"
+    },
+    {
+        "artist": "Kenny Loggins",
+        "album": "Grand Theft Auto V: Los Santos Rock Radio",
+        "first_detected": "2025-12-16 09:25:30.427153"
+    },
+    {
+        "artist": "Flo Rida",
+        "album": "Wild Ones",
+        "first_detected": "2025-12-16 09:25:30.452872"
+    },
+    {
+        "artist": "Florida Georgia Line",
+        "album": "Anything Goes",
+        "first_detected": "2025-12-16 09:25:30.483948"
+    },
+    {
+        "artist": "Juice WRLD",
+        "album": "Legends Never Die",
+        "first_detected": "2025-12-16 09:25:30.526014"
+    },
+    {
+        "artist": "MF DOOM",
+        "album": "MM..FOOD",
+        "first_detected": "2025-12-16 09:25:30.557841"
+    },
+    {
+        "artist": "MF DOOM",
+        "album": "Operation: Doomsday",
+        "first_detected": "2025-12-16 09:25:30.592441"
+    },
+    {
+        "artist": "John Carpenter",
+        "album": "The Fog: Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-16 09:25:30.606454"
+    },
+    {
+        "artist": "Djo",
+        "album": "DECIDE",
+        "first_detected": "2025-12-16 09:25:30.636547"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry Styles",
+        "first_detected": "2025-12-16 09:25:30.663351"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry Styles",
+        "first_detected": "2025-12-16 09:25:30.697128"
+    },
+    {
+        "artist": "Harry Styles",
+        "album": "Harry's House",
+        "first_detected": "2025-12-16 09:25:30.715644"
+    },
+    {
+        "artist": "ROSAL\u00cdA",
+        "album": "MOTOMAMI",
+        "first_detected": "2025-12-16 09:25:30.783181"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Stoney",
+        "first_detected": "2025-12-16 09:25:30.829870"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Stoney",
+        "first_detected": "2025-12-16 09:25:30.867566"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Hollywood's Bleeding",
+        "first_detected": "2025-12-16 09:25:30.883144"
+    },
+    {
+        "artist": "Post Malone",
+        "album": "Stoney (Complete Edition)",
+        "first_detected": "2025-12-16 09:25:30.891478"
+    },
+    {
+        "artist": "Ice Cube",
+        "album": "Lethal Injection",
+        "first_detected": "2025-12-16 09:25:30.927314"
+    },
+    {
+        "artist": "Led Zeppelin",
+        "album": "Physical Graffiti (1994 Remaster)",
+        "first_detected": "2025-12-16 09:25:30.935943"
+    },
+    {
+        "artist": "Highly Suspect",
+        "album": "MCID",
+        "first_detected": "2025-12-16 09:25:30.998595"
+    },
+    {
+        "artist": "HIM",
+        "album": "Dark Light",
+        "first_detected": "2025-12-16 09:25:31.040803"
+    },
+    {
+        "artist": "TesseracT",
+        "album": "Polaris/Errai",
+        "first_detected": "2025-12-16 09:25:31.056252"
+    },
+    {
+        "artist": "Dido",
+        "album": "Life for rent",
+        "first_detected": "2025-12-16 09:25:31.092928"
+    },
+    {
+        "artist": "Zero 9:36",
+        "album": "You Will Not Be Saved EP",
+        "first_detected": "2025-12-16 09:25:31.107267"
+    },
+    {
+        "artist": "Yeah Yeah Yeahs",
+        "album": "Cool It Down",
+        "first_detected": "2025-12-16 09:25:31.137887"
+    },
+    {
+        "artist": "Sports",
+        "album": "Naked All The Time",
+        "first_detected": "2025-12-16 09:25:31.189429"
+    },
+    {
+        "artist": "Seekae",
+        "album": "The Worry (10th Anniversary Edition)",
+        "first_detected": "2025-12-16 09:25:31.247123"
+    },
+    {
+        "artist": "Against the Current",
+        "album": "In Our Bones",
+        "first_detected": "2025-12-16 09:25:31.301988"
+    },
+    {
+        "artist": "Florence + the Machine",
+        "album": "Everybody Scream",
+        "first_detected": "2025-12-16 09:25:31.348193"
+    },
+    {
+        "artist": "Rejjie Snow",
+        "album": "Dear Annie",
+        "first_detected": "2025-12-16 09:25:31.389578"
+    },
+    {
+        "artist": "Frank Sinatra",
+        "album": "Nothing But The Best (2008 Remastered)",
+        "first_detected": "2025-12-16 09:25:31.408205"
+    },
+    {
+        "artist": "Childish Gambino",
+        "album": "Camp",
+        "first_detected": "2025-12-16 09:25:31.448786"
+    },
+    {
+        "artist": "Childish Gambino",
+        "album": "Because the Internet",
+        "first_detected": "2025-12-16 09:25:31.495782"
+    },
+    {
+        "artist": "Crowded House",
+        "album": "Crowded House",
+        "first_detected": "2025-12-16 09:25:31.534495"
+    },
+    {
+        "artist": "Cane Hill",
+        "album": "Kill The Sun",
+        "first_detected": "2025-12-16 09:25:31.548885"
+    },
+    {
+        "artist": "Vendredi Sur Mer",
+        "album": "Premiers Emois",
+        "first_detected": "2025-12-16 09:25:31.562980"
+    },
+    {
+        "artist": "Yellow Days",
+        "album": "The Way Things Change",
+        "first_detected": "2025-12-16 09:25:31.583183"
+    },
+    {
+        "artist": "Oliver Tree",
+        "album": "Ugly Is Beautiful",
+        "first_detected": "2025-12-16 09:25:31.614476"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Landslide",
+        "first_detected": "2025-12-16 09:25:31.637043"
+    },
+    {
+        "artist": "Xxxtentacion",
+        "album": "17",
+        "first_detected": "2025-12-16 09:25:31.666115"
+    },
+    {
+        "artist": "Afroman",
+        "album": "The Good Times",
+        "first_detected": "2025-12-16 09:25:31.694215"
+    },
+    {
+        "artist": "Plini",
+        "album": "Other Things",
+        "first_detected": "2025-12-16 09:25:31.735017"
+    },
+    {
+        "artist": "The Lumineers",
+        "album": "III",
+        "first_detected": "2025-12-16 09:25:31.773003"
+    },
+    {
+        "artist": "Aaryan Shah",
+        "album": "The Arrival: Part I",
+        "first_detected": "2025-12-16 09:25:31.795419"
+    },
+    {
+        "artist": "Laura Marling",
+        "album": "Once I Was An Eagle",
+        "first_detected": "2025-12-16 09:25:31.827624"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "This Place Will Become Your Tomb",
+        "first_detected": "2025-12-16 09:25:31.867683"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "Two",
+        "first_detected": "2025-12-16 09:25:31.896167"
+    },
+    {
+        "artist": "\u041a\u0438\u043d\u043e",
+        "album": "\u0413\u0440\u0443\u043f\u043f\u0430 \u043a\u0440\u043e\u0432\u0438",
+        "first_detected": "2025-12-16 09:25:31.921269"
+    },
+    {
+        "artist": "88rising",
+        "album": "Head In The Clouds II",
+        "first_detected": "2025-12-16 09:25:31.952143"
+    },
+    {
+        "artist": "88rising",
+        "album": "Head In The Clouds",
+        "first_detected": "2025-12-16 09:25:31.989184"
+    },
+    {
+        "artist": "Jonathan Wolff",
+        "album": "Seinfeld (Original Television Soundtrack)",
+        "first_detected": "2025-12-16 09:25:32.041619"
+    },
+    {
+        "artist": "alt-J",
+        "album": "An Awesome Wave",
+        "first_detected": "2025-12-16 09:25:32.047995"
+    },
+    {
+        "artist": "Mazzy Star",
+        "album": "So Tonight That I Might See",
+        "first_detected": "2025-12-16 09:25:32.068918"
+    },
+    {
+        "artist": "Dr. Dre",
+        "album": "The Chronic",
+        "first_detected": "2025-12-16 09:25:32.103155"
+    },
+    {
+        "artist": "As It Is",
+        "album": "The Great Depression",
+        "first_detected": "2025-12-16 09:25:32.131826"
+    },
+    {
+        "artist": "Two Feet",
+        "album": "Call Me, I Still Love You",
+        "first_detected": "2025-12-16 09:25:32.152464"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Ghost Reveries",
+        "first_detected": "2025-12-16 09:25:32.180010"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Damnation",
+        "first_detected": "2025-12-16 09:25:32.204543"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "All We Know of Heaven, All We Need of Hell",
+        "first_detected": "2025-12-16 09:25:32.233375"
+    },
+    {
+        "artist": "Yves Tumor",
+        "album": "Heaven to a Tortured Mind",
+        "first_detected": "2025-12-16 09:25:32.263014"
+    },
+    {
+        "artist": "The Game",
+        "album": "The R.E.D. Album",
+        "first_detected": "2025-12-16 09:25:32.300542"
+    },
+    {
+        "artist": "Baroness",
+        "album": "Yellow & Green (cd2)",
+        "first_detected": "2025-12-16 09:25:32.313941"
+    },
+    {
+        "artist": "Mike Posner",
+        "album": "At Night, Alone.",
+        "first_detected": "2025-12-16 09:25:32.348618"
+    },
+    {
+        "artist": "Pendulum",
+        "album": "Elemental",
+        "first_detected": "2025-12-16 09:25:32.371361"
+    },
+    {
+        "artist": "Scissor Sisters",
+        "album": "Comfortably Numb",
+        "first_detected": "2025-12-16 09:25:32.392628"
+    },
+    {
+        "artist": "Scissor Sisters",
+        "album": "Scissor Sisters",
+        "first_detected": "2025-12-16 09:25:32.437272"
+    },
+    {
+        "artist": "N.W.A",
+        "album": "The Best Of N.W.A: The Strength Of Street Knowledge",
+        "first_detected": "2025-12-16 09:25:32.471997"
+    },
+    {
+        "artist": "Kids See Ghosts",
+        "album": "Kids See Ghosts",
+        "first_detected": "2025-12-16 09:25:32.500388"
+    },
+    {
+        "artist": "Alfie Templeman",
+        "album": "Stop Thinking (About Me)",
+        "first_detected": "2025-12-16 09:25:32.521159"
+    },
+    {
+        "artist": "Funk Fiction",
+        "album": "Aquatic Ambience",
+        "first_detected": "2025-12-16 09:25:32.541981"
+    },
+    {
+        "artist": "Karmanjakah",
+        "album": "Ancient Skills EP",
+        "first_detected": "2025-12-16 09:25:32.557112"
+    },
+    {
+        "artist": "Duckwrth",
+        "album": "SuperGood",
+        "first_detected": "2025-12-16 09:25:32.590981"
+    },
+    {
+        "artist": "Duckwrth",
+        "album": "Crush",
+        "first_detected": "2025-12-16 09:25:32.609290"
+    },
+    {
+        "artist": "Still Woozy",
+        "album": "If This Isn\u2019t Nice, I Don\u2019t Know What Is",
+        "first_detected": "2025-12-16 09:25:32.638326"
+    },
+    {
+        "artist": "Method Man",
+        "album": "I\u2019ll Be There for You",
+        "first_detected": "2025-12-16 09:25:32.661082"
+    },
+    {
+        "artist": "Justice",
+        "album": "Audio, Video, Disco.",
+        "first_detected": "2025-12-16 09:25:32.691176"
+    },
+    {
+        "artist": "Frank Turner",
+        "album": "England Keep My Bones",
+        "first_detected": "2025-12-16 09:25:32.720266"
+    },
+    {
+        "artist": "Frank Turner",
+        "album": "Songbook",
+        "first_detected": "2025-12-16 09:25:32.766292"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "HELLBOY",
+        "first_detected": "2025-12-16 09:25:32.798334"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "EVERYBODY'S EVERYTHING",
+        "first_detected": "2025-12-16 09:25:32.811611"
+    },
+    {
+        "artist": "Lil Peep",
+        "album": "Come Over When You're Sober, Pt. 1",
+        "first_detected": "2025-12-16 09:25:32.823879"
+    },
+    {
+        "artist": "Metronomy",
+        "album": "405 - Metronomy x Biig Piig",
+        "first_detected": "2025-12-16 09:25:32.836800"
+    },
+    {
+        "artist": "Testament",
+        "album": "The Ritual",
+        "first_detected": "2025-12-16 09:25:32.866991"
+    },
+    {
+        "artist": "Pattern-Seeking Animals",
+        "album": "Prehensile Tales",
+        "first_detected": "2025-12-16 09:25:32.883036"
+    },
+    {
+        "artist": "Deftones",
+        "album": "Koi No Yokan",
+        "first_detected": "2025-12-16 09:25:32.915538"
+    },
+    {
+        "artist": "Dayglow",
+        "album": "Fuzzybrain",
+        "first_detected": "2025-12-16 09:25:32.947627"
+    },
+    {
+        "artist": "Khruangbin",
+        "album": "Texas Moon",
+        "first_detected": "2025-12-16 09:25:32.966982"
+    },
+    {
+        "artist": "Deezer",
+        "album": "100% H.E.R",
+        "first_detected": "2025-12-16 09:25:32.973720"
+    },
+    {
+        "artist": "Empire of the Sun",
+        "album": "We Are the People",
+        "first_detected": "2025-12-16 09:25:32.993751"
+    },
+    {
+        "artist": "Joji",
+        "album": "SMITHEREENS",
+        "first_detected": "2025-12-16 09:25:33.015186"
+    },
+    {
+        "artist": "Joji",
+        "album": "Nectar",
+        "first_detected": "2025-12-16 09:25:33.041569"
+    },
+    {
+        "artist": "Joji",
+        "album": "BALLADS 1",
+        "first_detected": "2025-12-16 09:25:33.067979"
+    },
+    {
+        "artist": "Tremonti",
+        "album": "Dust",
+        "first_detected": "2025-12-16 09:25:33.095115"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Greatest Hits",
+        "first_detected": "2025-12-16 09:25:33.135806"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Better Man: Original Motion Picture Soundtrack",
+        "first_detected": "2025-12-16 09:25:33.150688"
+    },
+    {
+        "artist": "cute girls doing cute things",
+        "album": "cutie jams vol. 2",
+        "first_detected": "2025-12-16 09:25:33.189418"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Hotline Miami 2: Wrong Number",
+        "first_detected": "2025-12-16 09:25:33.257363"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Now That's What I Call Music! 112",
+        "first_detected": "2025-12-16 09:25:33.272190"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Now That's What I Call Music 9 (Original)",
+        "first_detected": "2025-12-16 09:25:33.286075"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Phineas and Ferb\u2010ulous: The Ultimate Album",
+        "first_detected": "2025-12-16 09:25:33.343581"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "Bravo Hits 71",
+        "first_detected": "2025-12-16 09:25:33.357452"
+    },
+    {
+        "artist": "Various Artists",
+        "album": "MTV Party to Go \u201998",
+        "first_detected": "2025-12-16 09:25:33.370537"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "Blue Weekend",
+        "first_detected": "2025-12-16 09:25:33.399666"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "Visions Of A Life",
+        "first_detected": "2025-12-16 09:25:33.434651"
+    },
+    {
+        "artist": "Wolf Alice",
+        "album": "My Love Is Cool",
+        "first_detected": "2025-12-16 09:25:33.465223"
+    },
+    {
+        "artist": "girl in red",
+        "album": "if i could make it go quiet",
+        "first_detected": "2025-12-16 09:25:33.493632"
+    },
+    {
+        "artist": "Elbow",
+        "album": "The Seldom Seen Kid (Bonus Tracks Version)",
+        "first_detected": "2025-12-16 09:25:33.508311"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "The Singles 1999\u20132006",
+        "first_detected": "2025-12-16 09:25:33.562729"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Viva la Vida or Death and All His Friends",
+        "first_detected": "2025-12-16 09:25:33.590100"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Clocks [Holland]",
+        "first_detected": "2025-12-16 09:25:33.604095"
+    },
+    {
+        "artist": "Aaron Smith; Krono",
+        "album": "Dancin (feat. Luvli) (Krono Remix)",
+        "first_detected": "2025-12-16 09:25:33.617524"
+    },
+    {
+        "artist": "Incubus",
+        "album": "Enjoy Incubus",
+        "first_detected": "2025-12-16 09:25:33.642525"
+    },
+    {
+        "artist": "Dave Brubeck Quartet",
+        "album": "Time Out",
+        "first_detected": "2025-12-16 09:25:33.655532"
+    },
+    {
+        "artist": "The Contortionist",
+        "album": "Our Bones",
+        "first_detected": "2025-12-16 09:25:33.677718"
+    },
+    {
+        "artist": "Billie Eilish",
+        "album": "Happier Than Ever",
+        "first_detected": "2025-12-16 09:25:33.712976"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Dark Side Of The Moon (2011 Remastered Version)",
+        "first_detected": "2025-12-16 09:25:33.726421"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Dark Side Of The Moon",
+        "first_detected": "2025-12-16 09:25:33.754450"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "Ummagumma",
+        "first_detected": "2025-12-16 09:25:33.797357"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "Ummagumma",
+        "first_detected": "2025-12-16 09:25:33.831234"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "Ummagumma",
+        "first_detected": "2025-12-16 09:25:33.864656"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Piper at the Gates of Dawn",
+        "first_detected": "2025-12-16 09:25:33.890927"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "The Wall",
+        "first_detected": "2025-12-16 09:25:33.938631"
+    },
+    {
+        "artist": "mgk",
+        "album": "Tickets to My Downfall",
+        "first_detected": "2025-12-16 09:25:33.967832"
+    },
+    {
+        "artist": "Blackstreet (feat. Dr. Dre)",
+        "album": "No Diggity",
+        "first_detected": "2025-12-16 09:25:33.975383"
+    },
+    {
+        "artist": "Sipper",
+        "album": "Losers",
+        "first_detected": "2025-12-16 09:25:33.982347"
+    },
+    {
+        "artist": "Tame Impala",
+        "album": "Borderline",
+        "first_detected": "2025-12-16 09:25:33.994572"
+    },
+    {
+        "artist": "Miley Cyrus",
+        "album": "Bangerz",
+        "first_detected": "2025-12-16 09:25:34.031798"
+    },
+    {
+        "artist": "Still Corners",
+        "album": "Slow Air",
+        "first_detected": "2025-12-16 09:25:34.054474"
+    },
+    {
+        "artist": "Anomalie",
+        "album": "M\u00e9tropole 1|2",
+        "first_detected": "2025-12-16 09:25:34.068480"
+    },
+    {
+        "artist": "The Monkees",
+        "album": "The Monkees 50 [3CD]",
+        "first_detected": "2025-12-16 09:25:34.082908"
+    },
+    {
+        "artist": "Fatboy Slim",
+        "album": "You've Come A Long Way, Baby (2008 10th Anniversary Edition)",
+        "first_detected": "2025-12-16 09:25:34.096936"
+    },
+    {
+        "artist": "Muse",
+        "album": "Black Holes And Revelations",
+        "first_detected": "2025-12-16 09:25:34.127974"
+    },
+    {
+        "artist": "A Tribe Called Quest",
+        "album": "The Low End Theory",
+        "first_detected": "2025-12-16 09:25:34.161000"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Random Access Memories",
+        "first_detected": "2025-12-16 09:25:34.193877"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Random Access Memories",
+        "first_detected": "2025-12-16 09:25:34.226098"
+    },
+    {
+        "artist": "Daft Punk",
+        "album": "Random Access Memories",
+        "first_detected": "2025-12-16 09:25:34.257593"
+    },
+    {
+        "artist": "Souls of Mischief",
+        "album": "93 'til Infinity",
+        "first_detected": "2025-12-16 09:25:34.272680"
+    },
+    {
+        "artist": "Unlike Pluto",
+        "album": "Technicolor Daydream",
+        "first_detected": "2025-12-16 09:25:34.305095"
+    },
+    {
+        "artist": "Sting",
+        "album": "Ten Summoner's Tales CD",
+        "first_detected": "2025-12-16 09:25:34.320990"
+    },
+    {
+        "artist": "Martin Garrix",
+        "album": "Loop",
+        "first_detected": "2025-12-16 09:25:34.340595"
+    },
+    {
+        "artist": "Khalid, Swae Lee",
+        "album": "Black Panther The Album Music From And Inspired By",
+        "first_detected": "2025-12-16 09:25:34.353969"
+    },
+    {
+        "artist": "Busted",
+        "album": "2000's Pop Hits",
+        "first_detected": "2025-12-16 09:25:34.367106"
+    },
+    {
+        "artist": "Travis Scott",
+        "album": "Rodeo",
+        "first_detected": "2025-12-16 09:25:34.399736"
+    },
+    {
+        "artist": "Landon Cube; 24KGoldn",
+        "album": "Eighties",
+        "first_detected": "2025-12-16 09:25:34.414724"
+    },
+    {
+        "artist": "Mystic Diversions",
+        "album": "Milchbar Seaside Season (compiled  by Blank&Jones)",
+        "first_detected": "2025-12-16 09:25:34.428252"
+    },
+    {
+        "artist": "Sylvan Esso",
+        "album": "What Now",
+        "first_detected": "2025-12-16 09:25:34.456807"
+    },
+    {
+        "artist": "Mac Ayres",
+        "album": "Drive Slow",
+        "first_detected": "2025-12-16 09:25:34.482694"
+    },
+    {
+        "artist": "Kirinji",
+        "album": "cherish",
+        "first_detected": "2025-12-16 09:25:34.510985"
+    },
+    {
+        "artist": "Dave Brubeck",
+        "album": "24 Classic Original Recordings",
+        "first_detected": "2025-12-16 09:25:34.524372"
+    },
+    {
+        "artist": "Jorja Smith",
+        "album": "Black Panther: The Album (music from and inspired by)",
+        "first_detected": "2025-12-16 09:25:34.537747"
+    },
+    {
+        "artist": "Omar Apollo",
+        "album": "Erase",
+        "first_detected": "2025-12-16 09:25:34.556701"
+    },
+    {
+        "artist": "Adam Jensen",
+        "album": "The Mystic",
+        "first_detected": "2025-12-16 09:25:34.575338"
+    },
+    {
+        "artist": "I Built The Sky",
+        "album": "The Zenith Rise",
+        "first_detected": "2025-12-16 09:25:37.287997"
+    },
+    {
+        "artist": "DoorHead",
+        "album": "Compendium.",
+        "first_detected": "2025-12-16 09:25:37.295962"
+    },
+    {
+        "artist": "Getter, Party Nails",
+        "album": "Visceral",
+        "first_detected": "2025-12-16 09:25:37.309482"
+    },
+    {
+        "artist": "Sonder",
+        "album": "Into",
+        "first_detected": "2025-12-16 09:25:37.335377"
+    },
+    {
+        "artist": "Iron Maiden",
+        "album": "Seventh Son of a Seventh Son (2015 Remaster)",
+        "first_detected": "2025-12-16 09:25:37.350087"
+    },
+    {
+        "artist": "Natasha Bedingfield",
+        "album": "N. B.",
+        "first_detected": "2025-12-16 09:25:37.365125"
+    },
+    {
+        "artist": "Journey",
+        "album": "Frontiers",
+        "first_detected": "2025-12-16 09:25:37.391334"
+    },
+    {
+        "artist": "Michael Franti & Spearhead",
+        "album": "All Rebel Rockers",
+        "first_detected": "2025-12-16 09:25:37.420344"
+    },
+    {
+        "artist": "AURORA",
+        "album": "Running With the Wolves",
+        "first_detected": "2025-12-16 09:25:37.442452"
+    },
+    {
+        "artist": "Memorist",
+        "album": "ONI//KIJO",
+        "first_detected": "2025-12-16 09:25:37.466411"
+    },
+    {
+        "artist": "Angel Vivaldi",
+        "album": "Away With Words, Part 1 - EP",
+        "first_detected": "2025-12-16 09:25:37.480626"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Fortitude",
+        "first_detected": "2025-12-16 09:25:37.510321"
+    },
+    {
+        "artist": "Sewerslvt",
+        "album": "Mr. Kill Myself - Single",
+        "first_detected": "2025-12-16 09:25:37.524066"
+    },
+    {
+        "artist": "easy life",
+        "album": "frank",
+        "first_detected": "2025-12-16 09:25:37.537984"
+    },
+    {
+        "artist": "The Notorious B.I.G.",
+        "album": "Ready to Die (The Remaster)",
+        "first_detected": "2025-12-16 09:25:37.551314"
+    },
+    {
+        "artist": "Razorlight",
+        "album": "Bravo Hits 56",
+        "first_detected": "2025-12-16 09:25:37.564340"
+    },
+    {
+        "artist": "Boston",
+        "album": "Boston",
+        "first_detected": "2025-12-16 09:25:37.589570"
+    },
+    {
+        "artist": "Trippie Redd",
+        "album": "Pegasus: Neon Shark Vs Pegasus Presented by Travis Barker",
+        "first_detected": "2025-12-16 09:25:37.603419"
+    },
+    {
+        "artist": "Oasis",
+        "album": "(What\u2019s the Story) Morning Glory?",
+        "first_detected": "2025-12-16 09:25:37.660481"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "Remember That You Will Die",
+        "first_detected": "2025-12-16 09:25:37.690947"
+    },
+    {
+        "artist": "Polyphia",
+        "album": "New Levels New Devils",
+        "first_detected": "2025-12-16 09:25:37.732459"
+    },
+    {
+        "artist": "\u4e9c\u862d\u77e5\u5b50",
+        "album": "\u6d6e\u904a\u7a7a\u9593",
+        "first_detected": "2025-12-16 09:25:37.760360"
+    },
+    {
+        "artist": "Coolio",
+        "album": "Gangsta's Paradise (25th Anniversary - Remastered)",
+        "first_detected": "2025-12-16 09:25:37.774095"
+    },
+    {
+        "artist": "Coolio",
+        "album": "Gangsta\u2019s Paradise",
+        "first_detected": "2025-12-16 09:25:37.811525"
+    },
+    {
+        "artist": "Mac Miller",
+        "album": "Swimming",
+        "first_detected": "2025-12-16 09:25:37.841489"
+    },
+    {
+        "artist": "Mac Miller",
+        "album": "Swimming",
+        "first_detected": "2025-12-16 09:25:37.874517"
+    },
+    {
+        "artist": "Romy",
+        "album": "Mid Air",
+        "first_detected": "2025-12-16 09:25:37.907335"
+    },
+    {
+        "artist": "Haken",
+        "album": "Aquarius",
+        "first_detected": "2025-12-16 09:25:37.943158"
+    },
+    {
+        "artist": "Syncatto",
+        "album": "Momento",
+        "first_detected": "2025-12-16 09:25:38.291329"
+    },
+    {
+        "artist": "Blink-182",
+        "album": "Blink-182",
+        "first_detected": "2025-12-16 09:25:38.304822"
+    },
+    {
+        "artist": "Blink-182",
+        "album": "NINE",
+        "first_detected": "2025-12-16 09:25:38.312051"
+    },
+    {
+        "artist": "Foo Fighters",
+        "album": "Chasing Birds",
+        "first_detected": "2025-12-16 09:25:38.317919"
+    },
+    {
+        "artist": "Portishead",
+        "album": "Dummy",
+        "first_detected": "2025-12-16 09:25:38.340615"
+    },
+    {
+        "artist": "Last Dinosaurs",
+        "album": "Yumeno Garden",
+        "first_detected": "2025-12-16 09:25:38.367622"
+    },
+    {
+        "artist": "Last Dinosaurs",
+        "album": "Flying",
+        "first_detected": "2025-12-16 09:25:38.386507"
+    },
+    {
+        "artist": "WWE",
+        "album": "WWE: You Can't See Me",
+        "first_detected": "2025-12-16 09:25:38.401043"
+    },
+    {
+        "artist": "Peach Pit",
+        "album": "Being So Normal",
+        "first_detected": "2025-12-16 09:25:38.429408"
+    },
+    {
+        "artist": "half\u2022alive",
+        "album": "Now, Not Yet",
+        "first_detected": "2025-12-16 09:25:38.462768"
+    },
+    {
+        "artist": "M83",
+        "album": "Hurry Up, We\u2019re Dreaming",
+        "first_detected": "2025-12-16 09:25:38.502469"
+    },
+    {
+        "artist": "The Who",
+        "album": "The Who Hits 50!",
+        "first_detected": "2025-12-16 09:25:38.563762"
+    },
+    {
+        "artist": "Alexx",
+        "album": "Duvet",
+        "first_detected": "2025-12-16 09:25:38.578387"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "INSANO",
+        "first_detected": "2025-12-16 09:25:38.617549"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "INSANO",
+        "first_detected": "2025-12-16 09:25:38.655418"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man On The Moon II: The Legend Of Mr. Rager",
+        "first_detected": "2025-12-16 09:25:38.688522"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man on the Moon III: The Chosen",
+        "first_detected": "2025-12-16 09:25:38.723929"
+    },
+    {
+        "artist": "Kid Cudi",
+        "album": "Man On The Moon: The End Of Day (Deluxe Edition)",
+        "first_detected": "2025-12-16 09:25:38.738118"
+    },
+    {
+        "artist": "Run the Jewels",
+        "album": "RTJ4",
+        "first_detected": "2025-12-16 09:25:38.767066"
+    },
+    {
+        "artist": "Bon Jovi",
+        "album": "Cross Road: The Best Of Bon Jovi [Original CD]",
+        "first_detected": "2025-12-16 09:25:38.780897"
+    },
+    {
+        "artist": "Bon Jovi",
+        "album": "Slippery When Wet",
+        "first_detected": "2025-12-16 09:25:38.811183"
+    },
+    {
+        "artist": "Grimes",
+        "album": "Miss Anthropocene (Deluxe Edition)",
+        "first_detected": "2025-12-16 09:25:38.825590"
+    },
+    {
+        "artist": "The Pineapple Thief",
+        "album": "It Leads To This",
+        "first_detected": "2025-12-16 09:25:38.851422"
+    },
+    {
+        "artist": "2Pac",
+        "album": "All Eyez on Me",
+        "first_detected": "2025-12-16 09:25:38.891475"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Californication",
+        "first_detected": "2025-12-16 09:25:38.927579"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Blood Sugar Sex Magik",
+        "first_detected": "2025-12-16 09:25:38.971132"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "The Getaway",
+        "first_detected": "2025-12-16 09:25:39.002158"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "Unlimited Love",
+        "first_detected": "2025-12-16 09:25:39.034056"
+    },
+    {
+        "artist": "Red Hot Chili Peppers",
+        "album": "By the Way",
+        "first_detected": "2025-12-16 09:25:39.080805"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Ten Thousand Fists",
+        "first_detected": "2025-12-16 09:25:39.134534"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Indestructible",
+        "first_detected": "2025-12-16 09:25:39.165199"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Immortalized",
+        "first_detected": "2025-12-16 09:25:39.203384"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Asylum",
+        "first_detected": "2025-12-16 09:25:39.236020"
+    },
+    {
+        "artist": "Disturbed",
+        "album": "Believe",
+        "first_detected": "2025-12-16 09:25:39.269838"
+    },
+    {
+        "artist": "Finger Eleven",
+        "album": "Last Night on Earth",
+        "first_detected": "2025-12-16 09:25:39.300426"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "ATTENTION ATTENTION",
+        "first_detected": "2025-12-16 09:25:39.335707"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "The Sound Of Madness",
+        "first_detected": "2025-12-16 09:25:39.367806"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Planet Zero",
+        "first_detected": "2025-12-16 09:25:39.408378"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Threat To Survival",
+        "first_detected": "2025-12-16 09:25:39.439750"
+    },
+    {
+        "artist": "Shinedown",
+        "album": "Amaryllis",
+        "first_detected": "2025-12-16 09:25:39.472821"
+    },
+    {
+        "artist": "Ko\u042fn",
+        "album": "The Path of Totality",
+        "first_detected": "2025-12-16 09:25:39.490683"
+    },
+    {
+        "artist": "All Time Low",
+        "album": "Everyone\u2019s Talking!",
+        "first_detected": "2025-12-16 09:25:39.530486"
+    },
+    {
+        "artist": "Betraying the Martyrs",
+        "album": "Rapture",
+        "first_detected": "2025-12-16 09:25:39.560651"
+    },
+    {
+        "artist": "Dizzy",
+        "album": "The Sun and Her Scorch",
+        "first_detected": "2025-12-16 09:25:39.590798"
+    },
+    {
+        "artist": "Killswitch Engage",
+        "album": "The End of Heartache",
+        "first_detected": "2025-12-16 09:25:39.618577"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Stupid Dream",
+        "first_detected": "2025-12-16 09:25:39.651019"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "The Incident",
+        "first_detected": "2025-12-16 09:25:39.692040"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Lightbulb Sun (Reissue 2008)",
+        "first_detected": "2025-12-16 09:25:39.708020"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Fear of a Blank Planet",
+        "first_detected": "2025-12-16 09:25:39.733728"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "Signify",
+        "first_detected": "2025-12-16 09:25:39.765692"
+    },
+    {
+        "artist": "Porcupine Tree",
+        "album": "CLOSURE / CONTINUATION",
+        "first_detected": "2025-12-16 09:25:39.797072"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "The Dark Pool",
+        "first_detected": "2025-12-16 09:25:39.829040"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "Heroine",
+        "first_detected": "2025-12-16 09:25:39.860513"
+    },
+    {
+        "artist": "Thornhill",
+        "album": "BODIES",
+        "first_detected": "2025-12-16 09:25:39.893326"
+    },
+    {
+        "artist": "Black Orchid Empire",
+        "album": "Semaphore",
+        "first_detected": "2025-12-16 09:25:39.925164"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "American Capitalist",
+        "first_detected": "2025-12-16 09:25:39.951390"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "The Way Of The Fist",
+        "first_detected": "2025-12-16 09:25:39.975605"
+    },
+    {
+        "artist": "Five Finger Death Punch",
+        "album": "Got Your Six",
+        "first_detected": "2025-12-16 09:25:40.004697"
+    },
+    {
+        "artist": "Tool",
+        "album": "\u00c6nima",
+        "first_detected": "2025-12-16 09:25:40.033599"
+    },
+    {
+        "artist": "Tool",
+        "album": "Undertow",
+        "first_detected": "2025-12-16 09:25:40.063239"
+    },
+    {
+        "artist": "Tool",
+        "album": "Lateralus",
+        "first_detected": "2025-12-16 09:25:40.094641"
+    },
+    {
+        "artist": "Tool",
+        "album": "10,000 Days",
+        "first_detected": "2025-12-16 09:25:40.121011"
+    },
+    {
+        "artist": "Tool",
+        "album": "10,000 Days",
+        "first_detected": "2025-12-16 09:25:40.493756"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "The Madness of Many",
+        "first_detected": "2025-12-16 09:25:40.519229"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Weightless",
+        "first_detected": "2025-12-16 09:25:40.549822"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "Parrhesia",
+        "first_detected": "2025-12-16 09:25:40.578272"
+    },
+    {
+        "artist": "Animals as Leaders",
+        "album": "The Joy of Motion",
+        "first_detected": "2025-12-16 09:25:40.606562"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill",
+        "first_detected": "2025-12-16 09:25:40.638341"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Under Rug Swept",
+        "first_detected": "2025-12-16 09:25:40.670442"
+    },
+    {
+        "artist": "Alanis Morissette",
+        "album": "Jagged Little Pill Acoustic",
+        "first_detected": "2025-12-16 09:25:40.686500"
+    },
+    {
+        "artist": "Ghost",
+        "album": "Skelet\u00e1",
+        "first_detected": "2025-12-16 09:25:40.717481"
+    },
+    {
+        "artist": "Oh Wonder",
+        "album": "Oh Wonder (10 Years On)",
+        "first_detected": "2025-12-16 09:25:40.753538"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Atmosphere",
+        "first_detected": "2025-12-16 09:25:40.784381"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Elements",
+        "first_detected": "2025-12-16 09:25:40.819421"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Mountains",
+        "first_detected": "2025-12-16 09:25:40.855246"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Touch",
+        "first_detected": "2025-12-16 09:25:40.875575"
+    },
+    {
+        "artist": "Hybrid Minds",
+        "album": "Tides",
+        "first_detected": "2025-12-16 09:25:40.904589"
+    },
+    {
+        "artist": "Monuments",
+        "album": "Gnosis",
+        "first_detected": "2025-12-16 09:25:40.933165"
+    },
+    {
+        "artist": "Monuments",
+        "album": "In Stasis",
+        "first_detected": "2025-12-16 09:25:40.965949"
+    },
+    {
+        "artist": "Monuments",
+        "album": "The Amanuensis",
+        "first_detected": "2025-12-16 09:25:40.991917"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Amazing Things",
+        "first_detected": "2025-12-16 09:25:41.020726"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Automatic",
+        "first_detected": "2025-12-16 09:25:41.050626"
+    },
+    {
+        "artist": "Don Broco",
+        "album": "Technology",
+        "first_detected": "2025-12-16 09:25:41.079630"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "TRAUMA",
+        "first_detected": "2025-12-16 09:25:41.113614"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "Violent Nature",
+        "first_detected": "2025-12-16 09:25:41.157056"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "Violent Nature",
+        "first_detected": "2025-12-16 09:25:41.392637"
+    },
+    {
+        "artist": "I Prevail",
+        "album": "TRUE POWER",
+        "first_detected": "2025-12-16 09:25:41.429198"
+    },
+    {
+        "artist": "Fit For An Autopsy",
+        "album": "The Great Collapse",
+        "first_detected": "2025-12-16 09:25:41.464552"
+    },
+    {
+        "artist": "Bilmuri",
+        "album": "AMERICAN MOTOR SPORTS",
+        "first_detected": "2025-12-16 09:25:41.499622"
+    },
+    {
+        "artist": "Playgrounded",
+        "album": "The Death of Death",
+        "first_detected": "2025-12-16 09:25:41.534349"
+    },
+    {
+        "artist": "Playgrounded",
+        "album": "The Death of Death",
+        "first_detected": "2025-12-16 09:25:42.153301"
+    },
+    {
+        "artist": "Dayseeker",
+        "album": "Dark Sun",
+        "first_detected": "2025-12-16 09:25:42.178556"
+    },
+    {
+        "artist": "Dm Dokuro",
+        "album": "The Tale of a Cruel World (Calamity Original Game Soundtrack)",
+        "first_detected": "2025-12-16 09:25:42.206176"
+    },
+    {
+        "artist": "TesseracT",
+        "album": "War of Being",
+        "first_detected": "2025-12-16 09:25:42.239064"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Kentucky",
+        "first_detected": "2025-12-16 09:25:42.982432"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Kentucky",
+        "first_detected": "2025-12-16 09:25:43.011766"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Between the Devil & the Deep Blue Sea",
+        "first_detected": "2025-12-16 09:25:43.041360"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Folklore and Superstition",
+        "first_detected": "2025-12-16 09:25:43.068004"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Folklore and Superstition",
+        "first_detected": "2025-12-16 09:25:43.310828"
+    },
+    {
+        "artist": "Black Stone Cherry",
+        "album": "Magic Mountain",
+        "first_detected": "2025-12-16 09:25:43.344790"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Octavarium",
+        "first_detected": "2025-12-16 09:25:43.372900"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Dream Theater",
+        "first_detected": "2025-12-16 09:25:43.401285"
+    },
+    {
+        "artist": "Dream Theater",
+        "album": "Parasomnia",
+        "first_detected": "2025-12-16 09:25:43.426342"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Blood & Chemistry",
+        "first_detected": "2025-12-16 09:25:43.457523"
+    },
+    {
+        "artist": "Arcane Roots",
+        "album": "Melancholia Hymns",
+        "first_detected": "2025-12-16 09:25:43.489160"
+    },
+    {
+        "artist": "Psychedelic Porn Crumpets",
+        "album": "High Visceral {Part One}",
+        "first_detected": "2025-12-16 09:25:43.514026"
+    },
+    {
+        "artist": "Psychedelic Porn Crumpets",
+        "album": "Pogo Rodeo",
+        "first_detected": "2025-12-16 09:25:43.542312"
+    },
+    {
+        "artist": "Katatonia",
+        "album": "Nightmares as Extensions of the Waking State",
+        "first_detected": "2025-12-16 09:25:43.573498"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "Sundowning",
+        "first_detected": "2025-12-16 09:25:43.604756"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "Sundowning",
+        "first_detected": "2025-12-16 09:25:43.838189"
+    },
+    {
+        "artist": "Sleep Token",
+        "album": "One",
+        "first_detected": "2025-12-16 09:25:43.859466"
+    },
+    {
+        "artist": "Orbit Culture",
+        "album": "Descent",
+        "first_detected": "2025-12-16 09:25:43.889754"
+    },
+    {
+        "artist": "Orbit Culture",
+        "album": "Death Above Life",
+        "first_detected": "2025-12-16 09:25:43.918681"
+    },
+    {
+        "artist": "Opeth",
+        "album": "Sorceress",
+        "first_detected": "2025-12-16 09:25:43.953307"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "EVERGREEN",
+        "first_detected": "2025-12-16 09:25:43.979526"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "EVERGREEN",
+        "first_detected": "2025-12-16 09:25:44.207797"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "Use Me",
+        "first_detected": "2025-12-16 09:25:44.241060"
+    },
+    {
+        "artist": "PVRIS",
+        "album": "White Noise",
+        "first_detected": "2025-12-16 09:25:44.269259"
+    },
+    {
+        "artist": "Alice In Chains",
+        "album": "Dirt (Mov)",
+        "first_detected": "2025-12-16 09:25:44.285745"
+    },
+    {
+        "artist": "Stoned Jesus",
+        "album": "Seven Thunders Roar",
+        "first_detected": "2025-12-16 09:25:44.319779"
+    },
+    {
+        "artist": "Tesseract",
+        "album": "Altered State",
+        "first_detected": "2025-12-16 09:25:44.360683"
+    },
+    {
+        "artist": "Korn",
+        "album": "Issues",
+        "first_detected": "2025-12-16 09:25:44.401526"
+    },
+    {
+        "artist": "Korn",
+        "album": "Life Is Peachy",
+        "first_detected": "2025-12-16 09:25:44.437018"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Serenity of Suffering",
+        "first_detected": "2025-12-16 09:25:44.472687"
+    },
+    {
+        "artist": "Korn",
+        "album": "Korn",
+        "first_detected": "2025-12-16 09:25:44.508737"
+    },
+    {
+        "artist": "Korn",
+        "album": "Requiem",
+        "first_detected": "2025-12-16 09:25:44.539447"
+    },
+    {
+        "artist": "Korn",
+        "album": "Untitled CD",
+        "first_detected": "2025-12-16 09:25:44.553592"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Paradigm Shift",
+        "first_detected": "2025-12-16 09:25:44.587052"
+    },
+    {
+        "artist": "Korn",
+        "album": "Follow The Leader",
+        "first_detected": "2025-12-16 09:25:44.642786"
+    },
+    {
+        "artist": "Korn",
+        "album": "The Nothing",
+        "first_detected": "2025-12-16 09:25:44.676966"
+    },
+    {
+        "artist": "Florence and the Machine",
+        "album": "Lungs",
+        "first_detected": "2025-12-16 09:25:44.692507"
+    },
+    {
+        "artist": "Thrice",
+        "album": "To Be Everywhere Is to Be Nowhere",
+        "first_detected": "2025-12-16 09:25:44.722908"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Horizons/East",
+        "first_detected": "2025-12-16 09:25:44.753511"
+    },
+    {
+        "artist": "Thrice",
+        "album": "Horizons/West",
+        "first_detected": "2025-12-16 09:25:44.781620"
+    },
+    {
+        "artist": "Robbie Williams",
+        "album": "Escapology",
+        "first_detected": "2025-12-16 09:25:44.814469"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "Mylo Xyloto",
+        "first_detected": "2025-12-16 09:25:44.849616"
+    },
+    {
+        "artist": "Coldplay",
+        "album": "X&Y",
+        "first_detected": "2025-12-16 09:25:44.883265"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "Fallen",
+        "first_detected": "2025-12-16 09:25:44.917212"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "What You Want",
+        "first_detected": "2025-12-16 09:25:44.937373"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "The Open Door",
+        "first_detected": "2025-12-16 09:25:47.939039"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "The Open Door",
+        "first_detected": "2025-12-16 09:25:48.160079"
+    },
+    {
+        "artist": "Evanescence",
+        "album": "The Open Door",
+        "first_detected": "2025-12-16 09:25:48.454955"
+    },
+    {
+        "artist": "Pink Floyd",
+        "album": "A Saucerful of Secrets",
+        "first_detected": "2025-12-16 09:25:48.482062"
+    },
+    {
+        "artist": "Tame Impala",
+        "album": "Deadbeat",
+        "first_detected": "2025-12-16 09:25:48.517403"
+    },
+    {
+        "artist": "Northlane",
+        "album": "Node: Reloaded",
+        "first_detected": "2025-12-16 09:25:48.547490"
+    },
+    {
+        "artist": "Slipknot",
+        "album": "We Are Not Your Kind",
+        "first_detected": "2025-12-16 09:25:48.584122"
+    },
+    {
+        "artist": "Fit for an Autopsy",
+        "album": "Oh What the Future Holds",
+        "first_detected": "2025-12-16 09:25:48.612587"
+    },
+    {
+        "artist": "Fit for an Autopsy",
+        "album": "The Nothing That Is",
+        "first_detected": "2025-12-16 09:25:48.644017"
+    },
+    {
+        "artist": "PALESKIN",
+        "album": "Euphoric End",
+        "first_detected": "2025-12-16 09:25:48.673527"
+    },
+    {
+        "artist": "PALESKIN",
+        "album": "Joy Is Temporary, Pain Is Constant",
+        "first_detected": "2025-12-16 09:25:48.701337"
+    },
+    {
+        "artist": "Infected Mushroom",
+        "album": "Vicious Delicious",
+        "first_detected": "2025-12-16 09:25:48.733403"
+    },
+    {
+        "artist": "Gojira",
+        "album": "L\u2019Enfant sauvage",
+        "first_detected": "2025-12-16 09:25:48.764778"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Magma",
+        "first_detected": "2025-12-16 09:25:48.794333"
+    },
+    {
+        "artist": "Gojira",
+        "album": "Terra Incognita",
+        "first_detected": "2025-12-16 09:25:48.829939"
+    },
+    {
+        "artist": "I Built the Sky",
+        "album": "The Sky Is Not the Limit",
+        "first_detected": "2025-12-16 09:25:48.861276"
+    },
+    {
+        "artist": "MIRAR",
+        "album": "Ascension",
+        "first_detected": "2025-12-16 09:25:48.894967"
+    },
+    {
+        "artist": "MIRAR",
+        "album": "Mare",
+        "first_detected": "2025-12-16 09:25:48.918836"
+    },
+    {
+        "artist": "Haken",
+        "album": "Affinity",
+        "first_detected": "2025-12-16 09:25:48.947867"
+    },
+    {
+        "artist": "Haken",
+        "album": "Vector",
+        "first_detected": "2025-12-16 09:25:48.972550"
+    },
+    {
+        "artist": "Haken",
+        "album": "Fauna",
+        "first_detected": "2025-12-16 09:25:48.999818"
+    },
+    {
+        "artist": "Haken",
+        "album": "Virus",
+        "first_detected": "2025-12-16 09:25:50.243465"
+    },
+    {
+        "artist": "Haken",
+        "album": "Virus",
+        "first_detected": "2025-12-16 09:25:53.757032"
+    },
+    {
+        "artist": "Syncatto",
+        "album": "Fiction",
+        "first_detected": "2025-12-16 09:25:53.793685"
+    },
+    {
+        "artist": "Igorrr",
+        "album": "Spirituality and Distortion",
+        "first_detected": "2025-12-16 09:25:53.828493"
+    },
+    {
+        "artist": "Igorrr",
+        "album": "Amen",
+        "first_detected": "2025-12-16 09:25:53.864810"
+    },
+    {
+        "artist": "Set It Off",
+        "album": "Elsewhere",
+        "first_detected": "2025-12-16 09:25:53.903934"
+    },
+    {
+        "artist": "The Pineapple Thief",
+        "album": "It Leads to This",
+        "first_detected": "2025-12-16 09:25:53.930790"
+    },
+    {
+        "artist": "Heart of a Coward",
+        "album": "This Place Only Brings Death",
+        "first_detected": "2025-12-16 09:25:53.958735"
+    },
+    {
+        "artist": "Heart of a Coward",
+        "album": "Severance",
+        "first_detected": "2025-12-16 09:25:53.990255"
+    }
+]

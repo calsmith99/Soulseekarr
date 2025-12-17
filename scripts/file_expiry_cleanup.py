@@ -125,12 +125,9 @@ class FileExpiryCleanup:
         self.navidrome_token = None
         self.subsonic_salt = None
         self.subsonic_token = None
-        self.starred_albums = set()
-        self.starred_tracks = set()
-        self.starred_content_loaded = False  # Track if we successfully loaded starred content
         
-        # Album expiry tracking for UI cache
-        self.album_expiry_data = {}
+        # Database connection
+        self.db = get_db() if DATABASE_AVAILABLE else None
         
         # Validate configuration
         self._validate_config()
@@ -245,239 +242,8 @@ class FileExpiryCleanup:
             self.logger.error(msg)
             self.stats['errors'] += 1
             return False
-    
-    def get_starred_content(self):
-        """Get all starred albums and tracks from Navidrome using Subsonic API"""
-        if not self.subsonic_token or not self.subsonic_salt:
-            self.logger.error("No Navidrome Subsonic credentials available")
-            return False
-        
-        try:
-            # Use Subsonic API to get starred content
-            starred_url = f"{self.navidrome_url}/rest/getStarred2"
-            params = {
-                'u': self.navidrome_username,
-                't': self.subsonic_token,
-                's': self.subsonic_salt,
-                'v': '1.16.1',
-                'c': 'FileExpiryCleanup',
-                'f': 'json'
-            }
-            
-            self.logger.info(f"Fetching starred content from: {starred_url}")
-            response = requests.get(starred_url, params=params, timeout=30)
-            
-            self.logger.info(f"Starred content API response status: {response.status_code}")
-            
-            if response.status_code == 200:
-                data = response.json()
-                subsonic_response = data.get('subsonic-response', {})
-                
-                if subsonic_response.get('status') == 'ok':
-                    starred_info = subsonic_response.get('starred2', {})
-                    
-                    # Get starred albums
-                    starred_albums_data = starred_info.get('album', [])
-                    if not isinstance(starred_albums_data, list):
-                        starred_albums_data = [starred_albums_data] if starred_albums_data else []
-                    
-                    self.logger.info(f"Starred2 API returned {len(starred_albums_data)} albums")
-                    
-                    for album in starred_albums_data:
-                        album_name = album.get('name', '').lower()
-                        artist_name = album.get('artist', '').lower()
-                        album_key = f"{artist_name} - {album_name}"
-                        self.starred_albums.add(album_key)
-                        # Log first few albums for debugging
-                        if len(self.starred_albums) <= 5:
-                            self.logger.debug(f"Starred album: '{artist_name}' - '{album_name}' -> key: '{album_key}'")
-                    
-                    self.logger.info(f"Found {len(self.starred_albums)} starred albums")
-                    print(f"    ✓ Found {len(self.starred_albums)} starred albums")
-                    
-                    # Sample some starred albums for debugging
-                    if self.starred_albums:
-                        sample_albums = list(self.starred_albums)[:3]
-                        self.logger.debug(f"Sample starred album keys: {sample_albums}")
-                    
-                    # Get starred tracks/songs
-                    starred_tracks_data = starred_info.get('song', [])
-                    if not isinstance(starred_tracks_data, list):
-                        starred_tracks_data = [starred_tracks_data] if starred_tracks_data else []
-                    
-                    self.logger.info(f"Starred2 API returned {len(starred_tracks_data)} songs")
-                    
-                    for track in starred_tracks_data:
-                        track_title = track.get('title', '').lower()
-                        artist_name = track.get('artist', '').lower()
-                        album_name = track.get('album', '').lower()
-                        track_key = f"{artist_name} - {album_name} - {track_title}"
-                        self.starred_tracks.add(track_key)
-                    
-                    self.logger.info(f"Found {len(self.starred_tracks)} starred tracks")
-                    print(f"    ✓ Found {len(self.starred_tracks)} starred songs")
-                    
-                    # Mark that we successfully loaded starred content
-                    self.starred_content_loaded = True
-                    return True
-                else:
-                    error = subsonic_response.get('error', {})
-                    msg = f"Subsonic API error: {error.get('message', 'Unknown error')}"
-                    self.logger.error(msg)
-                    return False
-            else:
-                self.logger.error(f"Failed to fetch starred content. Status: {response.status_code}, Response: {response.text[:200]}")
-                return False
-            
-        except Exception as e:
-            msg = f"Error getting starred content from Navidrome: {e}"
-            print(f"    ⚠️  {msg}")
-            self.logger.error(msg)
-            self.stats['errors'] += 1
-            return False
-    
-    def get_album_art_url(self, artist, album):
-        """Get album cover art URL from Navidrome using Subsonic API"""
-        if not self.subsonic_token or not self.subsonic_salt:
-            self.logger.debug(f"No Subsonic credentials available for album art: {artist} - {album}")
-            return None
-        
-        try:
-            # Search for the album using search3 endpoint
-            search_url = f"{self.navidrome_url}/rest/search3"
-            params = {
-                'u': self.navidrome_username,
-                't': self.subsonic_token,
-                's': self.subsonic_salt,
-                'v': '1.16.1',
-                'c': 'FileExpiryCleanup',
-                'f': 'json',
-                'query': f'"{artist}" "{album}"',  # Use quoted search for better matching
-                'albumCount': 10
-            }
-            
-            self.logger.debug(f"Searching for album art: {artist} - {album}")
-            response = requests.get(search_url, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                subsonic_response = data.get('subsonic-response', {})
-                
-                if subsonic_response.get('status') == 'ok':
-                    search_results = subsonic_response.get('searchResult3', {})
-                    albums = search_results.get('album', [])
-                    
-                    if not isinstance(albums, list):
-                        albums = [albums] if albums else []
-                    
-                    self.logger.debug(f"Found {len(albums)} album results for {artist} - {album}")
-                    
-                    # Try multiple matching strategies
-                    matches = []
-                    album_lower = album.lower().strip()
-                    artist_lower = artist.lower().strip()
-                    
-                    for album_result in albums:
-                        result_album = album_result.get('name', '').lower().strip()
-                        result_artist = album_result.get('artist', '').lower().strip()
-                        album_id = album_result.get('id')
-                        
-                        if not album_id:
-                            continue
-                            
-                        self.logger.debug(f"Checking album ID {album_id}: '{result_artist}' - '{result_album}'")
-                        
-                        # Calculate match score
-                        match_score = 0
-                        
-                        # Exact matches get highest score
-                        if result_album == album_lower and result_artist == artist_lower:
-                            match_score = 100
-                        # Artist exact + album contains
-                        elif result_artist == artist_lower and album_lower in result_album:
-                            match_score = 80
-                        # Album exact + artist contains  
-                        elif result_album == album_lower and artist_lower in result_artist:
-                            match_score = 80
-                        # Both contain each other
-                        elif album_lower in result_album and artist_lower in result_artist:
-                            match_score = 60
-                        # Partial matches
-                        elif artist_lower in result_artist or result_artist in artist_lower:
-                            if album_lower in result_album or result_album in album_lower:
-                                match_score = 40
-                        
-                        if match_score > 0:
-                            matches.append({
-                                'id': album_id,
-                                'score': match_score,
-                                'artist': result_artist,
-                                'album': result_album
-                            })
-                    
-                    # Sort by match score and try each one
-                    matches.sort(key=lambda x: x['score'], reverse=True)
-                    
-                    for match in matches[:3]:  # Try top 3 matches
-                        album_id = match['id']
-                        self.logger.debug(f"Trying album ID {album_id} with score {match['score']}")
-                        
-                        # Test if cover art is available for this album ID
-                        cover_url = f"{self.navidrome_url}/rest/getCoverArt"
-                        cover_params = {
-                            'u': self.navidrome_username,
-                            't': self.subsonic_token,
-                            's': self.subsonic_salt,
-                            'v': '1.16.1',
-                            'c': 'FileExpiryCleanup',
-                            'id': album_id,
-                            'size': 300
-                        }
-                        
-                        try:
-                            # Test the cover art URL
-                            test_response = requests.get(cover_url, params=cover_params, timeout=5)
-                            
-                            if test_response.status_code == 200:
-                                # Check if response is actual image data
-                                content_type = test_response.headers.get('Content-Type', '')
-                                if content_type.startswith('image/'):
-                                    # Build full URL with params for future use
-                                    from urllib.parse import urlencode
-                                    full_url = f"{cover_url}?{urlencode(cover_params)}"
-                                    self.logger.debug(f"Successfully found album art for {artist} - {album} using ID {album_id}")
-                                    return full_url
-                                else:
-                                    self.logger.debug(f"Album ID {album_id}: Response not an image ({content_type})")
-                            else:
-                                # Try to parse error response
-                                try:
-                                    error_content = test_response.text
-                                    if 'Artwork not found' in error_content:
-                                        self.logger.debug(f"Album ID {album_id}: No artwork available")
-                                    elif 'Album not found' in error_content:
-                                        self.logger.debug(f"Album ID {album_id}: Album no longer exists")
-                                    else:
-                                        self.logger.debug(f"Album ID {album_id}: HTTP {test_response.status_code}")
-                                except:
-                                    self.logger.debug(f"Album ID {album_id}: HTTP {test_response.status_code}")
-                                    
-                        except Exception as e:
-                            self.logger.debug(f"Error testing album ID {album_id}: {e}")
-                            continue
-                    
-                    self.logger.debug(f"No working album art found for {artist} - {album} (tried {len(matches)} matches)")
-                else:
-                    error = subsonic_response.get('error', {})
-                    self.logger.debug(f"Subsonic API error for {artist} - {album}: {error.get('message', 'Unknown error')}")
-            else:
-                self.logger.debug(f"HTTP error searching for {artist} - {album}: {response.status_code}")
-            
-            return None
-            
-        except Exception as e:
-            self.logger.debug(f"Error getting album art for {artist} - {album}: {e}")
-            return None
+
+
     
     def is_file_old_enough(self, file_path):
         """Check if file is older than cleanup_days"""
@@ -576,104 +342,64 @@ class FileExpiryCleanup:
             self.logger.error(f"Error extracting music info from path {file_path}: {e}")
             return "", "", ""
     
-    def normalize_for_comparison(self, text):
-        """Normalize text for comparison between filesystem and Navidrome data.
-        
-        This handles the common filesystem character replacements that occur
-        when albums/artists are saved to disk.
+    def get_navidrome_album_metadata(self, artist, album_path_name):
         """
-        if not text:
-            return ""
-        
-        # Create a normalized version that maps filesystem characters back to originals
-        normalized = text
-        
-        # Common filesystem character replacements
-        replacements = {
-            '_': '/',      # Horizons_West -> Horizons/West
-            ' - ': ': ',   # Album - Subtitle -> Album: Subtitle  
-            ' _ ': ' / ',  # Artist _ Album -> Artist / Album
-        }
-        
-        for fs_char, original_char in replacements.items():
-            normalized = normalized.replace(fs_char, original_char)
-        
-        return normalized.lower()
+        DEPRECATED: Metadata fetching is now handled by organise_files.py
+        """
+        return None
 
     def is_content_starred(self, file_path):
-        """Check if the file or its album is starred in Navidrome"""
+        """Check if the file or its album is starred in database"""
+        if not self.db:
+            self.logger.warning("Database not available - treating file as starred for safety")
+            return True
+            
         try:
-            # If we couldn't load starred content, be cautious and treat everything as starred
-            if not self.starred_content_loaded:
-                self.logger.warning(f"Starred content not loaded - treating file as starred for safety: {file_path}")
-                return True
-            
-            # Try to get metadata from audio file first
-            metadata = self.get_audio_metadata(file_path)
-            
-            if metadata:
-                # Use metadata from audio file (most accurate)
-                artist = metadata['artist'].lower()
-                album = metadata['album'].lower()
-                track = metadata.get('title', '').lower()
-            else:
-                # Fall back to filesystem path parsing
-                artist_fs, album_fs, track_fs = self.extract_music_info_from_path(file_path)
+            # Check if track is starred in DB (by file path)
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
                 
-                if not artist_fs:
-                    # Can't determine if starred without artist info - be safe
-                    self.logger.debug(f"No artist info extracted - treating as starred for safety: {file_path}")
+                # Check track level first
+                cursor.execute("SELECT is_starred FROM album_tracks WHERE file_path = ?", (str(file_path),))
+                row = cursor.fetchone()
+                if row and row['is_starred']:
+                    self.logger.debug(f"Track is starred in DB: {file_path}")
                     return True
                 
-                # Use filesystem names and try normalization
-                artist = artist_fs.lower()
-                album = album_fs.lower()
-                track = track_fs.lower()
+                # Get metadata to check album level
+                metadata = self.get_audio_metadata(file_path)
                 
-                # Also try the normalized version for filesystem names
-                artist_normalized = self.normalize_for_comparison(artist_fs)
-                album_normalized = self.normalize_for_comparison(album_fs)
-                track_normalized = self.normalize_for_comparison(track_fs)
-            
-            # Check if album is starred (direct comparison first)
-            album_key = f"{artist} - {album}"
-            if album_key in self.starred_albums:
-                self.logger.debug(f"Album is starred: {album_key}")
-                return True
-            
-            # If using filesystem names, also try normalized versions
-            if not metadata:
-                album_key_normalized = f"{artist_normalized} - {album_normalized}"
-                if album_key_normalized in self.starred_albums:
-                    self.logger.debug(f"Album is starred (normalized): {album_key_normalized}")
-                    return True
-            
-            # Debug: log failed album matches
-            self.logger.debug(f"Album NOT starred - checking '{album_key}' against {len(self.starred_albums)} starred albums")
-            # Show similar album names for debugging
-            for starred_key in self.starred_albums:
-                if artist in starred_key:
-                    self.logger.debug(f"  Found starred album for artist: '{starred_key}'")
-            
-            # Check if individual track is starred (direct comparison)
-            track_key = f"{artist} - {album} - {track}"
-            if track_key in self.starred_tracks:
-                self.logger.debug(f"Track is starred: {track_key}")
-                return True
-            
-            # If using filesystem names, also try normalized version
-            if not metadata:
-                track_key_normalized = f"{artist_normalized} - {album_normalized} - {track_normalized}"
-                if track_key_normalized in self.starred_tracks:
-                    self.logger.debug(f"Track is starred (normalized): {track_key_normalized}")
+                # Try to get MBID
+                mb_album_id = metadata.get('musicbrainz_albumid') if metadata else None
+                
+                if mb_album_id:
+                    album_key = mb_album_id
+                else:
+                    # Fallback to artist-album hash
+                    if metadata:
+                        artist = metadata.get('artist')
+                        album = metadata.get('album')
+                    else:
+                        artist, album, _ = self.extract_music_info_from_path(file_path)
+                    
+                    if artist and album:
+                        import hashlib
+                        key_str = f"{artist}-{album}".lower().encode('utf-8')
+                        album_key = f"local-{hashlib.md5(key_str).hexdigest()}"
+                    else:
+                        return False
+                
+                cursor.execute("SELECT is_starred FROM expiring_albums WHERE album_key = ?", (album_key,))
+                row = cursor.fetchone()
+                if row and row['is_starred']:
+                    self.logger.debug(f"Album is starred in DB: {album_key}")
                     return True
             
             return False
             
         except Exception as e:
-            self.logger.error(f"Error checking if content is starred for {file_path}: {e}")
-            # On error, assume starred to be safe (don't delete)
-            return True
+            self.logger.error(f"Error checking starred status in DB: {e}")
+            return True # Safe default
     
     def get_audio_metadata(self, file_path):
         """Extract artist, album, and track metadata from audio file"""
@@ -691,7 +417,7 @@ class FileExpiryCleanup:
             metadata = {}
             
             # Extract essential metadata
-            for field in ['albumartist', 'artist', 'album', 'title']:
+            for field in ['albumartist', 'artist', 'album', 'title', 'musicbrainz_albumid']:
                 value = None
                 
                 # Try common tag names for FLAC and MP3
@@ -699,7 +425,8 @@ class FileExpiryCleanup:
                     'albumartist': ['albumartist', 'ALBUMARTIST', 'TPE2'],
                     'artist': ['artist', 'ARTIST', 'TPE1'],
                     'album': ['album', 'ALBUM', 'TALB'],
-                    'title': ['title', 'TITLE', 'TIT2']
+                    'title': ['title', 'TITLE', 'TIT2'],
+                    'musicbrainz_albumid': ['musicbrainz_albumid', 'MUSICBRAINZ_ALBUMID', 'TXXX:MusicBrainz Album Id']
                 }
                 
                 for tag_key in tag_variants.get(field, [field]):
@@ -728,265 +455,24 @@ class FileExpiryCleanup:
             return None
 
     def get_navidrome_album_metadata(self, artist, album_path_name):
-        """Get original album metadata from Navidrome using Subsonic API"""
-        if not self.subsonic_token or not self.subsonic_salt:
-            return None
-        
-        try:
-            # Search for the album using search3 endpoint
-            search_url = f"{self.navidrome_url}/rest/search3"
-            params = {
-                'u': self.navidrome_username,
-                't': self.subsonic_token,
-                's': self.subsonic_salt,
-                'v': '1.16.1',
-                'c': 'FileExpiryCleanup',
-                'f': 'json',
-                'query': f"{artist}",  # Search by artist to find albums
-                'albumCount': 50
-            }
-            
-            response = requests.get(search_url, params=params, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                subsonic_response = data.get('subsonic-response', {})
-                
-                if subsonic_response.get('status') == 'ok':
-                    search_result = subsonic_response.get('searchResult3', {})
-                    albums = search_result.get('album', [])
-                    
-                    if albums:
-                        # Look for the best match
-                        for album_data in albums:
-                            navidrome_album = album_data.get('name', '').lower()
-                            navidrome_artist = album_data.get('artist', '').lower()
-                            
-                            # Check if this matches our filesystem album
-                            if (navidrome_artist == artist.lower() and 
-                                (navidrome_album == album_path_name.lower() or 
-                                 self.normalize_for_comparison(navidrome_album) == album_path_name.lower() or
-                                 self.normalize_for_comparison(album_path_name) == navidrome_album)):
-                                
-                                self.logger.debug(f"Found Navidrome metadata: {navidrome_artist} - {navidrome_album}")
-                                return {
-                                    'original_artist': album_data.get('artist', artist),
-                                    'original_album': album_data.get('name', album_path_name),
-                                    'navidrome_id': album_data.get('id'),
-                                    'cover_art': album_data.get('coverArt')
-                                }
-                    
-                    self.logger.debug(f"No Navidrome match found for: {artist} - {album_path_name}")
-                    return None
-                else:
-                    self.logger.debug(f"Navidrome search failed: {subsonic_response.get('error', {})}")
-                    return None
-            else:
-                self.logger.debug(f"Navidrome search request failed: {response.status_code}")
-                return None
-                
-        except Exception as e:
-            self.logger.debug(f"Error getting Navidrome album metadata: {e}")
-            return None
+        """
+        DEPRECATED: Metadata fetching is now handled by organise_files.py
+        """
+        return None
 
     def track_album_expiry(self, file_path):
-        """Track album expiry data for UI display"""
-        try:
-            # Get file age in days
-            file_stat = os.stat(file_path)
-            file_age = datetime.now() - datetime.fromtimestamp(file_stat.st_mtime)
-            days_old = file_age.days
-            days_until_expiry = self.cleanup_days - days_old
-            
-            # Try to get metadata from audio file first
-            metadata = self.get_audio_metadata(file_path)
-            
-            if metadata:
-                # Use metadata from audio file (most reliable)
-                artist = metadata['artist']
-                album = metadata['album'] 
-                track = metadata.get('title', '')
-                source = "metadata"
-                self.logger.debug(f"Using audio metadata: {artist} - {album}")
-            else:
-                # Fall back to filesystem path parsing
-                artist, album, track = self.extract_music_info_from_path(file_path)
-                source = "filesystem"
-                self.logger.debug(f"Using filesystem parsing: {artist} - {album}")
-            
-            if not artist or not album:
-                self.logger.debug(f"Could not extract artist/album info from {file_path}")
-                return
-                
-            # Create album key using the extracted names
-            album_key = f"{artist} - {album}"
-            
-            # Check if this file/album is starred
-            is_starred = self.is_content_starred(file_path)
-            
-            # Get album directory path (Artist/Album)
-            path_parts = Path(file_path).parts
-            album_dir = None
-            
-            # Try to find the actual album directory in the path
-            for i, part in enumerate(path_parts):
-                # Look for artist match (case insensitive)
-                if part.lower() == artist.lower() and i + 1 < len(path_parts):
-                    # The next part should be the album directory
-                    album_dir_full = path_parts[i + 1]
-                    album_dir = f"{part}/{album_dir_full}"
-                    break
-            
-            if not album_dir:
-                # Fallback: construct directory path
-                artist_fs, album_fs, _ = self.extract_music_info_from_path(file_path)
-                if artist_fs and album_fs:
-                    album_dir = f"{artist_fs}/{album_fs}"
-                else:
-                    album_dir = f"{artist}/{album}"
-            
-            # Track this album's expiry data using metadata names
-            if album_key not in self.album_expiry_data:
-                self.album_expiry_data[album_key] = {
-                    'artist': artist,                    # Original artist name from metadata
-                    'album': album,                      # Original album name from metadata  
-                    'metadata_source': source,           # Track where the data came from
-                    'oldest_file_days': days_old,
-                    'days_until_expiry': days_until_expiry,
-                    'file_count': 0,
-                    'total_size_mb': 0,
-                    'directory': album_dir,
-                    'will_expire': days_until_expiry <= 0,
-                    'is_starred': is_starred,  # Set starred status from the start
-                    'tracks': []  # Track all files in album
-                }
-            else:
-                # Update if this file is older
-                if days_old > self.album_expiry_data[album_key]['oldest_file_days']:
-                    self.album_expiry_data[album_key]['oldest_file_days'] = days_old
-                    self.album_expiry_data[album_key]['days_until_expiry'] = days_until_expiry
-                    self.album_expiry_data[album_key]['will_expire'] = days_until_expiry <= 0
-                
-                # Update starred status - if ANY file in album is starred, mark album as starred
-                if is_starred:
-                    self.album_expiry_data[album_key]['is_starred'] = True
-            
-            # Add file info
-            self.album_expiry_data[album_key]['file_count'] += 1
-            
-            # Get file size
-            try:
-                file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
-                self.album_expiry_data[album_key]['total_size_mb'] += file_size_mb
-            except:
-                file_size_mb = 0
-            
-            # Store individual track information
-            self.album_expiry_data[album_key]['tracks'].append({
-                'file_path': str(file_path),
-                'file_name': Path(file_path).name,
-                'track_title': track if track else Path(file_path).stem,
-                'file_size_mb': file_size_mb,
-                'days_old': days_old,
-                'last_modified': datetime.fromtimestamp(file_stat.st_mtime)
-            })
-            
-        except Exception as e:
-            self.logger.error(f"Error tracking album expiry for {file_path}: {e}")
-    
+        """
+        DEPRECATED: Album expiry tracking is now handled by organise_files.py
+        This method is kept as a placeholder if needed but does nothing.
+        """
+        pass
+
     def save_album_expiry_cache(self):
-        """Save album expiry data to database."""
-        try:
-            if not DATABASE_AVAILABLE:
-                self.logger.error("Database not available - cannot save album expiry data")
-                print("❌ Database not available - cannot save album expiry data")
-                return
-            
-            # Log what we're about to save
-            total_albums = len(self.album_expiry_data)
-            total_tracks = sum(len(d.get('tracks', [])) for d in self.album_expiry_data.values())
-            
-            if total_albums == 0:
-                self.logger.info("No albums to save to database")
-                print("💾 No album expiry data to save (no albums found)")
-                return
-            
-            print(f"💾 Saving {total_albums} albums with {total_tracks} tracks to database...")
-            
-            db = get_db()
-            saved_count = 0
-            
-            # Create progress bar for album processing
-            album_items = list(self.album_expiry_data.items())
-            
-            if TQDM_AVAILABLE:
-                album_progress = tqdm(album_items,
-                                    desc="PROGRESS_MAIN: Saving albums to database",
-                                    unit="album", ncols=100, position=0)
-            else:
-                album_progress = album_items
-            
-            albums_with_art = 0
-            
-            try:
-                for album_key, data in album_progress:
-                    # Get album art URL from Navidrome
-                    album_art_url = self.get_album_art_url(data['artist'], data['album'])
-                    
-                    if album_art_url:
-                        albums_with_art += 1
-                        if not TQDM_AVAILABLE:
-                            print(f"    🎨 Found album art for {data['artist']} - {data['album']}")
-                        self.logger.info(f"Found album art for {data['artist']} - {data['album']}")
-                    else:
-                        self.logger.debug(f"No album art found for {data['artist']} - {data['album']}")
-                    
-                    album_record = {
-                        'album_key': album_key,
-                        'artist': data['artist'],
-                        'album': data['album'],
-                        'directory': data['directory'],
-                        'album_art_url': album_art_url,
-                        'oldest_file_days': data['oldest_file_days'],
-                        'days_until_expiry': data['days_until_expiry'],
-                        'file_count': data['file_count'],
-                        'total_size_mb': data['total_size_mb'],
-                        'is_starred': data['is_starred'],
-                        'cleanup_days': self.cleanup_days,
-                        'status': 'starred' if data['is_starred'] else 'pending'
-                    }
-                    album_id = db.upsert_expiring_album(album_record)
-                    
-                    # Clear existing tracks for this album
-                    db.clear_album_tracks(album_id)
-                    
-                    # Add all tracks
-                    for track in data.get('tracks', []):
-                        db.add_album_track(album_id, track)
-                    
-                    saved_count += 1
-                    
-                    # Update progress bar
-                    if TQDM_AVAILABLE:
-                        album_progress.set_postfix({
-                            'Saved': saved_count,
-                            'With_Art': albums_with_art,
-                            'Art_%': f"{(albums_with_art/saved_count)*100:.1f}" if saved_count > 0 else "0"
-                        })
-                        
-            finally:
-                if TQDM_AVAILABLE:
-                    album_progress.close()
-                
-            print(f"    ✅ Saved {saved_count} albums")
-            print(f"    🎨 Found album art for {albums_with_art} albums ({(albums_with_art/saved_count)*100:.1f}%)" if saved_count > 0 else "")
-            
-            self.logger.info(f"Saved {saved_count} albums with {total_tracks} tracks to database")
-            print(f"✅ Saved {saved_count} albums with all track details to database")
-            
-        except Exception as e:
-            self.logger.error(f"Error saving album expiry data to database: {e}")
-            print(f"❌ Error saving to database: {e}")
+        """
+        DEPRECATED: Album expiry tracking is now handled by organise_files.py
+        This method is kept as a placeholder if needed but does nothing.
+        """
+        pass
 
     def delete_file(self, file_path):
         """Delete a file with logging"""
@@ -1060,7 +546,9 @@ class FileExpiryCleanup:
             progress = all_file_paths
         
         try:
-            for file_path in progress:
+            for i, file_path in enumerate(progress, 1):
+                if i % 100 == 0:
+                    print(f"PROGRESS: {i}/{total_music_files} - Processing music files...")
                 # Delete macOS metadata files immediately without tracking
                 filename = os.path.basename(file_path)
                 if filename.startswith('._'):
@@ -1076,9 +564,6 @@ class FileExpiryCleanup:
                 
                 files_processed += 1
                 self.stats['files_scanned'] += 1
-                
-                # Always track album data for UI cache (regardless of age)
-                self.track_album_expiry(file_path)
                 
                 # Check if file is old enough
                 if not self.is_file_old_enough(file_path):
@@ -1250,28 +735,32 @@ class FileExpiryCleanup:
         self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
         self.logger.info("")
         
-        # Step 2: Get starred content
+        # Step 2: Verify database connection for starred content
         step_start = datetime.now()
         print()
-        print("⭐ Step 2: Fetching starred content from Navidrome...")
-        self.logger.info("PROGRESS: [2/6] 33% - Fetching starred content from Navidrome")
-        starred_success = self.get_starred_content()
+        print("⭐ Step 2: Verifying starred content protection...")
+        self.logger.info("PROGRESS: [2/6] 33% - Verifying starred content protection")
         
-        if not starred_success:
-            print("⚠️  Failed to fetch starred content")
-            if not self.dry_run:
-                print("❌ Aborting cleanup to avoid deleting starred content")
-                print("   Run with --dry-run to see what would be deleted")
-                self.logger.error("Aborting cleanup - could not verify starred content and not in dry run mode")
-                return False
-            else:
-                print("   Continuing in dry run mode - no files will be deleted")
-                self.logger.warning("Continuing in dry run mode despite starred content fetch failure")
+        if not self.db:
+            print("⚠️  Database not available - treating ALL files as starred (safe mode)")
+            self.logger.warning("Database not available - enabling full protection")
         else:
-            # Print summary of starred content
-            print(f"    ✓ Protection enabled for:")
-            print(f"      📀 {len(self.starred_albums)} starred albums")
-            print(f"      🎵 {len(self.starred_tracks)} starred songs")
+            try:
+                with self.db.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT COUNT(*) as count FROM expiring_albums WHERE is_starred = TRUE")
+                    starred_albums_count = cursor.fetchone()['count']
+                    
+                    cursor.execute("SELECT COUNT(*) as count FROM album_tracks WHERE is_starred = TRUE")
+                    starred_tracks_count = cursor.fetchone()['count']
+                    
+                print(f"    ✓ Protection enabled for:")
+                print(f"      📀 {starred_albums_count} starred albums (in DB)")
+                print(f"      🎵 {starred_tracks_count} starred songs (in DB)")
+                self.logger.info(f"Found {starred_albums_count} starred albums and {starred_tracks_count} starred tracks in DB")
+            except Exception as e:
+                print(f"⚠️  Error checking database: {e}")
+                self.logger.error(f"Error checking database for starred content: {e}")
         
         step_duration = (datetime.now() - step_start).total_seconds()
         self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
@@ -1318,17 +807,6 @@ class FileExpiryCleanup:
         self.logger.info("PROGRESS: [5/6] 83% - Removing empty directories")
         self.remove_empty_directories(self.incomplete_dir)
         self.remove_empty_directories(self.not_owned_dir)
-        
-        step_duration = (datetime.now() - step_start).total_seconds()
-        self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")
-        self.logger.info("")
-        
-        # Step 6: Save album expiry cache for UI
-        step_start = datetime.now()
-        print()
-        print("💾 Step 6: Saving album expiry data to database...")
-        self.logger.info("PROGRESS: [6/6] 100% - Saving album expiry data to database")
-        self.save_album_expiry_cache()
         
         step_duration = (datetime.now() - step_start).total_seconds()
         self.logger.info(f"   ⏱️  Step completed in {step_duration:.1f}s")

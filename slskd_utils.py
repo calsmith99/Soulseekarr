@@ -36,8 +36,42 @@ class SlskdDownloader:
             'X-API-Key': self.slskd_api_key
         }
     
+    def is_downloading_or_completed(self, artist: str, title: str) -> bool:
+        """Check if a song is already downloading or completed in slskd."""
+        try:
+            url = f"{self.slskd_url}/api/v0/transfers/downloads"
+            response = requests.get(url, headers=self.headers, timeout=10)
+            
+            if response.status_code != 200:
+                return False
+            
+            downloads = response.json()
+            
+            # Normalize for comparison
+            norm_artist = self._normalize_string(artist)
+            norm_title = self._normalize_string(title)
+            
+            for download in downloads:
+                filename = download.get('filename', '')
+                norm_filename = self._normalize_string(filename)
+                
+                # Check if both artist and title appear in filename
+                if norm_artist in norm_filename and norm_title in norm_filename:
+                    state = download.get('state', '').lower()
+                    # Consider these states as "already handled" (active downloads only)
+                    # We retry completed/succeeded because if we are here, the track is missing from library
+                    if state in ['queued', 'initializing', 'requested', 'inprogress']:
+                        self.logger.info(f"Skipping search: '{artist} - {title}' is already {state} ({os.path.basename(filename)})")
+                        return True
+            
+            return False
+            
+        except Exception as e:
+            self.logger.debug(f"Error checking download status: {e}")
+            return False
+
     def search_and_download(self, search_query: str, search_type: str = 'album', 
-                           target_name: Optional[str] = None, dry_run: bool = False) -> bool:
+                           target_name: Optional[str] = None, dry_run: bool = False) -> Any:
         """
         Search for content and download the best match.
         
@@ -48,12 +82,23 @@ class SlskdDownloader:
             dry_run: If True, only simulate the download
             
         Returns:
-            True if successful, False otherwise
+            Result from _download_files (dict or False)
         """
         if dry_run:
             self.logger.info(f"[DRY RUN] Would search slskd for: {search_query}")
             return True
         
+        # Extract artist/title from search query if possible to check existing downloads
+        # This is a heuristic since we only have the query string here
+        if search_type == 'song' and target_name:
+            # Try to parse artist from query (assuming "Artist Title" format)
+            # This is imperfect but helps catch obvious duplicates
+            parts = search_query.split(' ', 1)
+            if len(parts) > 1:
+                # We can't easily separate artist/title from just the query string reliably
+                # But if we're called from search_and_download_song, we might want to pass them explicitly
+                pass
+
         try:
             # Step 1: Initiate search
             search_id = self._initiate_search(search_query)
@@ -74,18 +119,27 @@ class SlskdDownloader:
             
             # Step 4: Find best match based on type
             if search_type == 'album':
-                best_match = self._find_best_album_match(results, target_name)
+                matches = self._find_best_album_match(results, target_name)
             elif search_type == 'song':
-                best_match = self._find_best_song_match(results, search_query, target_name)
+                matches = self._find_best_song_match(results, search_query, target_name)
             else:
-                best_match = self._find_best_any_match(results)
+                matches = self._find_best_any_match(results)
             
-            if not best_match:
+            if not matches:
                 self.logger.warning(f"No suitable match found")
                 return False
             
-            # Step 5: Download the files
-            return self._download_files(best_match)
+            # Step 5: Download the files (try matches in order)
+            for i, match in enumerate(matches):
+                self.logger.info(f"Attempting download from candidate {i+1}/{len(matches)}")
+                result = self._download_files(match)
+                if result:
+                    return result
+                
+                self.logger.warning(f"Download failed for candidate {i+1}, trying next...")
+            
+            self.logger.error("All download candidates failed")
+            return False
             
         except Exception as e:
             self.logger.error(f"Error in search_and_download: {e}")
@@ -120,7 +174,7 @@ class SlskdDownloader:
             self.logger.error(f"Error initiating search: {e}")
             return None
     
-    def _wait_for_search_completion(self, search_id: str, max_wait: int = 120, 
+    def _wait_for_search_completion(self, search_id: str, max_wait: int = 600, 
                                     check_interval: int = 4) -> int:
         """
         Wait for search to complete and return file count.
@@ -160,7 +214,7 @@ class SlskdDownloader:
                     return file_count
                 
                 # Early exit if we have results and waited long enough
-                if elapsed >= 60 and file_count > 0:
+                if elapsed >= 300 and file_count > 0:
                     self.logger.info(f"Proceeding with {file_count} files after {elapsed}s")
                     return file_count
                     
@@ -229,7 +283,7 @@ class SlskdDownloader:
         
         return cleaned
     
-    def _find_best_album_match(self, results: List[Dict], album_name: Optional[str] = None) -> Optional[Dict]:
+    def _find_best_album_match(self, results: List[Dict], album_name: Optional[str] = None) -> List[Dict]:
         """
         Find the best album match from search results.
         
@@ -239,7 +293,7 @@ class SlskdDownloader:
         3. Higher file counts
         4. Better bitrates
         
-        Returns only the BEST single version of the album (not all versions).
+        Returns list of candidates sorted by score.
         """
         album_candidates = []
         
@@ -248,6 +302,7 @@ class SlskdDownloader:
                 continue
             
             username = result.get('username', '')
+            upload_speed = result.get('uploadSpeed', 0)
             files = result.get('files', [])
             
             # Group files by their parent directory (each directory = one album version)
@@ -290,10 +345,25 @@ class SlskdDownloader:
                 
                 # Overall score
                 score = 0
+                
+                # Penalize compilations if not requested
+                compilation_keywords = ['best of', 'greatest hits', 'collection', 'anthology', 'essential', 'compilation', 'various artists']
+                is_wanted_compilation = album_name and any(kw in album_name.lower() for kw in compilation_keywords)
+                
+                if not is_wanted_compilation:
+                    normalized_dir = self._normalize_string(directory)
+                    if any(kw in normalized_dir for kw in compilation_keywords):
+                        score -= 20
+                
                 score += name_score
-                score += 20 if has_flac else 0
+                score += 40 if has_flac else 0
                 score += len(audio_files)  # More files = better (likely complete album)
                 score += min(avg_bitrate // 32, 10)  # Bitrate bonus (max 10)
+                
+                # Speed bonus (1 point per 100KB/s, max 30)
+                speed_kb = upload_speed / 1024
+                speed_bonus = min(int(speed_kb / 100), 30)
+                score += speed_bonus
                 
                 album_candidates.append({
                     'username': username,
@@ -302,12 +372,13 @@ class SlskdDownloader:
                     'file_count': len(audio_files),
                     'has_flac': has_flac,
                     'avg_bitrate': avg_bitrate,
+                    'upload_speed': upload_speed,
                     'score': score
                 })
         
         if not album_candidates:
             self.logger.info("No album candidates found")
-            return None
+            return []
         
         # Sort by score (highest first)
         album_candidates.sort(key=lambda x: x['score'], reverse=True)
@@ -316,20 +387,17 @@ class SlskdDownloader:
         self.logger.info(f"Found {len(album_candidates)} album versions:")
         for i, candidate in enumerate(album_candidates[:5]):
             dir_name = os.path.basename(candidate['directory'])
+            speed_mb = candidate.get('upload_speed', 0) / (1024 * 1024)
             self.logger.info(f"  {i+1}. {dir_name}: {candidate['file_count']} files, "
                            f"FLAC: {candidate['has_flac']}, "
-                           f"Bitrate: {candidate['avg_bitrate']}kbps, "
+                           f"Bitrate: {candidate['avg_bitrate']}kbps, {speed_mb:.2f}MB/s, "
                            f"Score: {candidate['score']}")
         
-        # Return ONLY the best version
-        best = album_candidates[0]
-        self.logger.info(f"Selected: {os.path.basename(best['directory'])} "
-                        f"({best['file_count']} files, FLAC: {best['has_flac']})")
-        
-        return best
+        # Return all candidates
+        return album_candidates
     
     def _find_best_song_match(self, results: List[Dict], search_query: str, 
-                             target_title: Optional[str] = None) -> Optional[Dict]:
+                             target_title: Optional[str] = None) -> List[Dict]:
         """
         Find the best song match from search results.
         
@@ -377,6 +445,7 @@ class SlskdDownloader:
                 continue
             
             username = result.get('username', '')
+            upload_speed = result.get('uploadSpeed', 0)
             files = result.get('files', [])
             total_files += len(files)
             
@@ -411,7 +480,9 @@ class SlskdDownloader:
                 unwanted_keywords = [
                     'remix', 'mix)', 'edit)', 'version)', 'live', 'acoustic', 'demo', 
                     'karaoke', 'instrumental', 'radio edit', 'clean version', 'explicit',
-                    'cover', 'tribute', 'mashup', 'bootleg', 'alternate', 'alternative'
+                    'cover', 'tribute', 'mashup', 'bootleg', 'alternate', 'alternative',
+                    'funkymix', 'ultimix', 'megamix', 'club mix', 'extended mix',
+                    'redrum', 'intro', 'outro', 'acapella', 'dj tool', 'transition'
                 ]
                 
                 # Check if the target title itself contains version indicators
@@ -442,8 +513,8 @@ class SlskdDownloader:
                 # Special penalty for obvious remix patterns - but only if target doesn't expect them
                 remix_patterns = [
                     r'\(.*remix.*\)', r'\[.*remix.*\]',  # (any remix) or [any remix]
-                    r'\(.*mix\)', r'\[.*mix\]',          # (any mix) or [any mix] 
-                    r'\(.*edit\)', r'\[.*edit\]',        # (any edit) or [any edit]
+                    r'\(.*mix.*\)', r'\[.*mix.*\]',      # (any mix) or [any mix] - catches "Funkymix by..."
+                    r'\(.*edit.*\)', r'\[.*edit.*\]',    # (any edit) or [any edit] - catches "Radio Edit by..."
                 ]
                 
                 for pattern in remix_patterns:
@@ -492,9 +563,9 @@ class SlskdDownloader:
                 
                 # Quality bonuses
                 if '.flac' in filename.lower():
-                    match_score += 5
+                    match_score += 40
                 elif '.mp3' in filename.lower():
-                    match_score += 3
+                    match_score += 5
                 
                 # Bitrate bonus
                 if bitrate >= 320:
@@ -506,8 +577,19 @@ class SlskdDownloader:
                 if size_mb > 3:
                     match_score += min(int(size_mb / 2), 5)
                 
+                # Speed bonus (1 point per 100KB/s, max 30)
+                # uploadSpeed is in bytes/sec
+                speed_kb = upload_speed / 1024
+                speed_bonus = min(int(speed_kb / 100), 30)
+                match_score += speed_bonus
+                
                 # Apply unwanted version penalty
                 match_score -= unwanted_penalty
+                
+                # Penalize compilations for single songs too
+                compilation_keywords = ['best of', 'greatest hits', 'collection', 'anthology', 'essential', 'compilation', 'various artists']
+                if any(kw in normalized_filename.lower() for kw in compilation_keywords):
+                    match_score -= 10
                 
                 # Bonus for matching expected version types
                 version_match_bonus = 0
@@ -526,7 +608,70 @@ class SlskdDownloader:
                     for indicator in original_indicators:
                         if indicator in normalized_filename.lower():
                             match_score += 20
+                    
+                    # Bonus for "clean" filenames (only track name, artist, album, track number)
+                    # This helps avoid "remix", "edit", "live" etc that might not be caught by specific keywords
+                    # Logic: Check if all words in filename are present in allowed set (artist + title + album + numbers)
+                    
+                    # Create set of allowed words
+                    allowed_words = set(artist_words + title_words + album_words)
+                    # Add common filler words that are okay
+                    allowed_words.update(['the', 'a', 'an', 'feat', 'ft', 'featuring', 'and', '&', 'with', 'mp3', 'flac'])
+                    
+                    # Get words from filename (remove extension first)
+                    file_basename_no_ext = os.path.splitext(os.path.basename(filename))[0]
+                    file_words = self._normalize_string(file_basename_no_ext).split()
+                    
+                    # Check if file words are mostly in allowed words
+                    clean_word_count = 0
+                    unknown_word_count = 0
+                    
+                    for word in file_words:
+                        if len(word) < 2: continue # Skip single chars
+                        if word.isdigit(): continue # Skip numbers (track numbers, years)
+                        
+                        if word in allowed_words:
+                            clean_word_count += 1
+                        else:
+                            # Check for partial matches (e.g. "songname" matching "song")
+                            is_partial = False
+                            for allowed in allowed_words:
+                                if len(allowed) > 3 and (allowed in word or word in allowed):
+                                    is_partial = True
+                                    break
+                            
+                            if is_partial:
+                                clean_word_count += 1
+                            else:
+                                unknown_word_count += 1
+                    
+                    # If we have mostly clean words and few unknown words, give a bonus
+                    if clean_word_count > 0 and unknown_word_count <= 1:
+                        match_score += 15
+                        self.logger.debug(f"  Clean filename bonus: {os.path.basename(filename)}")
                 
+                # Bonus if folder path contains album name
+                if target_album and album_words:
+                    # Get directory path
+                    if '\\' in filename:
+                        directory = filename.rsplit('\\', 1)[0]
+                    elif '/' in filename:
+                        directory = filename.rsplit('/', 1)[0]
+                    else:
+                        directory = ''
+                    
+                    normalized_dir = self._normalize_string(directory)
+                    
+                    # Check if significant album words are in directory
+                    album_matches = 0
+                    for word in album_words:
+                        if len(word) > 3 and word in normalized_dir:
+                            album_matches += 1
+                    
+                    if album_matches >= min(len(album_words), 2):
+                        match_score += 15
+                        self.logger.debug(f"  Album in path bonus: {directory}")
+
                 # Only add candidates with positive scores (after penalties)
                 if match_score > 0:
                     candidates.append({
@@ -535,10 +680,11 @@ class SlskdDownloader:
                         'filename': filename,
                         'filesize': filesize,
                         'bitrate': bitrate,
+                        'upload_speed': upload_speed,
                         'score': match_score
                     })
                     self.logger.debug(f"  Candidate: {os.path.basename(filename)} "
-                                    f"(score: {match_score}, {size_mb:.1f}MB)")
+                                    f"(score: {match_score}, {size_mb:.1f}MB, {int(speed_kb)}KB/s)")
         
         self.logger.info(f"Found {len(candidates)} potential matches out of {total_files} total files")
         
@@ -553,25 +699,28 @@ class SlskdDownloader:
         self.logger.info(f"Top 5 candidates:")
         for i, candidate in enumerate(candidates[:5]):
             size_mb = candidate['filesize'] / (1024 * 1024)
+            speed_mb = candidate.get('upload_speed', 0) / (1024 * 1024)
             self.logger.info(f"  {i+1}. {os.path.basename(candidate['filename'])}: "
-                           f"{size_mb:.1f}MB, {candidate['bitrate']}kbps, "
+                           f"{size_mb:.1f}MB, {candidate['bitrate']}kbps, {speed_mb:.2f}MB/s, "
                            f"Score: {candidate['score']}")
         
-        return candidates[0]
+        return candidates
     
-    def _find_best_any_match(self, results: List[Dict]) -> Optional[Dict]:
+    def _find_best_any_match(self, results: List[Dict]) -> List[Dict]:
         """Find best match of any type (fallback)."""
         # Try album first
-        album_match = self._find_best_album_match(results)
-        if album_match:
-            return album_match
+        album_matches = self._find_best_album_match(results)
+        if album_matches:
+            return album_matches
         
         # Fall back to any audio file
         return self._find_any_audio_file(results)
     
-    def _find_any_audio_file(self, results: List[Dict]) -> Optional[Dict]:
+    def _find_any_audio_file(self, results: List[Dict]) -> List[Dict]:
         """Find any reasonable audio file as last resort fallback."""
         self.logger.info("Trying to find ANY suitable audio file...")
+        
+        candidates = []
         
         for result in results:
             if not isinstance(result, dict):
@@ -602,18 +751,26 @@ class SlskdDownloader:
                 self.logger.info(f"Found audio file: {os.path.basename(filename)} "
                                f"({size_mb:.1f}MB) from {username}")
                 
-                return {
+                candidates.append({
                     'username': username,
                     'files': [file_info],
                     'filename': filename,
                     'filesize': filesize
-                }
+                })
         
-        self.logger.info("No suitable audio files found")
-        return None
+        if not candidates:
+            self.logger.info("No suitable audio files found")
+            return []
+            
+        return candidates
     
-    def _download_files(self, match: Dict) -> bool:
-        """Download the selected files."""
+    def _download_files(self, match: Dict) -> Any:
+        """
+        Download the selected files.
+        
+        Returns:
+            List of queued files if successful, False otherwise
+        """
         username = match.get('username')
         files = match.get('files', [])
         
@@ -650,7 +807,12 @@ class SlskdDownloader:
                 for file_obj in file_data:
                     size_mb = file_obj['size'] / (1024 * 1024) if file_obj['size'] > 0 else 0
                     self.logger.info(f"  ✓ Queued: {os.path.basename(file_obj['filename'])} ({size_mb:.1f}MB)")
-                return True
+                
+                # Return the queued files info including username
+                return {
+                    'username': username,
+                    'files': file_data
+                }
             else:
                 self.logger.warning(f"Failed to queue files: HTTP {response.status_code}")
                 if response.text:
@@ -704,7 +866,7 @@ def search_and_download_song(slskd_url: str, slskd_api_key: str,
                              artist: str, title: str,
                              album: Optional[str] = None,
                              logger: Optional[logging.Logger] = None,
-                             dry_run: bool = False) -> bool:
+                             dry_run: bool = False) -> Any:
     """
     Search and download a song.
     
@@ -718,9 +880,13 @@ def search_and_download_song(slskd_url: str, slskd_api_key: str,
         dry_run: If True, only simulate the download
         
     Returns:
-        True if successful, False otherwise
+        Result from search_and_download (dict or False)
     """
     downloader = SlskdDownloader(slskd_url, slskd_api_key, logger)
+    
+    # Check if already downloading or completed
+    if not dry_run and downloader.is_downloading_or_completed(artist, title):
+        return True
     
     # Create search query - include album in search if available for better results
     if album:

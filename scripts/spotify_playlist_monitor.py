@@ -49,7 +49,8 @@ import re
 # Add parent directory to path so we can import action_logger and lidarr_utils
 sys.path.append(str(Path(__file__).parent.parent))
 
-from slskd_utils import search_and_download_song
+from database import DatabaseManager
+from slskd_utils import SlskdDownloader, search_and_download_song
 
 # Try to import settings
 try:
@@ -78,8 +79,10 @@ except ImportError as e:
     LidarrClient = None
 
 class SpotifyPlaylistMonitor:
-    def __init__(self, dry_run=False):
+    def __init__(self, dry_run=False, limit=0):
         self.dry_run = dry_run
+        self.limit = limit
+        self.db = DatabaseManager()
         
         # Try to get configuration from settings module first
         if SETTINGS_AVAILABLE:
@@ -202,6 +205,18 @@ class SpotifyPlaylistMonitor:
                 self.lidarr_client = None
                 if self.logger:
                     self.logger.warning("LidarrClient not available, using fallback methods")
+
+            # Initialize Slskd downloader
+            if self.slskd_url and self.slskd_api_key:
+                self.slskd_downloader = SlskdDownloader(
+                    slskd_url=self.slskd_url,
+                    slskd_api_key=self.slskd_api_key,
+                    logger=self.logger
+                )
+            else:
+                self.slskd_downloader = None
+                if self.logger:
+                    self.logger.warning("Slskd configuration missing, download features disabled")
 
         except Exception as e:
             error_msg = f"❌ Failed to initialize Spotify Playlist Monitor: {e}"
@@ -601,10 +616,20 @@ class SpotifyPlaylistMonitor:
                 if not track or track.get('type') != 'track':
                     continue
                 
+                # Extract release year
+                release_date = track.get('album', {}).get('release_date', '')
+                year = None
+                if release_date:
+                    try:
+                        year = int(release_date.split('-')[0])
+                    except (ValueError, IndexError):
+                        year = None
+
                 song_info = {
                     'title': track.get('name', ''),
                     'artists': [artist.get('name', '') for artist in track.get('artists', [])],
                     'album': track.get('album', {}).get('name', ''),
+                    'year': year,
                     'spotify_id': track.get('id', ''),
                     'duration_ms': track.get('duration_ms', 0)
                 }
@@ -662,7 +687,7 @@ class SpotifyPlaylistMonitor:
             
             # Try each endpoint until one works
             for i, endpoint in enumerate(api_endpoints):
-                self.logger.debug(f"Trying Subsonic API endpoint {i+1}/{len(api_endpoints)}: {endpoint['method']}")
+                self.logger.debug(f"Trying Subsonic API endpoint {i+1}")
                 
                 # Build headers and params for Subsonic API (no Bearer token needed)
                 headers = {}
@@ -1271,7 +1296,7 @@ class SpotifyPlaylistMonitor:
             cleaned_title = self.clean_song_title(song['title'])
             search_url = f"{self.navidrome_url}/rest/search3"
             search_params = {
-                'query': f'"{song["artist"]}" "{cleaned_title}"',
+                'query': f'artist:"{song["artist"]}" "{cleaned_title}"',
                 'songCount': 10,
                 'f': 'json',
                 'u': self.navidrome_username,
@@ -1293,7 +1318,7 @@ class SpotifyPlaylistMonitor:
                     # Look for exact match - try both cleaned and original titles
                     target_artist = self.normalize_string(song['artist'])
                     target_title_cleaned = self.normalize_string(self.clean_song_title(song['title']))
-                    target_title_original = self.normalize_string(song['title'])
+                    target_title_original = self.normalize_string(song['title']);
                     
                     for found_song in songs:
                         found_artist = self.normalize_string(found_song.get('artist', ''))
@@ -1709,7 +1734,8 @@ class SpotifyPlaylistMonitor:
                         sorted_albums = sorted(albums, key=lambda x: x.get('releaseDate', '0000-01-01'), reverse=True)
                         if sorted_albums:
                             target_album = sorted_albums[0]
-                            self.logger.warning(f"No album match found for song '{song_info['title']}' from album '{song_info['album']}', using most recent album: {target_album.get('title', '')} (released: {target_album.get('releaseDate', 'Unknown')})")
+                            self.logger.warning(f"No album match found for song '{song_info['title']}' from album '{song_info['album']}'", 
+                                                f"using most recent album: {target_album.get('title', '')} (released: {target_album.get('releaseDate', 'Unknown')})")
                             self.logger.debug(f"Target album artist: {target_album.get('artist', {}).get('artistName', 'Unknown')}")
                             self.logger.debug(f"Target album foreignAlbumId: {target_album.get('foreignAlbumId', 'None')}")
                             
@@ -2098,6 +2124,7 @@ class SpotifyPlaylistMonitor:
             queued_count = 0
             failed_count = 0
             skipped_count = 0
+            active_downloads = []
             
             for i, song in enumerate(songs_to_queue, 1):
                 try:
@@ -2105,6 +2132,20 @@ class SpotifyPlaylistMonitor:
                     if self.is_song_already_downloaded(song):
                         print(f"⏭️  Skipping song {i}/{len(songs_to_queue)} (already downloaded): {song['artist']} - {song['title']}")
                         self.logger.info(f"Song already downloaded, skipping: {song['artist']} - {song['title']}")
+                        skipped_count += 1
+                        continue
+
+                    # Check if song exists in Navidrome
+                    if self.is_song_in_navidrome(song):
+                        print(f"⏭️  Skipping song {i}/{len(songs_to_queue)} (exists in Navidrome): {song['artist']} - {song['title']}")
+                        self.logger.info(f"Song exists in Navidrome, skipping: {song['artist']} - {song['title']}")
+                        skipped_count += 1
+                        continue
+                    
+                    # Check if song exists in Lidarr
+                    if self.is_song_in_lidarr(song):
+                        print(f"⏭️  Skipping song {i}/{len(songs_to_queue)} (exists in Lidarr): {song['artist']} - {song['title']}")
+                        self.logger.info(f"Song exists in Lidarr, skipping: {song['artist']} - {song['title']}")
                         skipped_count += 1
                         continue
                     
@@ -2117,9 +2158,17 @@ class SpotifyPlaylistMonitor:
                     
                     print(f"📥 Queuing song {i}/{len(songs_to_queue)}: {song['artist']} - {song['title']}")
                     
-                    if self.queue_song_in_slskd(song):
+                    result = self.queue_song_in_slskd(song)
+                    if result:
                         queued_count += 1
                         self.logger.info(f"Successfully queued: {song['artist']} - {song['title']}")
+                        
+                        if isinstance(result, dict):
+                            # Add metadata for moving
+                            result['artist'] = song['artist']
+                            result['title'] = song['title']
+                            result['album'] = song.get('album') or song.get('album_name')
+                            active_downloads.append(result)
                     else:
                         failed_count += 1
                         self.logger.warning(f"Failed to queue: {song['artist']} - {song['title']}")
@@ -2138,6 +2187,10 @@ class SpotifyPlaylistMonitor:
                 print(f"⏭️  Skipped {skipped_count} songs (already downloaded or downloading)")
             if failed_count > 0:
                 print(f"⚠️  Failed to queue {failed_count} songs")
+            
+            # Monitor and move downloads
+            if active_downloads:
+                self.monitor_and_move_downloads(active_downloads)
             
             return queued_count + skipped_count  # Return total "successful" operations
             
@@ -2169,6 +2222,45 @@ class SpotifyPlaylistMonitor:
             self.logger.error(f"Error checking slskd connection: {e}")
             return False
     
+    def is_song_in_lidarr(self, song):
+        """Check if song exists in Lidarr and has a file"""
+        if not self.lidarr_client:
+            return False
+            
+        try:
+            artist_name = song['artist']
+            title = song['title']
+            
+            # Get artist from Lidarr
+            artist = self.lidarr_client.get_artist_by_name(artist_name)
+            if not artist:
+                return False
+                
+            # Get tracks for artist
+            tracks = self.lidarr_client.get_tracks_by_artist(artist['id'])
+            if not tracks:
+                return False
+                
+            # Normalize title for comparison
+            normalized_title = self.normalize_string(self.clean_song_title(title))
+            
+            for track in tracks:
+                if not track.get('hasFile'):
+                    continue
+                    
+                track_title = track.get('title', '')
+                normalized_track_title = self.normalize_string(self.clean_song_title(track_title))
+                
+                if normalized_title == normalized_track_title:
+                    self.logger.info(f"Song found in Lidarr: {artist_name} - {title} (matched '{track_title}')")
+                    return True
+                    
+            return False
+            
+        except Exception as e:
+            self.logger.error(f"Error checking Lidarr for song {song['artist']} - {song['title']}: {e}")
+            return False
+
     def queue_song_in_slskd(self, song):
         """Queue a single song for download in slskd using shared utility."""
         try:
@@ -2180,7 +2272,7 @@ class SpotifyPlaylistMonitor:
             album = song.get('album') or song.get('album_name')
             
             # Use shared utility function with album info
-            success = search_and_download_song(
+            result = search_and_download_song(
                 slskd_url=self.slskd_url,
                 slskd_api_key=self.slskd_api_key,
                 artist=song['artist'],
@@ -2190,17 +2282,116 @@ class SpotifyPlaylistMonitor:
                 dry_run=False
             )
             
-            if success:
+            if result:
                 if album:
                     self.logger.info(f"Successfully queued: {song['artist']} - {song['title']} (from {album})")
                 else:
                     self.logger.info(f"Successfully queued: {song['artist']} - {song['title']}")
             
-            return success
+            return result
             
         except Exception as e:
             self.logger.error(f"Error queuing song {song['artist']} - {song['title']}: {e}")
             return False
+
+    def sanitize_filename(self, name):
+        """Sanitize string for use in filenames"""
+        return re.sub(r'[<>:"/\\|?*]', '_', str(name)).strip()
+
+    def monitor_and_move_downloads(self, active_downloads):
+        """Monitor active downloads and move them to incomplete folder when finished."""
+        if not active_downloads:
+            return
+
+        import shutil
+        
+        print(f"\n👀 Monitoring {len(active_downloads)} active downloads...")
+        self.logger.info(f"Monitoring {len(active_downloads)} active downloads")
+        
+        # Max wait time: 10 minutes (60 * 10s)
+        max_retries = 60
+        
+        remaining_downloads = active_downloads.copy()
+        
+        for i in range(max_retries):
+            if not remaining_downloads:
+                print("✅ All downloads completed and moved!")
+                break
+                
+            print(f"⏳ Waiting for downloads... ({len(remaining_downloads)} remaining) [Check {i+1}/{max_retries}]")
+            
+            still_pending = []
+            
+            for download in remaining_downloads:
+                username = download.get('username')
+                files = download.get('files', [])
+                artist = download.get('artist')
+                title = download.get('title')
+                album = download.get('album') or "Unknown Album"
+                
+                # Check if files exist
+                all_files_exist = True
+                found_files = []
+                
+                # Construct base user path
+                base_download_path = Path('/downloads/completed')
+                user_path = base_download_path / username
+                
+                for file_info in files:
+                    filename = file_info.get('filename')
+                    file_path = user_path / filename
+                    
+                    if not file_path.exists():
+                        all_files_exist = False
+                        break
+                    else:
+                        found_files.append(file_path)
+                
+                if all_files_exist and found_files:
+                    # Move files
+                    try:
+                        # Destination: /media/Incomplete/Artist/Album/
+                        safe_artist = self.sanitize_filename(artist)
+                        safe_album = self.sanitize_filename(album)
+                        
+                        dest_dir = Path('/media/Incomplete') / safe_artist / safe_album
+                        dest_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        for src_path in found_files:
+                            dest_path = dest_dir / src_path.name
+                            print(f"🚚 Moving {src_path.name} to {dest_dir}")
+                            self.logger.info(f"Moving {src_path} to {dest_path}")
+                            
+                            # Move file
+                            shutil.move(str(src_path), str(dest_path))
+                            
+                            # Try to clean up empty source directories
+                            try:
+                                if src_path.parent != user_path:
+                                    # If file was in a subdir, try to remove it if empty
+                                    src_path.parent.rmdir()
+                            except:
+                                pass
+                            
+                        print(f"✅ Completed: {artist} - {title}")
+                        
+                    except Exception as e:
+                        self.logger.error(f"Error moving files for {artist} - {title}: {e}")
+                        print(f"❌ Error moving files for {artist} - {title}: {e}")
+                        # Don't retry moving if it failed
+                        pass
+                        
+                else:
+                    still_pending.append(download)
+            
+            remaining_downloads = still_pending
+            if remaining_downloads:
+                time.sleep(10)
+        
+        if remaining_downloads:
+            print(f"⚠️  Timed out waiting for {len(remaining_downloads)} downloads")
+            for d in remaining_downloads:
+                self.logger.warning(f"Timed out waiting for download: {d.get('artist')} - {d.get('title')}")
     
     def find_best_song_match(self, results, target_song):
         """Find the best matching song from search results with relaxed criteria"""
@@ -2256,7 +2447,7 @@ class SpotifyPlaylistMonitor:
                         continue
                     
                     # Normalize filename for comparison
-                    normalized_filename = self.normalize_string(filename)
+                    normalized_filename = self.normalize_string(file)
                     
                     # Remove track numbers for better matching (e.g., "08 Mr. Kill Myself" -> "Mr. Kill Myself")
                     cleaned_filename = re.sub(r'^\d+\s*[-.]?\s*', '', normalized_filename)
@@ -2619,7 +2810,55 @@ class SpotifyPlaylistMonitor:
             self.stats['errors'] += 1
             return False
     
-    def run(self, playlist_url):
+    def run(self, playlist_url=None):
+        """Entry point for script execution"""
+        if playlist_url:
+            return self.process_playlist(playlist_url)
+            
+        # Batch mode
+        print(f"🎵 Spotify Playlist Monitor - Batch Mode")
+        print("=" * 60)
+        
+        config_file = Path(__file__).parent / 'playlist_configs.json'
+        if not config_file.exists():
+            print("❌ No playlist_configs.json found")
+            return False
+            
+        try:
+            with open(config_file, 'r') as f:
+                configs = json.load(f)
+            
+            # Filter for Spotify monitor configs
+            spotify_configs = []
+            for key, config in configs.items():
+                script_path = config.get('script', '')
+                if 'spotify_playlist_monitor.py' in script_path:
+                    spotify_configs.append(config)
+            
+            if not spotify_configs:
+                print("⚠️  No Spotify playlists configured in playlist_configs.json")
+                return True
+                
+            print(f"Found {len(spotify_configs)} playlists to process")
+            
+            for i, config in enumerate(spotify_configs, 1):
+                url = config.get('parameters', {}).get('playlist_url') or config.get('playlist_url')
+                name = config.get('name', 'Unknown')
+                
+                if url:
+                    print(f"\n[{i}/{len(spotify_configs)}] Processing: {name}")
+                    self.process_playlist(url)
+                else:
+                    print(f"\n[{i}/{len(spotify_configs)}] Skipping {name}: No URL found")
+                    
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error in batch mode: {e}")
+            print(f"❌ Error in batch mode: {e}")
+            return False
+
+    def process_playlist(self, playlist_url):
         """Main function to process playlist"""
         print(f"🎵 Spotify Playlist Monitor")
         print("=" * 60)
@@ -2627,14 +2866,15 @@ class SpotifyPlaylistMonitor:
         # Log start
         log_action("script_start", "Spotify Playlist Monitor started", {
             "playlist_url": playlist_url,
-            "dry_run": self.dry_run
+            "dry_run": self.dry_run,
+            "limit": self.limit
         })
         
-        self.logger.info(f"Starting Spotify playlist monitoring - URL: {playlist_url}, Dry run: {self.dry_run}")
+        self.logger.info(f"Starting Spotify playlist monitoring - URL: {playlist_url}, Dry run: {self.dry_run}, Limit: {self.limit}")
         
         if self.dry_run:
-            print("🔍 Running in DRY RUN mode - no changes will be made to Lidarr")
-            self.logger.info("Running in DRY RUN mode - no changes will be made to Lidarr")
+            print("🔍 Running in DRY RUN mode - no changes will be made")
+            self.logger.info("Running in DRY RUN mode - no changes will be made")
         
         # Step 1: Authenticate with Spotify
         print()
@@ -2642,245 +2882,578 @@ class SpotifyPlaylistMonitor:
         if not self.authenticate_spotify():
             print("❌ Failed to authenticate with Spotify - aborting")
             return False
-        
-        # Step 2: Authenticate with Navidrome
+            
+        # Step 2: Authenticate with Navidrome (needed for starring/playlist)
         print()
         print("🔐 Step 2: Authenticating with Navidrome...")
         if not self.authenticate_navidrome():
             print("❌ Failed to authenticate with Navidrome - aborting")
             return False
-        
+            
         # Step 3: Get playlist songs
         print()
         print("📋 Step 3: Fetching playlist songs...")
         if not self.get_playlist_songs(playlist_url):
             print("❌ Failed to get playlist songs - aborting")
             return False
-        
-        # Step 4: Get Navidrome library
+            
+        # Step 4: Sync with Database
         print()
-        print("📚 Step 4: Loading Navidrome library...")
-        if not self.get_navidrome_library():
-            print("❌ Failed to load Navidrome library - aborting")
-            return False
+        print("💾 Step 4: Syncing with database...")
+        self.sync_playlist_tracks()
         
-        # Step 5: Find missing songs
+        # Step 5: Process tracks (Download, Star, Add to Playlist)
         print()
-        print("🔍 Step 5: Finding missing songs...")
-        if not self.find_missing_songs():
-            print("❌ Failed to find missing songs - aborting")
-            return False
-        
-        # Step 6: Manage Navidrome playlist - add found songs and queue missing ones
-        print()
-        print("📋 Step 6: Managing Navidrome playlist...")
-        if not self.manage_navidrome_playlist():
-            print("⚠️  Failed to manage Navidrome playlist (continuing with artist monitoring)")
-        
-        # Step 7: Add missing artists to Lidarr for monitoring
-        print()
-        print("👥 Step 7: Adding missing artists to Lidarr for monitoring...")
-        if not self.monitor_missing_songs():
-            print("❌ Failed to add missing artists for monitoring")
-            return False
+        print("⚙️  Step 5: Processing tracks...")
+        self.process_tracks()
         
         # Print summary
         print()
         print("=" * 60)
         print("📊 Processing Summary:")
         print(f"   🎵 Playlist songs: {self.stats['playlist_songs']}")
-        print(f"   ✅ Songs in library: {self.stats['songs_in_library']}")
-        print(f"   ❌ Songs missing: {self.stats['songs_missing']}")
-        print(f"   📋 Songs added to playlist: {self.stats['songs_added_to_playlist']}")
         print(f"   📥 Songs queued for download: {self.stats['songs_queued_for_download']}")
-        print(f"   👥 Artists added for monitoring: {self.stats['artists_added']}")
-        print(f"   ❌ Artists failed to add: {self.stats['artists_failed']}")
+        print(f"   ✅ Songs added to playlist: {self.stats['songs_added_to_playlist']}")
         print(f"   ⚠️  Errors: {self.stats['errors']}")
         
-        # Show failed artists if any
-        if self.failed_artists:
-            print()
-            print("❌ Failed to add these artists to Lidarr:")
-            for artist in sorted(self.failed_artists):
-                print(f"   • {artist}")
-        
-        # Log summary  
-        self.logger.info(f"Processing complete - Playlist songs: {self.stats['playlist_songs']}, "
-                        f"Missing: {self.stats['songs_missing']}, "
-                        f"Artists added: {self.stats['artists_added']}, "
-                        f"Errors: {self.stats['errors']}")
-        
-        if self.stats['errors'] == 0:
-            print()
-            print("✅ Spotify playlist monitoring complete!")
-            self.logger.info("Spotify playlist monitoring completed successfully")
-            
-            log_action("script_complete", "Spotify Playlist Monitor completed successfully", {
-                "stats": self.stats,
-                "log_file": self.log_file_path
-            })
-        else:
-            print()
-            print("⚠️  Spotify playlist monitoring completed with errors!")
-            self.logger.warning("Spotify playlist monitoring completed with errors")
-            
-            log_action("script_complete", "Spotify Playlist Monitor completed with errors", {
-                "stats": self.stats,
-                "errors": self.stats['errors'],
-                "log_file": self.log_file_path
-            })
-        
-        return self.stats['errors'] == 0
+        return True
 
-def main():
-    parser = argparse.ArgumentParser(description='Monitor Spotify playlists and add missing songs to Lidarr')
-    parser.add_argument('--playlist-url', help='Spotify playlist URL (if not provided, will process all active playlists)')
-    parser.add_argument('--dry-run', action='store_true', help='Run in dry-run mode (no changes to Lidarr)')
-    parser.add_argument('--live', action='store_true', default=True, help='Run in LIVE mode (will make actual changes to Lidarr) - DEFAULT')
+    def sync_playlist_tracks(self):
+        """Sync Spotify playlist tracks with local database"""
+        count = 0
+        total = len(self.playlist_songs)
+        
+        for i, song in enumerate(self.playlist_songs, 1):
+            # Report progress periodically
+            if i % 10 == 0 or i == total:
+                print(f"PROGRESS: {i}/{total} - Syncing database...")
+                
+            # Check if track exists
+            existing = self.db.get_playlist_track(song['spotify_id'])
+            
+            artist_name = song['artists'][0] if song['artists'] else "Unknown"
+            
+            if not existing:
+                # Add new track
+                self.db.upsert_playlist_track({
+                    'spotify_id': song['spotify_id'],
+                    'artist': artist_name,
+                    'title': song['title'],
+                    'album': song['album'],
+                    'year': song.get('year'),
+                    'status': 'pending'
+                })
+                count += 1
+            else:
+                # Update metadata if needed, but preserve status
+                self.db.upsert_playlist_track({
+                    'spotify_id': song['spotify_id'],
+                    'artist': artist_name,
+                    'title': song['title'],
+                    'album': song['album'],
+                    'year': song.get('year'),
+                    'status': existing['status'],
+                    'slskd_id': existing['slskd_id'],
+                    'navidrome_id': existing['navidrome_id']
+                })
+                
+        print(f"   ✅ Synced {len(self.playlist_songs)} tracks ({count} new)")
+        self.logger.info(f"Synced {len(self.playlist_songs)} tracks ({count} new)")
+
+    def process_tracks(self):
+        """Process tracks based on their status"""
+        processed_count = 0
+        total_tracks = len(self.playlist_songs)
+        
+        for i, song in enumerate(self.playlist_songs, 1):
+            # Report progress
+            print(f"PROGRESS: {i}/{total_tracks} - Processing {song['artists'][0]} - {song['title']}")
+            
+            if self.limit > 0 and processed_count >= self.limit:
+                print(f"   ⚠️  Limit reached ({self.limit}), stopping processing")
+                break
+                
+            track = self.db.get_playlist_track(song['spotify_id'])
+            if not track:
+                continue
+            
+            status = track['status']
+            
+            if status == 'pending' or status == 'failed':
+                print(f"   🎵 Processing: {track['artist']} - {track['title']} [{status}]")
+                self._handle_pending_track(track)
+                processed_count += 1
+            elif status == 'downloading':
+                print(f"   🎵 Processing: {track['artist']} - {track['title']} [{status}]")
+                self._handle_downloading_track(track)
+                processed_count += 1
+            elif status == 'downloaded':
+                print(f"   🎵 Processing: {track['artist']} - {track['title']} [{status}]")
+                self._handle_downloaded_track(track)
+                processed_count += 1
+            elif status == 'playlist_added':
+                # Already done
+                pass
+
+    def _handle_pending_track(self, track):
+        """Handle pending/failed track - queue for download"""
+        # Check if already in Navidrome
+        print(f"      🔍 Checking if available in Navidrome...")
+        navidrome_id = self._find_in_navidrome(track['artist'], track['title'])
+        
+        if navidrome_id:
+            print(f"      ✅ Found in Navidrome! Skipping download.")
+            self.db.update_playlist_track_status(track['spotify_id'], 'downloaded', navidrome_id=navidrome_id)
+            track['navidrome_id'] = navidrome_id
+            self._handle_downloaded_track(track)
+            return
+
+        if self.dry_run:
+            print(f"      🔍 [DRY RUN] Would search and download: {track['artist']} - {track['title']}")
+            return
+
+        if not self.slskd_downloader:
+            print(f"      ❌ Slskd not configured, skipping download")
+            return
+
+        print(f"      📥 Searching slskd...")
+        query = f"{track['artist']} {track['title']}"
+        
+        success = self.slskd_downloader.search_and_download(
+            search_query=query,
+            search_type='song',
+            target_name=track['title']
+        )
+        
+        if success:
+            print(f"      ✅ Download initiated")
+            self.db.update_playlist_track_status(track['spotify_id'], 'downloading')
+            self.stats['songs_queued_for_download'] += 1
+        else:
+            print(f"      ❌ Download failed to initiate")
+            self.db.update_playlist_track_status(track['spotify_id'], 'failed')
+            self.stats['errors'] += 1
+
+    def _handle_downloading_track(self, track):
+        """Check status of downloading track"""
+        print(f"      🔍 Checking if available in Navidrome...")
+        navidrome_id = self._find_in_navidrome(track['artist'], track['title'])
+        
+        if navidrome_id:
+            print(f"      ✅ Found in Navidrome!")
+            self.db.update_playlist_track_status(track['spotify_id'], 'downloaded', navidrome_id=navidrome_id)
+            # Immediately process as downloaded
+            track['navidrome_id'] = navidrome_id
+            self._handle_downloaded_track(track)
+        else:
+            # Check if it's still downloading in Slskd
+            song_info = {'artist': track['artist'], 'title': track['title']}
+            if self.is_song_currently_downloading(song_info):
+                print(f"      ⏳ Still downloading in Slskd...")
+            else:
+                # Not in Navidrome, and not downloading in Slskd -> Stuck/Failed/Deleted
+                print(f"      ⚠️  Not in Navidrome and not downloading - resetting to pending")
+                self.db.update_playlist_track_status(track['spotify_id'], 'pending')
+
+    def _handle_downloaded_track(self, track):
+        """Handle downloaded track - star and add to playlist"""
+        if not track['navidrome_id']:
+            # Try to find it again
+            navidrome_id = self._find_in_navidrome(track['artist'], track['title'])
+            if navidrome_id:
+                self.db.update_playlist_track_status(track['spotify_id'], 'downloaded', navidrome_id=navidrome_id)
+                track['navidrome_id'] = navidrome_id
+            else:
+                print(f"      ❌ Missing Navidrome ID, cannot process")
+                return
+
+        if self.dry_run:
+            print(f"      🔍 [DRY RUN] Would star and add to playlist")
+            return
+
+        # Star the track
+        self._star_navidrome_track(track['navidrome_id'])
+        
+        # Add to playlist
+        if hasattr(self, 'current_playlist_name') and self.current_playlist_name:
+            self._add_to_navidrome_playlist(track['navidrome_id'], self.current_playlist_name)
+            self.db.update_playlist_track_status(track['spotify_id'], 'playlist_added')
+            self.stats['songs_added_to_playlist'] += 1
+        else:
+            print(f"      ⚠️  Playlist name unknown, skipping playlist add")
+
+    def _find_in_navidrome(self, artist, title):
+        """Search for track in Navidrome"""
+        try:
+            query = f"{artist} {title}"
+            url = f"{self.navidrome_url}/rest/search3"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'SpotifyMonitor',
+                'f': 'json',
+                'query': query,
+                'songCount': 1
+            }
+            
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                songs = data.get('subsonic-response', {}).get('searchResult3', {}).get('song', [])
+                if songs:
+                    return songs[0]['id']
+            return None
+        except Exception as e:
+            self.logger.error(f"Error searching Navidrome: {e}")
+            return None
+
+    def _star_navidrome_track(self, navidrome_id):
+        """Star a track in Navidrome"""
+        try:
+            url = f"{self.navidrome_url}/rest/star"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'SpotifyMonitor',
+                'f': 'json',
+                'id': navidrome_id
+            }
+            requests.get(url, params=params)
+            print(f"      ⭐ Starred track")
+        except Exception as e:
+            self.logger.error(f"Error starring track: {e}")
+
+    def _add_to_navidrome_playlist(self, navidrome_id, playlist_name):
+        """Add track to Navidrome playlist"""
+        try:
+            # First find playlist ID or create it
+            playlist_id = self.ensure_navidrome_playlist(playlist_name)
+            if not playlist_id:
+                return
+
+            # Check if song already in playlist
+            if self._is_song_in_playlist(playlist_id, navidrome_id):
+                print(f"      ⚠️  Already in playlist: {playlist_name}")
+                return
+
+            # Add song to playlist
+            url = f"{self.navidrome_url}/rest/updatePlaylist"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'SpotifyMonitor',
+                'f': 'json',
+                'playlistId': playlist_id,
+                'songIdToAdd': navidrome_id
+            }
+            requests.get(url, params=params, timeout=30)
+            print(f"      ➕ Added to playlist: {playlist_name}")
+        except Exception as e:
+            self.logger.error(f"Error adding to playlist: {e}")
+
+    def _is_song_in_playlist(self, playlist_id, song_id):
+        """Check if song is already in playlist"""
+        try:
+            url = f"{self.navidrome_url}/rest/getPlaylist"
+            params = {
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'SpotifyMonitor',
+                'f': 'json',
+                'id': playlist_id
+            }
+            response = requests.get(url, params=params)
+            if response.status_code == 200:
+                data = response.json()
+                subsonic_response = data.get('subsonic-response', {})
+                if subsonic_response.get('status') == 'ok':
+                    entries = subsonic_response.get('playlist', {}).get('entry', [])
+                    for entry in entries:
+                        if entry.get('id') == song_id:
+                            return True
+            return False
+        except Exception:
+            return False
+
+    def is_song_in_navidrome(self, song):
+        """Check if a song exists in Navidrome library"""
+        try:
+            if not self.navidrome_url or not self.subsonic_token:
+                return False
+
+            # Search for the song using cleaned title for better matching
+            cleaned_title = self.clean_song_title(song['title'])
+            search_url = f"{self.navidrome_url}/rest/search3"
+            search_params = {
+                'query': f'{song["artist"]} {cleaned_title}',
+                'songCount': 20,
+                'f': 'json',
+                'u': self.navidrome_username,
+                't': self.subsonic_token,
+                's': self.subsonic_salt,
+                'v': '1.16.1',
+                'c': 'SpotifyPlaylistMonitor'
+            }
+            
+            response = requests.get(search_url, params=search_params, timeout=30)
+            
+            if response.status_code == 200:
+                data = response.json()
+                subsonic_response = data.get('subsonic-response', {})
+                if subsonic_response.get('status') == 'ok':
+                    search_result = subsonic_response.get('searchResult3', {})
+                    songs = search_result.get('song', [])
+                    
+                    target_artist = self.normalize_string(song['artist'])
+                    target_title_cleaned = self.normalize_string(self.clean_song_title(song['title']))
+                    target_title_original = self.normalize_string(song['title']);
+                    
+                    for found_song in songs:
+                        found_artist = self.normalize_string(found_song.get('artist', ''))
+                        found_title = self.normalize_string(found_song.get('title', ''))
+                        
+                        # Check artist match (fuzzy or exact)
+                        if target_artist in found_artist or found_artist in target_artist:
+                             # Check title match
+                            if (found_title == target_title_cleaned or 
+                                found_title == target_title_original or
+                                target_title_cleaned in found_title):
+                                return True
+            return False
+        except Exception as e:
+            self.logger.error(f"Error checking Navidrome for {song['artist']} - {song['title']}: {e}")
+            return False
+
+    def get_downloaded_file_path(self, song):
+        """Find the path of a downloaded song in the completed downloads folder"""
+        try:
+            downloads_dir = "/downloads/completed"
+            
+            if not os.path.exists(downloads_dir):
+                return None
+            
+            # Normalize song info for comparison
+            artist = self.normalize_string(song['artist'])
+            title = self.normalize_string(song['title'])
+            cleaned_title = self.normalize_string(self.clean_song_title(song['title']))
+            
+            # Common audio file extensions
+            audio_extensions = ['.mp3', '.flac', '.m4a', '.ogg', '.wav', '.aac']
+            
+            # Search through the downloads directory recursively
+            for root, dirs, files in os.walk(downloads_dir):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    
+                    # Delete macOS metadata files immediately
+                    if file.startswith('._'):
+                        continue
+                    
+                    # Check if it's an audio file
+                    if not any(file.lower().endswith(ext) for ext in audio_extensions):
+                        continue
+                    
+                    # Normalize filename for comparison
+                    normalized_filename = self.normalize_string(file)
+                    
+                    # Check if both artist and title (or cleaned title) appear in the filename
+                    if (artist in normalized_filename and 
+                        (title in normalized_filename or cleaned_title in normalized_filename)):
+                        return file_path
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error searching for downloaded file: {e}")
+            return None
+
+    def move_downloaded_file(self, source_path, track):
+        """Move a downloaded file to the incomplete directory"""
+        try:
+            import shutil
+            
+            artist = track['artist']
+            album = track.get('album') or "Unknown Album"
+            year = track.get('year')
+            
+            # Destination: /media/Incomplete/Artist/[Year] Album/
+            safe_artist = self.sanitize_filename(artist)
+            safe_album = self.sanitize_filename(album)
+            
+            if year:
+                album_folder_name = f"[{year}] {safe_album}"
+            else:
+                album_folder_name = safe_album
+            
+            dest_dir = Path('/media/Incomplete') / safe_artist / album_folder_name
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            
+            source_path = Path(source_path)
+            dest_path = dest_dir / source_path.name
+            
+            print(f"🚚 Moving {source_path.name} to {dest_dir}")
+            self.logger.info(f"Moving {source_path} to {dest_path}")
+            
+            # Move file
+            shutil.move(str(source_path), str(dest_path))
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error moving file {source_path}: {e}")
+            return False
+    
+    def debug_search_results(self, results, song, attempt_number):
+        """Debug function to log search results for troubleshooting"""
+        try:
+            self.logger.info(f"=== DEBUG: Search Results for {song['artist']} - {song['title']} (Attempt {attempt_number}) ===")
+            
+            if not results:
+                self.logger.info("No results provided to debug function")
+                self.logger.info("=== END DEBUG ===")
+                return
+            
+            # Handle different result formats
+            if isinstance(results, list):
+                user_responses = results
+            elif isinstance(results, dict):
+                # Handle case where results might be wrapped in a different structure
+                user_responses = results.get('responses', results.get('users', [results] if 'username' in results else []))
+            else:
+                self.logger.info(f"Unexpected results type: {type(results)}")
+                self.logger.info("=== END DEBUG ===")
+                return
+            
+            total_users = len(user_responses)
+            total_files = 0
+            
+            # Calculate total files
+            for user_response in user_responses:
+                if isinstance(user_response, dict):
+                    files = user_response.get('files', [])
+                    total_files += len(files)
+            
+            self.logger.info(f"Found {total_users} users with {total_files} total files")
+            
+            # Show details for first few users
+            for i, user_response in enumerate(user_responses[:5]):  # Show first 5 users
+                if not isinstance(user_response, dict):
+                    continue
+                    
+                username = user_response.get('username', f'User{i}')
+                files = user_response.get('files', [])
+                
+                self.logger.info(f"User {i+1}: {username} ({len(files)} files)")
+                
+                # Show first few files from each user
+                for j, file_info in enumerate(files[:3]):
+                    if not isinstance(file_info, dict):
+                        continue
+                        
+                    filename = file_info.get('filename', f'file{j}')
+                    filesize = file_info.get('size', 0)
+                    size_mb = filesize / (1024 * 1024) if filesize > 0 else 0
+                    
+                    # Check if it's an audio file
+                    is_audio = any(filename.lower().endswith(ext) for ext in ['.mp3', '.flac', '.m4a', '.ogg', '.wav'])
+                    
+                    self.logger.info(f"  File {j+1}: {os.path.basename(filename)} ({size_mb:.1f}MB) {'[AUDIO]' if is_audio else '[OTHER]'}")
+                
+                if len(files) > 3:
+                    self.logger.info(f"  ... and {len(files) - 3} more files")
+            
+            if total_users > 5:
+                self.logger.info(f"... and {total_users - 5} more users")
+            
+            self.logger.info("=== END DEBUG ===")
+            
+        except Exception as e:
+            self.logger.error(f"Error in debug_search_results: {e}")
+            self.logger.info("=== END DEBUG ===")
+    
+    def monitor_missing_songs(self):
+        """Add artists from missing songs to Lidarr for monitoring future releases"""
+        try:
+            print(f"👥 Processing artists from {len(self.missing_songs)} missing songs...")
+            self.logger.info(f"Processing artists from {len(self.missing_songs)} missing songs")
+            
+            # Log some examples of missing songs for debugging
+            if self.missing_songs:
+                print(f"📝 Example missing songs:")
+                for song in self.missing_songs[:5]:  # Show first 5
+                    print(f"   • {song['artists'][0]} - {song['title']}")
+                if len(self.missing_songs) > 5:
+                    print(f"   ... and {len(self.missing_songs) - 5} more")
+            
+            all_artists = set()
+            artists_monitored = set()
+            artists_already_exist = set()
+            
+            # Collect all unique artists from missing songs
+            for song in self.missing_songs:
+                for artist in song['artists']:
+                    all_artists.add(artist)
+            
+            print(f"🎭 Adding {len(all_artists)} unique artists to Lidarr for future release monitoring...")
+            self.logger.info(f"Adding {len(all_artists)} unique artists to Lidarr for future release monitoring")
+            
+            # Log which artists we're about to add
+            if all_artists:
+                print(f"📝 Artists to monitor:")
+                for i, artist in enumerate(sorted(list(all_artists))[:10], 1):  # Show first 10
+                    print(f"   {i}. {artist}")
+                if len(all_artists) > 10:
+                    print(f"   ... and {len(all_artists) - 10} more")
+            
+            for artist in all_artists:
+                # Check if artist already exists before trying to add
+                if self.lidarr_client and self.lidarr_client.artist_exists(artist):
+                    artists_already_exist.add(artist)
+                    if self.dry_run:
+                        print(f"    ⏭️  Artist already monitored (would skip): {artist}")
+                    else:
+                        self.logger.debug(f"Artist already monitored: {artist}")
+                    continue
+                
+                artist_success = self.add_artist_to_lidarr(artist)
+                if artist_success:
+                    artists_monitored.add(artist)
+                else:
+                    self.failed_artists.append(artist)
+                    self.stats['artists_failed'] += 1
+            
+            if artists_already_exist:
+                print(f"    ⏭️  {len(artists_already_exist)} artists already monitored (skipped)")
+            print(f"    ✓ Successfully added {len(artists_monitored)} new artists for future release monitoring")
+            if self.failed_artists:
+                print(f"    ❌ Failed to add {len(self.failed_artists)} artists")
+            
+            self.stats['artists_added'] = len(artists_monitored)
+            
+            return True
+            
+        except Exception as e:
+            msg = f"Error monitoring missing songs: {e}"
+            print(f"    ❌ {msg}")
+            self.logger.error(msg)
+            self.stats['errors'] += 1
+            return False
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Spotify Playlist Monitor")
+    parser.add_argument("--playlist-url", help="Spotify playlist URL to process")
+    parser.add_argument("--dry-run", action="store_true", help="Run without making changes")
+    parser.add_argument("--limit", type=int, default=0, help="Limit number of tracks to process")
     
     args = parser.parse_args()
     
-    # Use dry-run if explicitly requested, otherwise default to live mode
-    dry_run_mode = args.dry_run
-    
-    print(f"🎵 Starting Spotify Playlist Monitor")
-    
-    if dry_run_mode:
-        print("🔍 RUNNING IN DRY-RUN MODE - No changes will be made to Lidarr")
-        print("💡 Remove --dry-run flag to make actual changes")
-    else:
-        print("⚠️  RUNNING IN LIVE MODE - Changes will be made to Lidarr!")
-        print("💡 Use --dry-run flag to test without making changes")
-    
-    print(f"🔄 Dry Run: {dry_run_mode}")
-    print()
-    
-    if args.playlist_url:
-        # Process single playlist
-        print(f"📋 Single Playlist Mode")
-        print(f"📋 Playlist URL: {args.playlist_url}")
-        playlists_to_process = [{'url': args.playlist_url, 'name': 'Manual'}]
-    else:
-        # Process all active playlists from settings
-        print(f"� Batch Processing Mode - checking saved playlists")
-        playlists_file = Path(__file__).parent.parent / 'work' / 'spotify_playlists.json'
-        
-        if not playlists_file.exists():
-            print("❌ No saved playlists found. Add playlists through the settings page first.")
-            sys.exit(1)
-            
-        with open(playlists_file, 'r') as f:
-            all_playlists = json.load(f)
-        
-        # Filter to only active playlists
-        playlists_to_process = [p for p in all_playlists if p.get('active', True)]
-        
-        if not playlists_to_process:
-            print("ℹ️  No active playlists found. Enable playlists in settings to process them.")
-            sys.exit(0)
-            
-        print(f"📋 Found {len(playlists_to_process)} active playlists to process")
-    
-    print(f"�🔄 Dry Run: {args.dry_run}")
-    print()
-    
-    monitor = None
-    overall_success = True
-    total_stats = {
-        'playlists_processed': 0,
-        'total_songs': 0,
-        'total_missing': 0,
-        'total_artists_added': 0,
-        'errors': 0
-    }
-    
-    try:
-        print("⚙️  Initializing monitor...")
-        monitor = SpotifyPlaylistMonitor(dry_run=dry_run_mode)
-        
-        # Process each playlist
-        for i, playlist in enumerate(playlists_to_process, 1):
-            playlist_url = playlist['url']
-            playlist_name = playlist.get('name', f'Playlist {i}')
-            
-            print(f"\n🎵 Processing playlist {i}/{len(playlists_to_process)}: {playlist_name}")
-            print(f"📋 URL: {playlist_url}")
-            
-            try:
-                success = monitor.run(playlist_url)
-                
-                if success:
-                    print(f"✅ Successfully processed: {playlist_name}")
-                else:
-                    print(f"⚠️  Completed with errors: {playlist_name}")
-                    overall_success = False
-                
-                # Accumulate stats
-                total_stats['playlists_processed'] += 1
-                total_stats['total_songs'] += monitor.stats.get('playlist_songs', 0)
-                total_stats['total_missing'] += monitor.stats.get('songs_missing', 0)
-                total_stats['total_artists_added'] += monitor.stats.get('artists_added', 0)
-                total_stats['errors'] += monitor.stats.get('errors', 0)
-                
-                # Reset monitor stats for next playlist
-                monitor.stats = {
-                    'playlist_songs': 0,
-                    'songs_in_library': 0,
-                    'songs_missing': 0,
-                    'songs_added_to_playlist': 0,
-                    'songs_queued_for_download': 0,
-                    'artists_added': 0,
-                    'artists_failed': 0,
-                    'songs_added': 0,
-                    'errors': 0
-                }
-                monitor.playlist_songs = []
-                monitor.library_songs = set()
-                monitor.missing_songs = []
-                
-            except Exception as e:
-                print(f"❌ Failed to process playlist {playlist_name}: {e}")
-                monitor.logger.error(f"Failed to process playlist {playlist_name}: {e}")
-                overall_success = False
-                total_stats['errors'] += 1
-        
-        # Print final summary
-        print(f"\n{'='*60}")
-        print(f"🎵 SPOTIFY PLAYLIST MONITORING COMPLETE")
-        print(f"{'='*60}")
-        print(f"📊 Playlists processed: {total_stats['playlists_processed']}")
-        print(f"🎵 Total songs found: {total_stats['total_songs']}")
-        print(f"❓ Total songs missing: {total_stats['total_missing']}")
-        print(f"👥 Total artists added: {total_stats['total_artists_added']}")
-        print(f"❌ Errors: {total_stats['errors']}")
-        
-        if overall_success:
-            print("✅ All playlists processed successfully!")
-        else:
-            print("⚠️  Some playlists had errors!")
-            
-        sys.exit(0 if overall_success else 1)
-        
-    except Exception as e:
-        error_msg = f"❌ Fatal Error: {e}"
-        print(error_msg)
-        
-        # Try to log to file if monitor was initialized
-        if monitor and hasattr(monitor, 'logger') and monitor.logger:
-            monitor.logger.error(error_msg)
-            print(f"📋 Check log file: {monitor.log_file_path}")
-        
-        # Also try to log the action
-        try:
-            from action_logger import log_action
-            log_action("script_error", "Spotify Playlist Monitor failed", {
-                "error": str(e),
-                "total_stats": total_stats
-            })
-        except:
-            pass  # If action logging fails, don't crash
-            
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
+    monitor = SpotifyPlaylistMonitor(dry_run=args.dry_run, limit=args.limit)
+    monitor.run(playlist_url=args.playlist_url)

@@ -247,8 +247,8 @@ class FileOrganiser:
             
             tags = audio.tags
             
-            # Extract essential metadata (albumartist, album, title, year)
-            for field in ['albumartist', 'artist', 'album', 'title', 'date']:
+            # Extract essential metadata (albumartist, album, title, year, musicbrainz_albumid)
+            for field in ['albumartist', 'artist', 'album', 'title', 'date', 'musicbrainz_albumid']:
                 value = None
                 
                 # Try common tag names for FLAC and MP3
@@ -257,7 +257,8 @@ class FileOrganiser:
                     'artist': ['artist', 'ARTIST', 'TPE1'],
                     'album': ['album', 'ALBUM', 'TALB'],
                     'title': ['title', 'TITLE', 'TIT2'],
-                    'date': ['date', 'DATE', 'TDRC', 'TYER', 'year', 'YEAR']
+                    'date': ['date', 'DATE', 'TDRC', 'TYER', 'year', 'YEAR'],
+                    'musicbrainz_albumid': ['musicbrainz_albumid', 'MUSICBRAINZ_ALBUMID', 'TXXX:MusicBrainz Album Id']
                 }
                 
                 for tag_key in tag_variants.get(field, [field]):
@@ -277,7 +278,8 @@ class FileOrganiser:
                     else:
                         metadata[field] = value.strip()
                 else:
-                    missing.append('year' if field == 'date' else field)
+                    if field not in ['musicbrainz_albumid']: # MBID is optional
+                        missing.append('year' if field == 'date' else field)
             
             # Use albumartist if available, fallback to artist
             if 'albumartist' in metadata:
@@ -410,7 +412,9 @@ class FileOrganiser:
             valid_tracks_in_dir = 0
             missing_metadata_in_dir = 0
             
-            for file_path in dir_progress:
+            for i, file_path in enumerate(dir_progress, 1):
+                if i % 100 == 0:
+                    print(f"PROGRESS: {i}/{len(music_files)} - Scanning {dir_name}...")
                 try:
                     # Check metadata quality
                     has_metadata, metadata, missing = self.check_metadata_quality(file_path)
@@ -421,7 +425,21 @@ class FileOrganiser:
                         artist = metadata['artist']  # This is now albumartist if it was available
                         album = metadata['album'] 
                         year = metadata.get('year', 'Unknown')
-                        album_key = f"{artist}|||{album}|||{year}"
+                        
+                        # Use MBID if available, otherwise hash
+                        mb_album_id = metadata.get('musicbrainz_albumid')
+                        if mb_album_id:
+                            album_key = mb_album_id
+                        else:
+                            import hashlib
+                            key_str = f"{artist}-{album}".lower().encode('utf-8')
+                            album_key = f"local-{hashlib.md5(key_str).hexdigest()}"
+                        
+                        # Initialize metadata if new key
+                        if 'artist' not in track_database[album_key]:
+                            track_database[album_key]['artist'] = artist
+                            track_database[album_key]['album'] = album
+                            track_database[album_key]['year'] = year
                         
                         track_database[album_key]['tracks'].append((file_path, metadata, dir_name))
                         track_database[album_key]['locations'].add(dir_name)
@@ -521,7 +539,15 @@ class FileOrganiser:
         total_tracks_to_move = 0
         
         for album_key, album_data in track_database.items():
-            artist, album_title, year = album_key.split('|||', 2)
+            artist = album_data.get('artist')
+            album_title = album_data.get('album')
+            # Fallback for legacy keys if needed
+            if not artist or not album_title:
+                try:
+                    artist, album_title, _ = album_key.split('|||', 2)
+                except ValueError:
+                    continue
+                    
             if self._find_lidarr_album(artist, album_title):
                 monitored_count += 1
             total_tracks_to_move += len(album_data['tracks'])
@@ -541,9 +567,22 @@ class FileOrganiser:
             main_progress = tqdm(total=total_albums, desc="PROGRESS_MAIN: Organizing albums", 
                                unit="album", ncols=100, position=0)
         
-        for album_key, album_data in track_database.items():
+        for i, (album_key, album_data) in enumerate(track_database.items(), 1):
+            if i % 10 == 0:
+                print(f"PROGRESS: {i}/{total_albums} - Organizing albums...")
             try:
-                artist, album_title, year = album_key.split('|||', 2)
+                artist = album_data.get('artist')
+                album_title = album_data.get('album')
+                year = album_data.get('year', 'Unknown')
+                
+                # Fallback for legacy keys
+                if not artist or not album_title:
+                    try:
+                        artist, album_title, year = album_key.split('|||', 2)
+                    except ValueError:
+                        logger.warning(f"Skipping album with invalid key/data: {album_key}")
+                        continue
+                        
                 tracks = album_data['tracks']
                 locations = album_data['locations']
                 track_count = len(tracks)
@@ -668,7 +707,7 @@ class FileOrganiser:
                 # Track for expiry in new location (if database is available and working)
                 if self.db and tracks and not self.dry_run:
                     track_tuples = [(Path(t[0]), t[1]) for t in tracks]
-                    self.track_album_for_expiry(destination, album_key, track_tuples)
+                    self.track_album_for_expiry(destination, album_key, track_tuples, artist=artist, album=album_title)
                     
                     # Show expiry info for first few albums or important cases (debug level)
                     if show_detail and not self.dry_run:
@@ -734,7 +773,9 @@ class FileOrganiser:
         else:
             artist_iter = artists_data
         
-        for artist in artist_iter:
+        for i, artist in enumerate(artist_iter, 1):
+            if i % 50 == 0:
+                print(f"PROGRESS: {i}/{len(artists_data)} - Processing artists...")
             artist_name = artist.get('artistName', '').lower()
             self.lidarr_artists[artist_name] = artist
         
@@ -753,7 +794,9 @@ class FileOrganiser:
         else:
             album_iter = albums_data
         
-        for album in album_iter:
+        for i, album in enumerate(album_iter, 1):
+            if i % 50 == 0:
+                print(f"PROGRESS: {i}/{len(albums_data)} - Processing albums...")
             artist_name = album.get('artist', {}).get('artistName', '').lower()
             album_title = album.get('title', '').lower()
             key = f"{artist_name}|||{album_title}"
@@ -794,6 +837,9 @@ class FileOrganiser:
             try:
                 self.stats['owned_albums_checked'] += 1
                 albums_processed += 1
+                
+                if albums_processed % 10 == 0:
+                    print(f"PROGRESS: {albums_processed}/{total_albums} - Verifying owned albums...")
                 
                 artist, album, track_count = self._parse_album_info(album_path)
                 
@@ -1080,14 +1126,26 @@ class FileOrganiser:
         
         return None
     
-    def track_album_for_expiry(self, directory: Path, album_key: str, tracks: List[Tuple[Path, Dict]]):
+    def track_album_for_expiry(self, directory: Path, album_key: str, tracks: List[Tuple[Path, Dict]], artist: str = None, album: str = None):
         """Track an album for expiry monitoring in the database, preserving first_detected timestamp."""
         if not self.db or not tracks:
             return
         
         def perform_tracking():
-            # Parse album info
-            artist, album, year = album_key.split('|||', 2)
+            # Parse album info if not provided
+            nonlocal artist, album
+            if not artist or not album:
+                try:
+                    artist, album, _ = album_key.split('|||', 2)
+                except ValueError:
+                    # If we can't parse key and no info provided, try to get from first track
+                    if tracks and tracks[0][1]:
+                        artist = tracks[0][1].get('artist')
+                        album = tracks[0][1].get('album')
+                    
+                    if not artist or not album:
+                        logger.warning(f"Could not determine artist/album for expiry tracking: {album_key}")
+                        return
             
             # Calculate file statistics
             total_size = 0
@@ -1104,8 +1162,6 @@ class FileOrganiser:
                 'artist': artist,
                 'album': album,
                 'directory': str(directory),
-                'oldest_file_days': 0,  # Legacy field, not used for expiry
-                'days_until_expiry': 0,  # Legacy field, not used - frontend calculates
                 'file_count': file_count,
                 'total_size_mb': round(total_size, 2),
                 'is_starred': False,  # Will be updated by other scripts
@@ -1150,15 +1206,14 @@ class FileOrganiser:
                     # Update existing album record
                     cursor.execute("""
                         UPDATE expiring_albums 
-                        SET oldest_file_days = ?, days_until_expiry = ?, file_count = ?,
+                        SET file_count = ?,
                             total_size_mb = ?, is_starred = ?, last_seen = ?, status = ?,
-                            album_art_url = ?, updated_at = ?
+                            updated_at = ?
                         WHERE album_key = ?
                     """, (
-                        album_data['oldest_file_days'], album_data['days_until_expiry'],
                         album_data['file_count'], album_data['total_size_mb'],
                         album_data['is_starred'], now, album_data['status'],
-                        album_data.get('album_art_url'), now, album_key
+                        now, album_key
                     ))
                     album_id = existing['id']
                     logger.debug(f"   📊 Updated existing album: {artist} - {album}")
@@ -1166,13 +1221,12 @@ class FileOrganiser:
                     # Insert new album record
                     cursor.execute("""
                         INSERT INTO expiring_albums 
-                        (album_key, artist, album, directory, album_art_url, oldest_file_days, 
-                         days_until_expiry, file_count, total_size_mb, is_starred, 
+                        (album_key, artist, album, directory, 
+                         file_count, total_size_mb, is_starred, 
                          first_detected, last_seen, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        album_key, artist, album, str(directory), album_data.get('album_art_url'),
-                        album_data['oldest_file_days'], album_data['days_until_expiry'],
+                        album_key, artist, album, str(directory),
                         album_data['file_count'], album_data['total_size_mb'],
                         album_data['is_starred'], now, now, album_data['status']
                     ))
@@ -1459,34 +1513,10 @@ class FileOrganiser:
                 continue
             
             if target_file.exists():
-                # Compare quality and keep the better version
-                should_replace = self._compare_and_handle_duplicate(file_path, target_file)
-                if should_replace:
-                    logger.info(f"      🔄 Replacing lower quality file: {file_path.name}")
-                    try:
-                        # Remove the lower quality target file
-                        target_file.unlink()
-                        logger.info(f"        ✅ Removed lower quality target")
-                        self.stats['files_quality_upgraded'] += 1
-                    except Exception as e:
-                        logger.error(f"        ❌ Failed to remove target file: {e}")
-                        self.stats['errors'] += 1
-                        continue
-                else:
-                    logger.info(f"      ⚠️  Keeping existing better quality file: {file_path.name}")
-                    # Remove the source file since target is better
-                    try:
-                        file_path.unlink()
-                        logger.info(f"        ✅ Removed lower quality source file")
-                        self.stats['files_quality_kept_existing'] += 1
-                        # Don't need to move anything, but count as processed
-                        files_moved += 1
-                        source_directories_to_check.add(file_path.parent)
-                        continue
-                    except Exception as e:
-                        logger.error(f"        ❌ Failed to remove source file: {e}")
-                        self.stats['errors'] += 1
-                        continue
+                logger.info(f"      ⚠️  Duplicate found (skipping): {file_path.name}")
+                logger.info(f"         Target exists: {target_file}")
+                # Skip moving, do not delete source or target
+                continue
             
             try:
                 # Track the source directory before moving the file

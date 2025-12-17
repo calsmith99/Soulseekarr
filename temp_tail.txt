@@ -1,0 +1,10 @@
+                break
+                
+            track = self.db.get_playlist_track(song['spotify_id'])
+            if not track:
+                continue
+            
+            status = track['status']
+            
+            if status == 'pending' or status == 'failed':
+                print(f"   🎵 Processing: {track['artist']} - {track['title

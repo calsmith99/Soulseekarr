@@ -232,7 +232,8 @@ def scan_files_for_duplicates(music_files):
     tracks_by_key = defaultdict(list)
     
     for i, filepath in enumerate(music_files, 1):
-        if i % 100 == 0:
+        print(f"PROGRESS: {i}/{len(music_files)} - Processing file: {filepath.name}")
+        if i % 500 == 0:
             logging.info(f"   Processing file {i}/{len(music_files)}...")
         
         try:
@@ -300,7 +301,8 @@ def remove_duplicate_files(files_to_remove, dry_run=False):
     
     logging.info(f"\n🗑️  Removing {len(files_to_remove)} duplicate files...")
     
-    for track in files_to_remove:
+    for i, track in enumerate(files_to_remove, 1):
+        print(f"PROGRESS: {i}/{len(files_to_remove)} - Removing: {track.filename}")
         try:
             track.filepath.unlink()
             STATS['files_removed'] += 1

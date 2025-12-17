@@ -28,6 +28,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Tuple
 
+# Add parent directory to path to import database
+sys.path.append(str(Path(__file__).parent.parent))
+try:
+    from database import get_db
+except ImportError:
+    # Fallback if running from root
+    sys.path.append(str(Path(__file__).parent))
+    try:
+        from database import get_db
+    except ImportError:
+        print("Warning: Could not import database module - DB cleanup will be skipped")
+        get_db = None
+
 # Global statistics
 STATS = {
     'files_found': 0,
@@ -156,7 +169,8 @@ def delete_old_files(old_files: List[Tuple[Path, float, int]], dry_run: bool = F
     # Actually delete the files
     logging.info("🗑️  Deleting old log files...")
     
-    for file_path, age_hours, size in old_files:
+    for i, (file_path, age_hours, size) in enumerate(old_files, 1):
+        print(f"PROGRESS: {i}/{len(old_files)} - Deleting: {file_path.name}")
         try:
             age_days = age_hours / 24
             logging.info(f"   🗑️  Deleting: {file_path.name} (age: {age_days:.1f} days, size: {format_file_size(size)})")
@@ -251,6 +265,17 @@ def main():
         
         # Delete old files (or show what would be deleted)
         delete_old_files(old_files, dry_run)
+        
+        # Clean up database logs
+        if not dry_run and get_db:
+            try:
+                logging.info("🧹 Cleaning up old execution logs from database...")
+                db = get_db()
+                # Convert hours to days, minimum 1 day
+                db_cleanup_days = max(1, int(max_age_hours / 24))
+                db.cleanup_old_executions(days=db_cleanup_days)
+            except Exception as e:
+                logging.error(f"❌ Error cleaning up database logs: {e}")
         
         # Print summary
         print_summary()

@@ -80,6 +80,12 @@ except ImportError as e:
     print(f"Warning: Could not import lidarr_utils: {e}")
     LidarrClient = None
 
+try:
+    from database import get_db
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+
 class NavidromeStarredAlbumsMonitor:
     def __init__(self, dry_run=False):
         """Initialize the Navidrome Starred Albums Monitor
@@ -110,7 +116,11 @@ class NavidromeStarredAlbumsMonitor:
             
             # Initialize data storage
             self.starred_albums = []
+            self.starred_tracks = []
             self.unique_artists = set()
+            
+            # Initialize database
+            self.db = get_db() if DATABASE_AVAILABLE else None
             
             # Track failed artists
             self.failed_artists = []
@@ -308,8 +318,10 @@ class NavidromeStarredAlbumsMonitor:
                 if subsonic_response.get('status') == 'ok':
                     starred_info = subsonic_response.get('starred2', {})
                     albums = starred_info.get('album', [])
+                    songs = starred_info.get('song', [])
                     
                     self.starred_albums = []
+                    self.starred_tracks = []
                     artists_set = set()
                     
                     for album in albums:
@@ -330,11 +342,27 @@ class NavidromeStarredAlbumsMonitor:
                             if artist_name:
                                 artists_set.add(artist_name)
                     
+                    for song in songs:
+                        song_info = {
+                            'id': song.get('id'),
+                            'title': song.get('title', ''),
+                            'artist': song.get('artist', ''),
+                            'album': song.get('album', ''),
+                            'path': song.get('path', '')
+                        }
+                        self.starred_tracks.append(song_info)
+
                     self.unique_artists = artists_set
                     self.stats['starred_albums'] = len(self.starred_albums)
+                    self.stats['starred_tracks'] = len(self.starred_tracks)
                     self.stats['unique_artists'] = len(self.unique_artists)
                     
-                    self.logger.info(f"Found {len(self.starred_albums)} starred albums from {len(self.unique_artists)} unique artists")
+                    self.logger.info(f"Found {len(self.starred_albums)} starred albums and {len(self.starred_tracks)} starred tracks from {len(self.unique_artists)} unique artists")
+                    
+                    # Sync to database if available
+                    if self.db and not self.dry_run:
+                        self.sync_starred_status_to_db()
+                        
                     return True
                 else:
                     error = subsonic_response.get('error', {})
@@ -347,6 +375,46 @@ class NavidromeStarredAlbumsMonitor:
         except Exception as e:
             self.logger.error(f"Error fetching starred albums: {e}")
             return False
+
+    def sync_starred_status_to_db(self):
+        """Sync starred status to database"""
+        try:
+            self.logger.info("Syncing starred status to database...")
+            
+            # 1. Reset all starred status first (to handle un-starring)
+            # We do this by setting is_starred=False for everything
+            # This is safe because we're about to re-star everything that should be starred
+            with self.db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE expiring_albums SET is_starred = FALSE, status = 'pending' WHERE is_starred = TRUE")
+                cursor.execute("UPDATE album_tracks SET is_starred = FALSE WHERE is_starred = TRUE")
+                conn.commit()
+            
+            # 2. Update starred albums
+            for album in self.starred_albums:
+                artist = album.get('artist', '')
+                name = album.get('name', '')
+                if artist and name:
+                    album_key = f"{artist} - {name}"
+                    self.db.mark_album_starred(album_key, True)
+            
+            # 3. Update starred tracks
+            starred_tracks_data = []
+            for track in self.starred_tracks:
+                # We use navidrome_id (id) to match if possible, otherwise path
+                starred_tracks_data.append({
+                    'navidrome_id': track.get('id'),
+                    'file_path': track.get('path'), # This might not match exactly if paths differ, but it's a start
+                    'is_starred': True
+                })
+            
+            if starred_tracks_data:
+                self.db.bulk_update_starred_tracks(starred_tracks_data)
+                
+            self.logger.info("Starred status synced to database")
+            
+        except Exception as e:
+            self.logger.error(f"Error syncing starred status to database: {e}")
 
     def normalize_album_title(self, title):
         """Normalize album title for comparison"""
@@ -729,6 +797,7 @@ class NavidromeStarredAlbumsMonitor:
                     album_id = starred_album.get('id')
                     
                     self.logger.info(f"🔍 Processing album {i}/{len(self.starred_albums)}: {artist_name} - {album_name}")
+                    print(f"PROGRESS: {i}/{len(self.starred_albums)} - Processing album: {artist_name} - {album_name}")
                     
                     # First check if the album is owned
                     is_owned = self.is_album_owned(artist_name, album_name)
@@ -1251,7 +1320,8 @@ class NavidromeStarredAlbumsMonitor:
         try:
             if self.lidarr_client:
                 # Use the new LidarrClient utility
-                return self.lidarr_client.add_artist_with_future_monitoring(
+                # We use no monitoring to avoid downloading entire discographies or future releases
+                return self.lidarr_client.add_artist_without_monitoring(
                     artist_name=artist_name,
                     musicbrainz_data=musicbrainz_data,
                     search_for_missing=False  # Don't search for existing albums
@@ -1314,7 +1384,7 @@ class NavidromeStarredAlbumsMonitor:
                 'qualityProfileId': quality_profile_id,
                 'metadataProfileId': metadata_profile_id,
                 'rootFolderPath': root_folder_path,
-                'monitored': True,
+                'monitored': False,  # Do NOT monitor the artist
                 'albumFolder': True,
                 'addOptions': {
                     'monitor': 'none',  # Don't monitor any existing albums automatically
@@ -1539,6 +1609,7 @@ class NavidromeStarredAlbumsMonitor:
             for i, artist_name in enumerate(artists_to_add, 1):
                 try:
                     self.logger.info(f"🔍 Processing artist {i}/{len(artists_to_add)}: {artist_name}")
+                    print(f"PROGRESS: {i}/{len(artists_to_add)} - Processing artist: {artist_name}")
                     
                     # First, try to find the full artist name in MusicBrainz
                     musicbrainz_data = None

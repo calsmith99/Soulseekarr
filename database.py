@@ -8,6 +8,7 @@ import sqlite3
 import json
 import logging
 import threading
+import os
 from datetime import datetime
 from pathlib import Path
 from contextlib import contextmanager
@@ -38,8 +39,17 @@ class DatabaseManager:
         """Get a database connection with proper error handling."""
         conn = None
         try:
-            conn = sqlite3.connect(self.db_path)
+            # Increase timeout to wait for locks (default is 5.0 seconds)
+            # Using 60 seconds to be very safe against "database is locked" errors
+            conn = sqlite3.connect(self.db_path, timeout=60.0)
             conn.row_factory = sqlite3.Row  # Enable dict-like access
+            
+            # Enable Write-Ahead Logging (WAL) for better concurrency
+            # This allows readers to not block writers and vice versa
+            conn.execute("PRAGMA journal_mode=WAL")
+            # Optimize synchronization for WAL mode
+            conn.execute("PRAGMA synchronous=NORMAL")
+            
             yield conn
         except Exception as e:
             if conn:
@@ -149,34 +159,15 @@ class DatabaseManager:
                 artist TEXT NOT NULL,
                 album TEXT NOT NULL,
                 directory TEXT NOT NULL,
-                oldest_file_days INTEGER NOT NULL,
-                days_until_expiry INTEGER NOT NULL,
                 file_count INTEGER NOT NULL,
                 total_size_mb REAL NOT NULL,
                 is_starred BOOLEAN DEFAULT FALSE,
-                album_art_url TEXT,
                 first_detected TIMESTAMP NOT NULL,
                 last_seen TIMESTAMP NOT NULL,
                 status TEXT DEFAULT 'pending',
                 deleted_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # Album expiry history table (tracks changes over time)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS album_expiry_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                album_id INTEGER NOT NULL,
-                oldest_file_days INTEGER NOT NULL,
-                days_until_expiry INTEGER NOT NULL,
-                file_count INTEGER NOT NULL,
-                total_size_mb REAL NOT NULL,
-                is_starred BOOLEAN DEFAULT FALSE,
-                status TEXT NOT NULL,
-                recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (album_id) REFERENCES expiring_albums (id) ON DELETE CASCADE
             )
         """)
         
@@ -198,6 +189,23 @@ class DatabaseManager:
             )
         """)
         
+        # Playlist tracks table (for Spotify sync)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS playlist_tracks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                spotify_id TEXT NOT NULL UNIQUE,
+                artist TEXT NOT NULL,
+                title TEXT NOT NULL,
+                album TEXT,
+                status TEXT NOT NULL DEFAULT 'pending',
+                slskd_id TEXT,
+                navidrome_id TEXT,
+                last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
         # Create indexes for better performance (excluding new columns initially)
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_script_id ON script_executions(script_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_script_executions_start_time ON script_executions(start_time)")
@@ -208,12 +216,11 @@ class DatabaseManager:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_next_run ON scheduled_jobs(next_run)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_script_id ON scheduled_jobs(script_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_status ON expiring_albums(status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_days_until_expiry ON expiring_albums(days_until_expiry)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_last_seen ON expiring_albums(last_seen)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_expiry_history_album_id ON album_expiry_history(album_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_expiry_history_recorded_at ON album_expiry_history(recorded_at)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_album_id ON album_tracks(album_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_album_tracks_days_old ON album_tracks(days_old)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_playlist_tracks_spotify_id ON playlist_tracks(spotify_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_playlist_tracks_status ON playlist_tracks(status)")
         # Note: Indexes for new columns (is_starred, navidrome_id) are created in migration section
         
         # Run migrations if needed
@@ -334,6 +341,157 @@ class DatabaseManager:
                 conn.commit()
                 logger.info("Set schema version to 4, assuming cleanup_days already removed")
         
+        if current_version < 5:
+            # Migration: Add playlist_tracks table for Spotify sync
+            logger.info("Running migration to add playlist_tracks table...")
+            try:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS playlist_tracks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        spotify_id TEXT NOT NULL UNIQUE,
+                        artist TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        album TEXT,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        slskd_id TEXT,
+                        navidrome_id TEXT,
+                        last_checked TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_playlist_tracks_spotify_id ON playlist_tracks(spotify_id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_playlist_tracks_status ON playlist_tracks(status)")
+                
+                cursor.execute("PRAGMA user_version = 5")
+                conn.commit()
+                logger.info("Successfully added playlist_tracks table")
+            except Exception as e:
+                logger.error(f"Migration failed: {e}")
+                raise
+
+        if current_version < 6:
+            # Migration: Add year column to playlist_tracks
+            logger.info("Running migration to add year column to playlist_tracks...")
+            try:
+                cursor.execute("ALTER TABLE playlist_tracks ADD COLUMN year INTEGER")
+                cursor.execute("PRAGMA user_version = 6")
+                conn.commit()
+                logger.info("Successfully added year column to playlist_tracks")
+            except sqlite3.OperationalError as e:
+                if "duplicate column" in str(e).lower():
+                    cursor.execute("PRAGMA user_version = 6")
+                    conn.commit()
+                    logger.info("year column already exists, updating version")
+                else:
+                    logger.error(f"Migration failed: {e}")
+                    raise
+
+        if current_version < 7:
+            # Migration: Remove album_expiry_history and oldest_file_days
+            logger.info("Running migration to remove legacy tables and columns...")
+            try:
+                # Drop unused table
+                cursor.execute("DROP TABLE IF EXISTS album_expiry_history")
+                
+                # Recreate expiring_albums without oldest_file_days
+                cursor.execute("ALTER TABLE expiring_albums RENAME TO expiring_albums_old")
+                
+                cursor.execute("""
+                    CREATE TABLE expiring_albums (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        album_key TEXT NOT NULL UNIQUE,
+                        artist TEXT NOT NULL,
+                        album TEXT NOT NULL,
+                        directory TEXT NOT NULL,
+                        days_until_expiry INTEGER NOT NULL,
+                        file_count INTEGER NOT NULL,
+                        total_size_mb REAL NOT NULL,
+                        is_starred BOOLEAN DEFAULT FALSE,
+                        album_art_url TEXT,
+                        first_detected TIMESTAMP NOT NULL,
+                        last_seen TIMESTAMP NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        deleted_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Copy data
+                cursor.execute("""
+                    INSERT INTO expiring_albums 
+                    (id, album_key, artist, album, directory, days_until_expiry, 
+                     file_count, total_size_mb, is_starred, album_art_url, 
+                     first_detected, last_seen, status, deleted_at, created_at, updated_at)
+                    SELECT id, album_key, artist, album, directory, days_until_expiry, 
+                           file_count, total_size_mb, is_starred, album_art_url, 
+                           first_detected, last_seen, status, deleted_at, created_at, updated_at
+                    FROM expiring_albums_old
+                """)
+                
+                cursor.execute("DROP TABLE expiring_albums_old")
+                
+                # Recreate indexes
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_status ON expiring_albums(status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_days_until_expiry ON expiring_albums(days_until_expiry)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_last_seen ON expiring_albums(last_seen)")
+                
+                cursor.execute("PRAGMA user_version = 7")
+                conn.commit()
+                logger.info("Successfully removed legacy tables and columns")
+            except Exception as e:
+                logger.error(f"Migration failed: {e}")
+                raise
+
+        if current_version < 8:
+            # Migration: Remove days_until_expiry and album_art_url
+            logger.info("Running migration to remove days_until_expiry and album_art_url...")
+            try:
+                cursor.execute("ALTER TABLE expiring_albums RENAME TO expiring_albums_v7")
+                
+                cursor.execute("""
+                    CREATE TABLE expiring_albums (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        album_key TEXT NOT NULL UNIQUE,
+                        artist TEXT NOT NULL,
+                        album TEXT NOT NULL,
+                        directory TEXT NOT NULL,
+                        file_count INTEGER NOT NULL,
+                        total_size_mb REAL NOT NULL,
+                        is_starred BOOLEAN DEFAULT FALSE,
+                        first_detected TIMESTAMP NOT NULL,
+                        last_seen TIMESTAMP NOT NULL,
+                        status TEXT DEFAULT 'pending',
+                        deleted_at TIMESTAMP,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                
+                # Copy data
+                cursor.execute("""
+                    INSERT INTO expiring_albums 
+                    (id, album_key, artist, album, directory, file_count, total_size_mb, 
+                     is_starred, first_detected, last_seen, status, deleted_at, created_at, updated_at)
+                    SELECT id, album_key, artist, album, directory, file_count, total_size_mb, 
+                           is_starred, first_detected, last_seen, status, deleted_at, created_at, updated_at
+                    FROM expiring_albums_v7
+                """)
+                
+                cursor.execute("DROP TABLE expiring_albums_v7")
+                
+                # Recreate indexes
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_status ON expiring_albums(status)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_expiring_albums_last_seen ON expiring_albums(last_seen)")
+                
+                cursor.execute("PRAGMA user_version = 8")
+                conn.commit()
+                logger.info("Successfully removed days_until_expiry and album_art_url")
+            except Exception as e:
+                logger.error(f"Migration failed: {e}")
+                raise
+
         conn.commit()
         
         # Verify final schema version
@@ -363,22 +521,45 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         # Find executions that are still marked as running
-        cursor.execute("SELECT id, script_name FROM script_executions WHERE status = 'running'")
+        cursor.execute("SELECT id, script_name, pid FROM script_executions WHERE status = 'running'")
         orphaned_executions = cursor.fetchall()
         
         if orphaned_executions:
-            logger.info(f"Found {len(orphaned_executions)} orphaned running executions from previous session")
+            logger.info(f"Found {len(orphaned_executions)} potentially orphaned running executions")
             
-            # Mark them as stopped
             current_time = datetime.now()
+            cleaned_count = 0
+            
             for execution in orphaned_executions:
                 execution_id = execution['id']
                 script_name = execution['script_name']
+                pid = execution['pid']
+                
+                # Check if process is actually still running
+                is_running = False
+                if pid:
+                    try:
+                        # Signal 0 checks if process exists and we have permission
+                        os.kill(pid, 0)
+                        is_running = True
+                    except OSError:
+                        is_running = False
+                
+                if is_running:
+                    logger.info(f"Process {pid} for {script_name} is still running. Resuming tracking.")
+                    continue
+                
+                # Mark as stopped if not running
+                cleaned_count += 1
                 
                 # Calculate duration from start time
                 cursor.execute("SELECT start_time FROM script_executions WHERE id = ?", (execution_id,))
                 start_time_str = cursor.fetchone()['start_time']
-                start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                try:
+                    start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+                except:
+                    start_time = datetime.fromisoformat(start_time_str)
+                    
                 duration = (current_time - start_time).total_seconds()
                 
                 cursor.execute("""
@@ -394,7 +575,8 @@ class DatabaseManager:
                 logger.info(f"Marked orphaned execution as stopped: {script_name} (ID: {execution_id})")
             
             conn.commit()
-            logger.info(f"Cleaned up {len(orphaned_executions)} orphaned executions")
+            if cleaned_count > 0:
+                logger.info(f"Cleaned up {cleaned_count} orphaned executions")
         else:
             logger.debug("No orphaned executions found")
     
@@ -492,6 +674,36 @@ class DatabaseManager:
                 INSERT INTO script_logs (execution_id, line_number, timestamp, content, log_level)
                 VALUES (?, ?, ?, ?, ?)
             """, (execution_id, line_number, datetime.now(), content, log_level))
+            
+            conn.commit()
+    
+    def add_log_lines_batch(self, execution_id: int, log_entries: List[Dict]):
+        """Add multiple log lines for a script execution efficiently."""
+        if not log_entries:
+            return
+            
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Get current line number base
+            cursor.execute("SELECT COUNT(*) as count FROM script_logs WHERE execution_id = ?", (execution_id,))
+            start_line_number = cursor.fetchone()['count'] + 1
+            
+            # Prepare data for bulk insert
+            data = []
+            for i, entry in enumerate(log_entries):
+                data.append((
+                    execution_id, 
+                    start_line_number + i, 
+                    entry.get('timestamp', datetime.now()), 
+                    entry['content'], 
+                    entry.get('log_level', 'info')
+                ))
+            
+            cursor.executemany("""
+                INSERT INTO script_logs (execution_id, line_number, timestamp, content, log_level)
+                VALUES (?, ?, ?, ?, ?)
+            """, data)
             
             conn.commit()
     
@@ -740,25 +952,19 @@ class DatabaseManager:
                 # Update existing record (preserving first_detected)
                 cursor.execute("""
                     UPDATE expiring_albums 
-                    SET oldest_file_days = ?,
-                        days_until_expiry = ?,
-                        file_count = ?,
+                    SET file_count = ?,
                         total_size_mb = ?,
                         is_starred = ?,
                         last_seen = ?,
                         status = ?,
-                        album_art_url = ?,
                         updated_at = ?
                     WHERE album_key = ?
                 """, (
-                    album_data['oldest_file_days'],
-                    album_data['days_until_expiry'],
                     album_data['file_count'],
                     album_data['total_size_mb'],
                     album_data['is_starred'],
                     now,
                     album_data['status'],
-                    album_data.get('album_art_url'),
                     now,
                     album_key
                 ))
@@ -767,17 +973,14 @@ class DatabaseManager:
                 # Insert new record
                 cursor.execute("""
                     INSERT INTO expiring_albums 
-                    (album_key, artist, album, directory, album_art_url, oldest_file_days, days_until_expiry, 
-                     file_count, total_size_mb, is_starred, first_detected, last_seen, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (album_key, artist, album, directory, file_count, total_size_mb, 
+                     is_starred, first_detected, last_seen, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     album_key,
                     album_data['artist'],
                     album_data['album'],
                     album_data['directory'],
-                    album_data.get('album_art_url'),
-                    album_data['oldest_file_days'],
-                    album_data['days_until_expiry'],
                     album_data['file_count'],
                     album_data['total_size_mb'],
                     album_data['is_starred'],
@@ -787,25 +990,16 @@ class DatabaseManager:
                 ))
                 album_id = cursor.lastrowid
             
-            # Record in history
-            cursor.execute("""
-                INSERT INTO album_expiry_history 
-                (album_id, oldest_file_days, days_until_expiry, file_count, 
-                 total_size_mb, is_starred, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (
-                album_id,
-                album_data['oldest_file_days'],
-                album_data['days_until_expiry'],
-                album_data['file_count'],
-                album_data['total_size_mb'],
-                album_data['is_starred'],
-                album_data['status']
-            ))
-            
             conn.commit()
             return album_id
     
+    def get_all_active_album_keys(self) -> List[str]:
+        """Get keys of all albums that are not deleted."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT album_key FROM expiring_albums WHERE status != 'deleted'")
+            return [row['album_key'] for row in cursor.fetchall()]
+
     def get_expiring_albums(self, status: str = 'pending', include_starred: bool = False) -> List[Dict]:
         """Get expiring albums from database."""
         with self.get_connection() as conn:
@@ -817,7 +1011,7 @@ class DatabaseManager:
             if not include_starred:
                 query += " AND is_starred = FALSE"
             
-            query += " ORDER BY days_until_expiry ASC, oldest_file_days DESC"
+            query += " ORDER BY first_detected ASC"
             
             cursor.execute(query, params)
             
@@ -869,11 +1063,10 @@ class DatabaseManager:
                 display_file_count = actual_file_count if actual_file_count > 0 else stored_file_count
                 
                 albums[album_key] = {
+                    'album_key': album_key,  # Include the key (MBID or Hash)
                     'artist': album_dict['artist'],
                     'album': album_dict['album'],
                     'directory': album_dict['directory'],
-                    'album_art_url': album_dict.get('album_art_url'),  # Use original Navidrome URL
-                    'oldest_file_days': album_dict['oldest_file_days'],
                     'days_until_expiry': days_until_expiry,  # Calculated from first_detected
                     'days_since_detected': days_since_detected,
                     'first_detected': album_dict['first_detected'],  # Include for frontend
@@ -893,8 +1086,7 @@ class DatabaseManager:
             # Convert back to dict with same keys
             sorted_albums = {}
             for album in albums_list:
-                album_key = f"{album['artist']} - {album['album']}"
-                sorted_albums[album_key] = album
+                sorted_albums[album['album_key']] = album
             
             return {
                 'generated_at': datetime.now().isoformat(),
@@ -954,26 +1146,7 @@ class DatabaseManager:
             if deleted_count > 0 or history_deleted > 0:
                 logger.info(f"Cleaned up {deleted_count} old album records and {history_deleted} history entries")
     
-    def get_album_expiry_history(self, album_key: str, limit: int = 30) -> List[Dict]:
-        """Get historical data for an album."""
-        with self.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT aeh.* 
-                FROM album_expiry_history aeh
-                JOIN expiring_albums ea ON aeh.album_id = ea.id
-                WHERE ea.album_key = ?
-                ORDER BY aeh.recorded_at DESC
-                LIMIT ?
-            """, (album_key, limit))
-            
-            history = []
-            for row in cursor.fetchall():
-                record = dict(row)
-                record['recorded_at'] = datetime.fromisoformat(record['recorded_at'])
-                history.append(record)
-            
-            return history
+
 
     def add_album_track(self, album_id: int, track_data: Dict):
         """Add or update a track for an album."""
@@ -1104,6 +1277,86 @@ class DatabaseManager:
             
             conn.commit()
             logger.info(f"Bulk updated starred status for {len(starred_tracks)} tracks")
+
+    # Playlist Tracks Methods
+    
+    def upsert_playlist_track(self, track_data: Dict) -> int:
+        """Insert or update a playlist track."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                INSERT INTO playlist_tracks 
+                (spotify_id, artist, title, album, year, status, slskd_id, navidrome_id, last_checked)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(spotify_id) DO UPDATE SET
+                artist = excluded.artist,
+                title = excluded.title,
+                album = excluded.album,
+                year = excluded.year,
+                status = excluded.status,
+                slskd_id = COALESCE(excluded.slskd_id, playlist_tracks.slskd_id),
+                navidrome_id = COALESCE(excluded.navidrome_id, playlist_tracks.navidrome_id),
+                last_checked = excluded.last_checked,
+                updated_at = CURRENT_TIMESTAMP
+            """, (
+                track_data['spotify_id'],
+                track_data['artist'],
+                track_data['title'],
+                track_data.get('album'),
+                track_data.get('year'),
+                track_data.get('status', 'pending'),
+                track_data.get('slskd_id'),
+                track_data.get('navidrome_id'),
+                datetime.now()
+            ))
+            
+            conn.commit()
+            
+            # Get the ID
+            cursor.execute("SELECT id FROM playlist_tracks WHERE spotify_id = ?", (track_data['spotify_id'],))
+            return cursor.fetchone()[0]
+            
+    def get_playlist_track(self, spotify_id: str) -> Optional[Dict]:
+        """Get a playlist track by Spotify ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM playlist_tracks WHERE spotify_id = ?", (spotify_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+            
+    def get_playlist_tracks_by_status(self, status: str) -> List[Dict]:
+        """Get playlist tracks by status."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM playlist_tracks WHERE status = ?", (status,))
+            return [dict(row) for row in cursor.fetchall()]
+            
+    def update_playlist_track_status(self, spotify_id: str, status: str, slskd_id: str = None, navidrome_id: str = None):
+        """Update status and optional IDs for a playlist track."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            updates = ["status = ?", "updated_at = CURRENT_TIMESTAMP"]
+            params = [status]
+            
+            if slskd_id:
+                updates.append("slskd_id = ?")
+                params.append(slskd_id)
+                
+            if navidrome_id:
+                updates.append("navidrome_id = ?")
+                params.append(navidrome_id)
+                
+            params.append(spotify_id)
+            
+            cursor.execute(f"""
+                UPDATE playlist_tracks 
+                SET {', '.join(updates)}
+                WHERE spotify_id = ?
+            """, params)
+            
+            conn.commit()
 
 # Global database manager instance
 _db_instance = None

@@ -380,6 +380,21 @@
             color: var(--danger-color);
         }
 
+        .status-failed {
+            background-color: rgba(244, 67, 54, 0.2);
+            color: var(--danger-color);
+        }
+
+        .status-stopped {
+            background-color: rgba(158, 158, 158, 0.2);
+            color: var(--text-secondary);
+        }
+
+        .status-queued {
+            background-color: rgba(33, 150, 243, 0.2);
+            color: var(--info-color);
+        }
+
         /* Loading and empty states */
         .loading {
             display: flex;
@@ -2016,6 +2031,7 @@
                             <div class="script-description">${script.description}</div>
                             ${progressHtml}
                             <div class="script-actions">
+                                <input type="text" class="script-input form-control" placeholder="Args (e.g. --limit 10)" data-script-id="${scriptId}" style="margin-right: 10px; width: 180px; display: inline-block; height: 31px; font-size: 0.875rem; padding: 4px 8px;">
                                 ${script.supports_dry_run ? `
                                     <button class="btn btn-secondary btn-sm run-btn" data-script-id="${scriptId}" data-dry-run="true">
                                         Dry Run
@@ -2042,7 +2058,9 @@
                     btn.addEventListener('click', async (e) => {
                         const scriptId = btn.dataset.scriptId;
                         const dryRun = btn.dataset.dryRun === 'true';
-                        await this.runScript(scriptId, dryRun);
+                        const input = document.querySelector(`.script-input[data-script-id="${scriptId}"]`);
+                        const args = input ? input.value : null;
+                        await this.runScript(scriptId, dryRun, args);
                     });
                 });
 
@@ -2061,12 +2079,12 @@
                 });
             }
 
-            async runScript(scriptId, dryRun = false) {
+            async runScript(scriptId, dryRun = false, args = null) {
                 try {
                     const response = await fetch(`/run_script/${scriptId}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ dry_run: dryRun })
+                        body: JSON.stringify({ dry_run: dryRun, args: args })
                     });
 
                     const data = await response.json();
@@ -2190,6 +2208,14 @@
             }
 
             updateScriptUI(scriptId, status) {
+                // Update local state
+                if (this.scripts[scriptId]) {
+                    this.scripts[scriptId].current_status = status;
+                    if (status.progress) {
+                        this.scripts[scriptId].progress = status.progress;
+                    }
+                }
+
                 const statusElement = document.getElementById(`status-${scriptId}`);
                 const runBtns = document.querySelectorAll(`[data-script-id="${scriptId}"].run-btn`);
                 const stopBtn = document.querySelector(`[data-script-id="${scriptId}"].stop-btn`);
@@ -2213,8 +2239,13 @@
                 // Update progress bar if running
                 const scriptItem = document.querySelector(`[data-script-id="${scriptId}"]`);
                 if (scriptItem && status.running) {
-                    // Fetch logs to get progress
-                    this.updateScriptProgress(scriptId, scriptItem);
+                    if (status.progress) {
+                        // Use progress from status update
+                        this.renderProgressBar(scriptId, scriptItem, status.progress);
+                    } else {
+                        // Fallback to fetching logs if no progress in status
+                        this.updateScriptProgress(scriptId, scriptItem);
+                    }
                 } else if (scriptItem) {
                     // Remove progress bar if not running
                     const existingProgress = scriptItem.querySelector('.script-progress');
@@ -2222,9 +2253,29 @@
                         existingProgress.remove();
                     }
                 }
+            }
 
-                // Reload execution queue to get updated data from database
-                this.loadExecutionQueue();
+            renderProgressBar(scriptId, scriptItem, progressInfo) {
+                let progressDiv = scriptItem.querySelector('.script-progress');
+                
+                if (!progressDiv) {
+                    // Create new progress bar
+                    const descriptionDiv = scriptItem.querySelector('.script-description');
+                    progressDiv = document.createElement('div');
+                    progressDiv.className = 'script-progress';
+                    descriptionDiv.after(progressDiv);
+                }
+                
+                const fillClass = progressInfo.percentage === 100 ? 'complete' : '';
+                progressDiv.innerHTML = `
+                    <div class="script-progress-info">
+                        <span class="script-progress-step">${this.escapeHtml(progressInfo.description)}</span>
+                        <span>${progressInfo.percentage}%</span>
+                    </div>
+                    <div class="script-progress-bar">
+                        <div class="script-progress-fill ${fillClass}" style="width: ${progressInfo.percentage}%;"></div>
+                    </div>
+                `;
             }
 
             async updateScriptProgress(scriptId, scriptItem) {
@@ -2235,27 +2286,7 @@
                         const progressInfo = this.parseProgressFromLogs(logData.logs || []);
                         
                         if (progressInfo) {
-                            // Update or create progress bar
-                            let progressDiv = scriptItem.querySelector('.script-progress');
-                            
-                            if (!progressDiv) {
-                                // Create new progress bar
-                                const descriptionDiv = scriptItem.querySelector('.script-description');
-                                progressDiv = document.createElement('div');
-                                progressDiv.className = 'script-progress';
-                                descriptionDiv.after(progressDiv);
-                            }
-                            
-                            const fillClass = progressInfo.percentage === 100 ? 'complete' : '';
-                            progressDiv.innerHTML = `
-                                <div class="script-progress-info">
-                                    <span class="script-progress-step">${this.escapeHtml(progressInfo.description)}</span>
-                                    <span>${progressInfo.percentage}%</span>
-                                </div>
-                                <div class="script-progress-bar">
-                                    <div class="script-progress-fill ${fillClass}" style="width: ${progressInfo.percentage}%;"></div>
-                                </div>
-                            `;
+                            this.renderProgressBar(scriptId, scriptItem, progressInfo);
                             
                             // Store progress in script object for next render
                             if (this.scripts[scriptId]) {
@@ -2449,25 +2480,91 @@
             }
 
             getQueueStatusText(status) {
-                switch(status) {
+                if (!status) return 'Unknown';
+                
+                switch(status.toLowerCase()) {
                     case 'running': return 'Running';
                     case 'completed': return 'Completed';
                     case 'failed': return 'Failed';
-                    default: return 'Idle';
+                    case 'stopped': return 'Stopped';
+                    case 'queued': return 'Queued';
+                    default: return status.charAt(0).toUpperCase() + status.slice(1);
                 }
             }
 
             startStatusUpdates() {
-                this.statusUpdateInterval = setInterval(() => {
-                    this.updateAllStatuses();
-                }, 2000);
+                if (this.eventSource) {
+                    this.eventSource.close();
+                }
+
+                this.eventSource = new EventSource('/api/events');
+                
+                this.eventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    // Handle generic messages if needed
+                };
+
+                this.eventSource.addEventListener('status_update', (event) => {
+                    const data = JSON.parse(event.data);
+                    this.handleStatusUpdate(data);
+                });
+
+                this.eventSource.onerror = (error) => {
+                    console.error('EventSource failed:', error);
+                    // Try to reconnect after a delay
+                    this.eventSource.close();
+                    setTimeout(() => this.startStatusUpdates(), 5000);
+                };
+            }
+
+            handleStatusUpdate(data) {
+                // Update running scripts
+                if (data.running_scripts) {
+                    Object.entries(data.running_scripts).forEach(([scriptId, status]) => {
+                        this.updateScriptUI(scriptId, status);
+                    });
+                    
+                    // Check for scripts that stopped running
+                    Object.keys(this.scripts).forEach(scriptId => {
+                        if (!data.running_scripts[scriptId] && this.scripts[scriptId].current_status?.running) {
+                            // Script was running but is not anymore, fetch final status
+                            this.updateScriptStatus(scriptId);
+                        }
+                    });
+                }
+
+                // Update execution queue
+                if (data.execution_queue) {
+                    this.executionQueue = data.execution_queue.map(item => ({
+                        scriptId: item.scriptId,
+                        name: item.name,
+                        startTime: new Date(item.startTime),
+                        endTime: item.endTime ? new Date(item.endTime) : null,
+                        status: item.status,
+                        duration_seconds: item.duration_seconds,
+                        dry_run: item.dry_run,
+                        execution_id: item.execution_id,
+                        progress: null // Will be populated from running_scripts
+                    }));
+
+                    // Merge progress from running_scripts
+                    if (data.running_scripts) {
+                        this.executionQueue.forEach(item => {
+                            if (item.status === 'running' && data.running_scripts[item.scriptId]?.progress) {
+                                item.progress = data.running_scripts[item.scriptId].progress;
+                            }
+                        });
+                    }
+
+                    this.renderQueue();
+                }
             }
 
             async updateAllStatuses() {
+                // Deprecated in favor of SSE, but kept for manual refresh if needed
                 for (const scriptId of Object.keys(this.scripts)) {
                     await this.updateScriptStatus(scriptId);
                 }
-                // Also refresh the execution queue
                 this.loadExecutionQueue();
             }
 
@@ -2590,17 +2687,34 @@
             parseProgressFromLogs(logs) {
                 // Look for PROGRESS: [n/total] percentage% - description pattern
                 // Example: "PROGRESS: [2/5] 40% - Processing Downloads folder"
-                const progressRegex = /PROGRESS:\s*\[(\d+)\/(\d+)\]\s*(\d+)%\s*-\s*(.+)/i;
+                const progressRegexComplex = /PROGRESS:\s*\[(\d+)\/(\d+)\]\s*(\d+)%\s*-\s*(.+)/i;
+                
+                // Look for simple PROGRESS: n/total - description pattern
+                // Example: "PROGRESS: 2/5 - Processing Downloads folder"
+                const progressRegexSimple = /PROGRESS:\s*(\d+)\/(\d+)\s*-\s*(.+)/i;
                 
                 // Search from end of logs to get most recent progress
                 for (let i = logs.length - 1; i >= 0; i--) {
-                    const match = logs[i].match(progressRegex);
+                    let match = logs[i].match(progressRegexComplex);
                     if (match) {
                         return {
                             current: parseInt(match[1]),
                             total: parseInt(match[2]),
                             percentage: parseInt(match[3]),
                             description: match[4].trim()
+                        };
+                    }
+                    
+                    match = logs[i].match(progressRegexSimple);
+                    if (match) {
+                        const current = parseInt(match[1]);
+                        const total = parseInt(match[2]);
+                        const percentage = Math.round((current / total) * 100);
+                        return {
+                            current: current,
+                            total: total,
+                            percentage: percentage,
+                            description: match[3].trim()
                         };
                     }
                 }
@@ -2899,8 +3013,8 @@
 
             renderAlbumCard(album, cleanupDays) {
                 const expiryClass = this.getExpiryClass(album.days_until_expiry);
-                const expiryLabel = this.getExpiryLabel(album.days_until_expiry, album.oldest_file_days, album.first_detected);
-                const albumKey = `${album.artist} - ${album.album}`;
+                const expiryLabel = this.getExpiryLabel(album.days_until_expiry, album.first_detected);
+                const albumKey = album.album_key;
                 
                 // Ensure cleanupDays has a valid value
                 if (!cleanupDays || cleanupDays <= 0) {
@@ -2937,7 +3051,6 @@
                         days_until_expiry: album.days_until_expiry,
                         days_since_detected: album.days_since_detected,
                         first_detected: album.first_detected,
-                        oldest_file_days: album.oldest_file_days,
                         progressPercent: progressPercent,
                         calculation: `(${cleanupDays} - ${album.days_until_expiry}) / ${cleanupDays} * 100 = ${progressPercent}%`
                     });
@@ -2946,14 +3059,7 @@
                 // Build album cover with background image
                 let coverClass = 'album-cover';
                 let coverStyle = '';
-                let iconHtml = '';
-                
-                if (album.album_art_url && album.album_art_url !== 'null' && album.album_art_url.trim() !== '') {
-                    coverClass += ' has-image';
-                    coverStyle = `background-image: url('${album.album_art_url}');`;
-                } else {
-                    iconHtml = '<div class="album-cover-icon">💿</div>';
-                }
+                let iconHtml = '<div class="album-cover-icon">💿</div>';
                 
                 return `
                     <div class="album-card ${expiryClass}" onclick="window.soulSeekarrApp.openTracksModal('${this.escapeHtml(albumKey)}', '${this.escapeHtml(album.artist)}', '${this.escapeHtml(album.album)}')">
@@ -2989,7 +3095,7 @@
                 return '';
             }
 
-            getExpiryLabel(daysUntilExpiry, oldestDays, firstDetected = null) {
+            getExpiryLabel(daysUntilExpiry, firstDetected = null) {
                 if (daysUntilExpiry < 0) {
                     const daysOverdue = Math.abs(daysUntilExpiry);
                     return `${daysOverdue}d overdue`;

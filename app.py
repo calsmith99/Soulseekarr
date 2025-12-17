@@ -11,6 +11,7 @@ import threading
 import time
 import json
 import re
+import shlex
 from datetime import datetime
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request, send_from_directory, Response
@@ -20,6 +21,7 @@ import requests
 from urllib.parse import urljoin
 import settings
 from scheduler import get_scheduler, start_scheduler, stop_scheduler
+import queue
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'soulseekarr-music-tools-secret-key-2025'
@@ -62,6 +64,115 @@ service_status_cache = {
     'slskd': {'status': 'unknown', 'last_check': None, 'error': None}
 }
 service_status_lock = threading.Lock()
+
+# SSE Management
+sse_queues = []
+sse_lock = threading.Lock()
+
+def broadcast_event(event_type, data):
+    """Broadcast an event to all connected SSE clients."""
+    with sse_lock:
+        dead_queues = []
+        for q in sse_queues:
+            try:
+                q.put({
+                    'type': event_type,
+                    'data': data
+                })
+            except Exception:
+                dead_queues.append(q)
+        
+        # Clean up dead queues
+        for q in dead_queues:
+            if q in sse_queues:
+                sse_queues.remove(q)
+
+def status_broadcaster():
+    """Background thread to broadcast status updates to SSE clients."""
+    last_state = {}
+    
+    while True:
+        try:
+            # Collect current state
+            current_state = {
+                'running_scripts': {},
+                'execution_queue': []
+            }
+            
+            # Get running scripts status
+            with script_lock:
+                for script_id, status in running_scripts.items():
+                    if status.get('running'):
+                        # Add progress if available
+                        if script_id in script_outputs:
+                            progress = parse_progress(script_outputs[script_id], script_id)
+                            if progress:
+                                status['progress'] = progress
+                        current_state['running_scripts'][script_id] = status.copy()
+                        # Convert datetime objects to strings
+                        if 'start_time' in current_state['running_scripts'][script_id]:
+                            dt = current_state['running_scripts'][script_id]['start_time']
+                            if isinstance(dt, datetime):
+                                current_state['running_scripts'][script_id]['start_time'] = dt.isoformat()
+                        if 'end_time' in current_state['running_scripts'][script_id]:
+                            dt = current_state['running_scripts'][script_id]['end_time']
+                            if isinstance(dt, datetime):
+                                current_state['running_scripts'][script_id]['end_time'] = dt.isoformat()
+
+            # Get execution queue
+            try:
+                # We can't easily detect changes in DB without querying, 
+                # but querying every second is cheap for SQLite WAL
+                executions = db.get_execution_queue(limit=20)
+                queue_items = []
+                for execution in executions:
+                    queue_items.append({
+                        'scriptId': execution['script_id'],
+                        'name': execution['script_name'],
+                        'startTime': execution['start_time'].isoformat(),
+                        'endTime': execution['end_time'].isoformat() if execution['end_time'] else None,
+                        'status': execution['status'],
+                        'duration_seconds': execution['duration_seconds'],
+                        'dry_run': execution['dry_run'],
+                        'execution_id': execution['id']
+                    })
+                current_state['execution_queue'] = queue_items
+            except Exception as e:
+                logger.error(f"Error getting execution queue for broadcast: {e}")
+
+            # Broadcast update
+            broadcast_event('status_update', current_state)
+            
+            time.sleep(1)
+            
+        except Exception as e:
+            logger.error(f"Error in status broadcaster: {e}")
+            time.sleep(5)
+
+@app.route('/api/events')
+def sse_events():
+    """Server-Sent Events endpoint."""
+    def stream():
+        q = queue.Queue()
+        with sse_lock:
+            sse_queues.append(q)
+        
+        try:
+            while True:
+                try:
+                    # Wait for new event
+                    event = q.get(timeout=20) # Keep-alive timeout
+                    yield f"event: {event['type']}\n"
+                    yield f"data: {json.dumps(event['data'])}\n\n"
+                except queue.Empty:
+                    # Send keep-alive comment
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            with sse_lock:
+                if q in sse_queues:
+                    sse_queues.remove(q)
+
+    return Response(stream(), mimetype='text/event-stream')
 
 def test_navidrome_service():
     """Test Navidrome service connectivity."""
@@ -288,15 +399,15 @@ def disable_cron(script_id):
             # Get current crontab
             result = subprocess.run(['crontab', '-l'], capture_output=True, text=True)
             if result.returncode == 0:
-                current_cron = result.stdout
+                current_crontab = result.stdout
                 
                 # Remove lines containing our script
-                lines = current_cron.split('\n')
+                lines = current_crontab.split('\n')
                 new_lines = [line for line in lines if cron_script_path not in line]
-                new_cron = '\n'.join(new_lines)
+                new_crontab = '\n'.join(new_lines)
                 
                 # Update crontab
-                subprocess.run(['crontab', '-'], input=new_cron, text=True, check=True)
+                subprocess.run(['crontab', '-'], input=new_crontab, text=True, check=True)
                 return True, "Cron job disabled successfully"
             else:
                 return True, "No crontab found"
@@ -611,13 +722,31 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
                 insert_index = 2  # After "python" and "-u" and "script.py"
                 if len(cmd) > 2 and cmd[2].endswith('.py'):
                     insert_index = 3
-                cmd.insert(insert_index, input_value)
+                
+                # Handle multiple arguments if input_value looks like flags
+                if input_value.strip().startswith('-'):
+                    try:
+                        args = shlex.split(input_value)
+                        for arg in reversed(args):
+                            cmd.insert(insert_index, arg)
+                    except Exception as e:
+                        logger.error(f"Error splitting arguments: {e}")
+                        cmd.insert(insert_index, input_value)
+                else:
+                    cmd.insert(insert_index, input_value)
                 
                 # Add --dry-run flag if supported and enabled
                 if script_env.get('DRY_RUN') == 'true':
                     cmd.append('--dry-run')
             else:
-                cmd = [script_path, input_value]
+                cmd = [script_path]
+                if input_value.strip().startswith('-'):
+                    try:
+                        cmd.extend(shlex.split(input_value))
+                    except:
+                        cmd.append(input_value)
+                else:
+                    cmd.append(input_value)
         else:
             if not script_path.startswith('python'):
                 cmd = [script_path]
@@ -648,11 +777,15 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
             running_scripts[script_id]['pid'] = process.pid
             running_scripts[script_id]['execution_id'] = execution_id
 
-        # Read output line by line
+        # Read output line by line with buffering for database
+        log_buffer = []
+        last_flush_time = time.time()
+        
         for line in iter(process.stdout.readline, ''):
             if line:
-                timestamp = datetime.now().strftime('%H:%M:%S')
-                output_line = f"[{timestamp}] {line.rstrip()}"
+                current_time = datetime.now()
+                timestamp_str = current_time.strftime('%H:%M:%S')
+                output_line = f"[{timestamp_str}] {line.rstrip()}"
                 
                 # Determine log level
                 log_level = 'info'
@@ -662,15 +795,53 @@ def run_script_thread(script_id, script_path, input_value=None, script_env=None)
                 elif 'warning' in line_lower or 'warn' in line_lower:
                     log_level = 'warning'
                 
-                # Store in database
+                # Add to buffer
                 if execution_id:
-                    db.add_log_line(execution_id, line.rstrip(), log_level)
+                    log_buffer.append({
+                        'content': line.rstrip(),
+                        'log_level': log_level,
+                        'timestamp': current_time
+                    })
                 
+                # Flush buffer if full or time elapsed
+                # Increased batch size to 100 to reduce I/O and locking frequency
+                if execution_id and (len(log_buffer) >= 100 or time.time() - last_flush_time >= 1.0):
+                    try:
+                        db.add_log_lines_batch(execution_id, log_buffer)
+                        
+                        # Also update in-memory logs in batch to reduce lock contention
+                        with script_lock:
+                            # Extract content lines for in-memory display
+                            new_lines = [f"[{entry['timestamp'].strftime('%H:%M:%S')}] {entry['content']}" for entry in log_buffer]
+                            script_outputs[script_id].extend(new_lines)
+                            # Keep only last 1000 lines
+                            if len(script_outputs[script_id]) > 1000:
+                                script_outputs[script_id] = script_outputs[script_id][-1000:]
+                                
+                        log_buffer = []
+                        last_flush_time = time.time()
+                    except Exception as db_err:
+                        logger.error(f"Error writing logs: {db_err}")
+                        log_buffer = []
+                        last_flush_time = time.time()
+                
+                # Removed per-line script_lock acquisition
+                # with script_lock:
+                #    script_outputs[script_id].append(output_line)
+                #    ...
+
+        # Flush remaining logs
+        if execution_id and log_buffer:
+            try:
+                db.add_log_lines_batch(execution_id, log_buffer)
                 with script_lock:
-                    script_outputs[script_id].append(output_line)
-                    # Keep only last 1000 lines to prevent memory issues
+                    new_lines = [f"[{entry['timestamp'].strftime('%H:%M:%S')}] {entry['content']}" for entry in log_buffer]
+                    script_outputs[script_id].extend(new_lines)
                     if len(script_outputs[script_id]) > 1000:
                         script_outputs[script_id] = script_outputs[script_id][-1000:]
+            except Exception as db_err:
+                logger.error(f"Error flushing final logs: {db_err}")
+            log_buffer = []
 
         # Wait for process to complete
         process.wait()
@@ -781,6 +952,7 @@ def run_script_api(script_id):
     # Get dry run setting from request body
     request_data = request.get_json() or {}
     dry_run = request_data.get('dry_run', False)
+    input_value = request_data.get('args', None)
     
     # Check if script file exists
     if script_path.startswith('python'):
@@ -805,7 +977,7 @@ def run_script_api(script_id):
         script_env['DRY_RUN'] = 'true' if dry_run else 'false'
     
     # Start script in background thread
-    thread = threading.Thread(target=run_script_thread, args=(script_id, script_path, None, script_env))
+    thread = threading.Thread(target=run_script_thread, args=(script_id, script_path, input_value, script_env))
     thread.daemon = True
     thread.start()
     
@@ -1245,52 +1417,16 @@ def get_album_tracks(album_key):
         logger.error(f"Error getting album tracks: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/album-art/<path:album_key>')
-def get_album_art(album_key):
-    """Proxy album art through Flask to handle authentication"""
-    try:
-        # Get album art URL from database
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT album_art_url FROM expiring_albums WHERE album_key = ?", (album_key,))
-            result = cursor.fetchone()
-            
-            if not result or not result[0]:
-                return '', 404
-                
-            album_art_url = result[0]
-            
-            # Fetch the image from Navidrome
-            import requests
-            response = requests.get(album_art_url, timeout=10)
-            
-            if response.status_code == 200:
-                # Return the image with proper headers
-                return Response(
-                    response.content,
-                    mimetype=response.headers.get('Content-Type', 'image/jpeg'),
-                    headers={
-                        'Cache-Control': 'public, max-age=3600',  # Cache for 1 hour
-                        'Content-Length': len(response.content)
-                    }
-                )
-            else:
-                return '', 404
-                
-    except Exception as e:
-        logger.error(f"Error serving album art for {album_key}: {e}")
-        return '', 500
-
 @app.route('/debug/albums')
 def debug_albums():
-    """Debug endpoint to examine album data and art URLs."""
+    """Debug endpoint to examine album data."""
     try:
         with db.get_connection() as conn:
             cursor = conn.cursor()
             
-            # Get sample of expiring albums with art info
+            # Get sample of expiring albums
             cursor.execute("""
-                SELECT album_key, artist, album, album_art_url, file_count
+                SELECT album_key, artist, album, file_count
                 FROM expiring_albums 
                 WHERE status = 'pending' 
                 LIMIT 10
@@ -1301,48 +1437,18 @@ def debug_albums():
                 album = dict(row)
                 albums.append(album)
             
-            # Get count of albums with/without art
+            # Get count of albums
             cursor.execute("""
-                SELECT 
-                    COUNT(CASE WHEN album_art_url IS NOT NULL AND album_art_url != '' THEN 1 END) as with_art,
-                    COUNT(CASE WHEN album_art_url IS NULL OR album_art_url = '' THEN 1 END) as without_art,
-                    COUNT(*) as total
+                SELECT COUNT(*) as total
                 FROM expiring_albums 
                 WHERE status = 'pending'
             """)
             
             stats = dict(cursor.fetchone())
             
-            # Get sample art URLs
-            cursor.execute("""
-                SELECT DISTINCT album_art_url 
-                FROM expiring_albums 
-                WHERE album_art_url IS NOT NULL AND album_art_url != ''
-                LIMIT 5
-            """)
-            
-            art_urls = [row[0] for row in cursor.fetchall()]
-            
-            # Test album art retrieval for albums without art
-            missing_art_albums = []
-            cursor.execute("""
-                SELECT artist, album
-                FROM expiring_albums 
-                WHERE (album_art_url IS NULL OR album_art_url = '') 
-                AND status = 'pending'
-                LIMIT 3
-            """)
-            
-            for row in cursor.fetchall():
-                artist, album = row
-                missing_art_albums.append({'artist': artist, 'album': album})
-            
             return jsonify({
                 'sample_albums': albums,
-                'stats': stats,
-                'sample_art_urls': art_urls,
-                'missing_art_albums': missing_art_albums,
-                'help': 'Albums without art might need file_expiry_cleanup.py to be re-run to populate album art URLs'
+                'stats': stats
             })
     except Exception as e:
         logger.error(f"Debug albums error: {e}")
@@ -2541,7 +2647,7 @@ def get_search_best_match(slskd_url, headers, search_id):
                         quality, score = calculate_file_quality_score(filename, size)
                         
                         if score > best_score:
-                            best_score = score
+                            best_score = score;
                             best_file = {
                                 'filename': filename,
                                 'size': size,
@@ -2675,6 +2781,11 @@ if __name__ == '__main__':
             else:
                 logger.warning(f"❌ {service_name.capitalize()}: {status.get('error', 'Connection failed')}")
     
+    # Start SSE status broadcaster
+    logger.info("Starting SSE status broadcaster...")
+    broadcaster_thread = threading.Thread(target=status_broadcaster, daemon=True)
+    broadcaster_thread.start()
+
     # Start Flask development server
     port = int(os.environ.get('PORT', 5000))
     host = os.environ.get('HOST', '0.0.0.0')

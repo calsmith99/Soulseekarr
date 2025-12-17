@@ -356,6 +356,89 @@ class LidarrClient:
             self.logger.error(f"Error checking if artist exists: {e}")
             return False
 
+    def add_artist_without_monitoring(self, artist_name: str, 
+                                          musicbrainz_data: Optional[Dict[str, Any]] = None,
+                                          search_for_missing: bool = False) -> bool:
+        """Add artist to Lidarr without monitoring
+        
+        This function:
+        1. Adds the artist to Lidarr
+        2. Sets artist monitoring to False
+        3. Sets album monitoring to 'none'
+        4. Optionally searches for missing albums (default: False)
+        
+        Args:
+            artist_name: Name of artist to add
+            musicbrainz_data: Optional MusicBrainz metadata dict
+            search_for_missing: Whether to search for existing albums (default: False)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if self.dry_run:
+                mb_info = f" (MusicBrainz: {musicbrainz_data['name']})" if musicbrainz_data else ""
+                self.logger.debug(f"DRY RUN: Would add artist without monitoring: {artist_name}{mb_info}")
+                return True
+            
+            # Check if artist already exists
+            if self.artist_exists(artist_name):
+                self.logger.debug(f"Artist '{artist_name}' already exists in Lidarr")
+                return True
+            
+            # Get Lidarr configuration
+            quality_profiles = self.get_quality_profiles()
+            root_folders = self.get_root_folders()
+            metadata_profiles = self.get_metadata_profiles()
+            
+            if not quality_profiles or not root_folders or not metadata_profiles:
+                self.logger.error("Failed to get Lidarr configuration (quality profiles, root folders, or metadata profiles)")
+                return False
+            
+            quality_profile_id = quality_profiles[0]['id']
+            root_folder_path = root_folders[0]['path']
+            metadata_profile_id = metadata_profiles[0]['id']
+            
+            # Prepare artist data for no monitoring
+            artist_data = {
+                'artistName': musicbrainz_data['name'] if musicbrainz_data else artist_name,
+                'foreignArtistId': musicbrainz_data['musicbrainz_id'] if musicbrainz_data else None,
+                'qualityProfileId': quality_profile_id,
+                'metadataProfileId': metadata_profile_id,
+                'rootFolderPath': root_folder_path,
+                'monitored': False,  # Do NOT monitor the artist
+                'albumFolder': True,
+                'addOptions': {
+                    'monitor': 'none',  # Don't monitor any existing albums
+                    'searchForMissingAlbums': search_for_missing
+                }
+            }
+            
+            # Remove None values
+            artist_data = {k: v for k, v in artist_data.items() if v is not None}
+            
+            # Log the artist data for debugging
+            self.logger.debug(f"Artist data to be sent to Lidarr: {artist_data}")
+            
+            # Add artist to Lidarr
+            headers = self._get_headers()
+            url = f"{self.lidarr_url}/api/v1/artist"
+            response = requests.post(url, headers=headers, json=artist_data, timeout=30)
+            
+            if response.status_code in [200, 201]:
+                mb_info = f" (MusicBrainz: {musicbrainz_data['name']})" if musicbrainz_data else ""
+                self.logger.info(f"Successfully added artist without monitoring: {artist_name}{mb_info}")
+                return True
+            else:
+                self.logger.warning(f"Failed to add artist {artist_name} to Lidarr: HTTP {response.status_code}")
+                if response.text:
+                    self.logger.warning(f"Error response: {response.text[:500]}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Error adding artist {artist_name} to Lidarr: {e}")
+            return False
+
     def add_artist_with_future_monitoring(self, artist_name: str, 
                                           musicbrainz_data: Optional[Dict[str, Any]] = None,
                                           search_for_missing: bool = False) -> bool:
@@ -625,6 +708,42 @@ class LidarrClient:
             self.logger.error(f"Error in add_artist_and_search_musicbrainz for '{artist_name}': {e}")
             return False
 
+    def get_artist_by_name(self, artist_name: str) -> Optional[Dict[str, Any]]:
+        """Get artist details from Lidarr by name"""
+        try:
+            artists = self.get_artists()
+            normalized_search = self.normalize_artist_name(artist_name)
+            
+            for artist in artists:
+                if self.normalize_artist_name(artist.get('artistName', '')) == normalized_search:
+                    return artist
+            
+            return None
+        except Exception as e:
+            self.logger.error(f"Error getting artist by name '{artist_name}': {e}")
+            return None
+
+    def get_tracks_by_artist(self, artist_id: int) -> List[Dict[str, Any]]:
+        """Get all tracks for a specific artist from Lidarr"""
+        try:
+            headers = self._get_headers()
+            url = f"{self.lidarr_url}/api/v1/track"
+            params = {'artistId': artist_id}
+            
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                tracks = response.json()
+                self.logger.debug(f"Retrieved {len(tracks)} tracks for artist ID {artist_id}")
+                return tracks
+            else:
+                self.logger.error(f"Failed to get tracks for artist ID {artist_id}: HTTP {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting tracks for artist ID {artist_id}: {e}")
+            return []
+        
 
 # Convenience functions for backward compatibility and easy usage
 def add_artist_to_lidarr(artist_name: str, 

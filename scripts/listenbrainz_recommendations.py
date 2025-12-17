@@ -397,7 +397,8 @@ class ListenBrainzRecommendations:
             self.logger.info(f"\n[5/5] Queuing {len(missing_albums)} missing albums...")
             queued_count = 0
             
-            for album in missing_albums:
+            for i, album in enumerate(missing_albums, 1):
+                print(f"PROGRESS: {i}/{len(missing_albums)} - Queuing: {album['artist']} - {album['album']}")
                 self.logger.info(f"Queuing: {album['artist']} - {album['album']}")
                 if self.queue_album_in_slskd(album['artist'], album['album']):
                     queued_count += 1

@@ -579,15 +579,17 @@ def check_download_queue(tracks_to_check: List[Dict]) -> List[Dict]:
         # Collect all files in download queue
         queued_files = []
         
-        # States that should prevent re-downloading (active or successfully completed)
+        # States that should prevent re-downloading (only active downloads)
+        # We exclude 'Completed'/'Succeeded' because if the file is missing (checked earlier),
+        # we want to retry even if slskd thinks it finished.
         skip_download_states = [
-            'Queued', 'Requested', 'Initializing', 'InProgress', 'Remotely Queued',
-            'Completed', 'Succeeded'  # Successfully completed downloads
+            'Queued', 'Requested', 'Initializing', 'InProgress', 'Remotely Queued'
         ]
         
         # States that represent failed downloads that can be retried
         failed_states = [
-            'TimedOut', 'Cancelled', 'Errored', 'Rejected', 'Failed'
+            'TimedOut', 'Cancelled', 'Errored', 'Rejected', 'Failed', 'Aborted',
+            'Completed', 'Succeeded'  # Treat completed as retryable if file is missing
         ]
         
         for user_group in downloads_data:
@@ -1305,6 +1307,7 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
         'rework', 'reworked', 'edit)', 'edited', 'version)', 
         'club mix', 'dance mix', 'radio mix', 'extended mix',
         'dub mix', 'house mix', 'techno mix', 'trance mix',
+        'funkymix', 'ultimix', 'megamix',
         
         # Live and acoustic versions  
         'live', 'concert', 'unplugged', 'acoustic', 'stripped',
@@ -1386,8 +1389,8 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
             # Additional pattern checks for remix variations that might be missed
             remix_patterns = [
                 r'\(.*remix.*\)', r'\[.*remix.*\]',  # (any remix) or [any remix]
-                r'\(.*mix\)', r'\[.*mix\]',          # (any mix) or [any mix] 
-                r'\(.*edit\)', r'\[.*edit\]',        # (any edit) or [any edit]
+                r'\(.*mix.*\)', r'\[.*mix.*\]',      # (any mix) or [any mix] - updated to catch "Funkymix by..."
+                r'\(.*edit.*\)', r'\[.*edit.*\]',    # (any edit) or [any edit] - updated to catch "Radio Edit by..."
                 r'\brmx\b', r'\bvs\.?\b',            # rmx or vs. (versus mixes)
                 r'\bfeat\.\s+.*remix', r'\bft\.\s+.*remix'  # feat. remix or ft. remix
             ]
@@ -1421,6 +1424,48 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
             # Prefer files/folders that explicitly avoid unwanted terms
             if not any(term in filename_clean for term in ['remix', 'mix', 'live', 'acoustic', 'edit']):
                 quality_score += 15  # Bonus for clean titles
+                
+                # Extra bonus for "pure" filenames (only track name, artist, album, track number)
+                # This helps avoid "remix", "edit", "live" etc that might not be caught by specific keywords
+                if track_title:
+                    # Create set of allowed words
+                    allowed_words = set(normalize_text_for_matching(artist_name).split() + 
+                                      normalize_text_for_matching(track_title).split() + 
+                                      normalize_text_for_matching(album_title).split())
+                    # Add common filler words that are okay
+                    allowed_words.update(['the', 'a', 'an', 'feat', 'ft', 'featuring', 'and', '&', 'with', 'mp3', 'flac'])
+                    
+                    # Get words from filename (remove extension first)
+                    file_basename_no_ext = os.path.splitext(file_basename)[0]
+                    file_words = normalize_text_for_matching(file_basename_no_ext).split()
+                    
+                    # Check if file words are mostly in allowed words
+                    clean_word_count = 0
+                    unknown_word_count = 0
+                    
+                    for word in file_words:
+                        if len(word) < 2: continue # Skip single chars
+                        if word.isdigit(): continue # Skip numbers (track numbers, years)
+                        
+                        if word in allowed_words:
+                            clean_word_count += 1
+                        else:
+                            # Check for partial matches
+                            is_partial = False
+                            for allowed in allowed_words:
+                                if len(allowed) > 3 and (allowed in word or word in allowed):
+                                    is_partial = True
+                                    break
+                            
+                            if is_partial:
+                                clean_word_count += 1
+                            else:
+                                unknown_word_count += 1
+                    
+                    # If we have mostly clean words and few unknown words, give a bonus
+                    if clean_word_count > 0 and unknown_word_count <= 1:
+                        quality_score += 15
+                        logging.debug(f"      ✨ Clean filename bonus: {file_basename}")
             
             # Prefer FLAC over MP3
             if filename.endswith('.flac'):
@@ -1453,6 +1498,21 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
                     album_match = True
                     quality_score += 15
             
+            # Bonus if folder path contains album name (more specific check)
+            if album_normalized and len(album_normalized) > 3:
+                # Check if significant album words are in directory path
+                album_words = [w for w in album_normalized.split() if len(w) > 2]
+                if album_words:
+                    dir_matches = 0
+                    normalized_dir = normalize_text_for_matching(folder_path)
+                    for word in album_words:
+                        if word in normalized_dir:
+                            dir_matches += 1
+                    
+                    if dir_matches >= min(len(album_words), 2):
+                        quality_score += 15
+                        logging.debug(f"      📂 Album in path bonus: {folder_path}")
+
             # If searching for specific track, check track match
             if track_title:
                 track_normalized = normalize_text_for_matching(track_title)
@@ -1477,6 +1537,22 @@ def find_best_candidates(results, artist_name: str, album_title: str, track_titl
             if any('full album' in part.lower() or 'complete' in part.lower() for part in path_parts):
                 quality_score += 5
             
+            # Check for compilation/best of albums if not requested
+            compilation_keywords = [
+                'best of', 'greatest hits', 'collection', 'anthology', 'essential', 
+                'compilation', 'top hits', 'golden hits', 'classic hits', 'various artists',
+                'super hits', 'ultimate'
+            ]
+            
+            is_wanted_compilation = any(kw in album_title.lower() for kw in compilation_keywords)
+            
+            if not is_wanted_compilation:
+                for kw in compilation_keywords:
+                    if kw in filename_clean or kw in folder_path_clean:
+                        quality_score -= 30  # Heavy penalty for unwanted compilations
+                        logging.debug(f"      📉 Penalizing compilation: {file_basename}")
+                        break
+
             candidates.append({
                 'username': username,
                 'filename': file_info.get('filename'),

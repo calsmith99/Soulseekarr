@@ -653,7 +653,13 @@ class TidalPlaylistMonitor:
     def find_missing_songs(self):
         """Find songs from playlist that are missing from library"""
         try:
-            for song in self.playlist_songs:
+            total_songs = len(self.playlist_songs)
+            
+            for i, song in enumerate(self.playlist_songs, 1):
+                # Report progress periodically
+                if i % 50 == 0 or i == total_songs:
+                    print(f"PROGRESS: {i}/{total_songs} - Checking library...")
+                
                 # Clean the title to remove featuring info and metadata
                 original_title = song['title']
                 cleaned_title = self.clean_song_title(original_title)
@@ -1017,7 +1023,9 @@ class TidalPlaylistMonitor:
             
             for i, artist_name in enumerate(sorted(unique_artists), 1):
                 try:
-                    print(f"🎵 Adding artist {i}/{len(unique_artists)}: {artist_name}")
+                    # Report progress
+                    print(f"PROGRESS: {i}/{len(unique_artists)} - Adding artist {artist_name}")
+                    
                     success = self.add_artist_to_lidarr(artist_name)
                     
                     if success:
