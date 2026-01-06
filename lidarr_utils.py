@@ -184,6 +184,26 @@ class LidarrClient:
             self.logger.error(f"Error getting metadata profiles: {e}")
             return []
 
+    def _get_profile_id(self, profiles: List[Dict[str, Any]], name_preference: Optional[str] = None, default_name: str = "Standard") -> Optional[int]:
+        """Helper to find profile ID by name"""
+        if not profiles:
+            return None
+            
+        # Try preference first
+        if name_preference:
+            for p in profiles:
+                if p.get('name', '').lower() == name_preference.lower():
+                    return p['id']
+            self.logger.warning(f"Preferred profile '{name_preference}' not found.")
+            
+        # Try default name (e.g. "Standard")
+        for p in profiles:
+            if p.get('name', '').lower() == default_name.lower():
+                return p['id']
+                
+        # Fallback to first
+        return profiles[0]['id']
+
     def search_musicbrainz_artist(self, artist_name: str) -> Optional[Dict[str, Any]]:
         """Search for artist in MusicBrainz
         
@@ -441,7 +461,8 @@ class LidarrClient:
 
     def add_artist_with_future_monitoring(self, artist_name: str, 
                                           musicbrainz_data: Optional[Dict[str, Any]] = None,
-                                          search_for_missing: bool = False) -> bool:
+                                          search_for_missing: bool = False,
+                                          metadata_profile_name: Optional[str] = None) -> bool:
         """Add artist to Lidarr with future monitoring (recommended for new artists)
         
         This function:
@@ -454,6 +475,7 @@ class LidarrClient:
             artist_name: Name of artist to add
             musicbrainz_data: Optional MusicBrainz metadata dict
             search_for_missing: Whether to search for existing albums (default: False)
+            metadata_profile_name: Optional name of metadata profile to use
             
         Returns:
             True if successful, False otherwise
@@ -480,7 +502,7 @@ class LidarrClient:
             
             quality_profile_id = quality_profiles[0]['id']
             root_folder_path = root_folders[0]['path']
-            metadata_profile_id = metadata_profiles[0]['id']
+            metadata_profile_id = self._get_profile_id(metadata_profiles, metadata_profile_name)
             
             # Prepare artist data for future monitoring
             artist_data = {
@@ -492,7 +514,7 @@ class LidarrClient:
                 'monitored': True,  # Monitor the artist
                 'albumFolder': True,
                 'addOptions': {
-                    'monitor': 'none',  # Don't monitor any existing albums
+                    'monitor': 'future',  # Monitor future releases
                     'searchForMissingAlbums': search_for_missing  # Usually False for new artists
                 }
             }
@@ -510,7 +532,7 @@ class LidarrClient:
             
             if response.status_code in [200, 201]:
                 mb_info = f" (MusicBrainz: {musicbrainz_data['name']})" if musicbrainz_data else ""
-                self.logger.info(f"Successfully added artist with future monitoring: {artist_name}{mb_info}")
+                self.logger.info(f"Successfully added artist with future monitoring: {artist_name}{mb_info} (Metadata Profile: {metadata_profile_id})")
                 return True
             else:
                 self.logger.warning(f"Failed to add artist {artist_name} to Lidarr: HTTP {response.status_code}")
@@ -524,7 +546,8 @@ class LidarrClient:
 
     def add_artist_with_all_monitoring(self, artist_name: str, 
                                        musicbrainz_data: Optional[Dict[str, Any]] = None,
-                                       search_for_missing: bool = True) -> bool:
+                                       search_for_missing: bool = True,
+                                       metadata_profile_name: Optional[str] = None) -> bool:
         """Add artist to Lidarr with all albums monitoring (use with caution)
         
         This function:
@@ -540,6 +563,7 @@ class LidarrClient:
             artist_name: Name of artist to add
             musicbrainz_data: Optional MusicBrainz metadata dict
             search_for_missing: Whether to search for existing albums (default: True)
+            metadata_profile_name: Optional name of metadata profile to use
             
         Returns:
             True if successful, False otherwise
@@ -566,7 +590,7 @@ class LidarrClient:
             
             quality_profile_id = quality_profiles[0]['id']
             root_folder_path = root_folders[0]['path']
-            metadata_profile_id = metadata_profiles[0]['id']
+            metadata_profile_id = self._get_profile_id(metadata_profiles, metadata_profile_name)
             
             # Prepare artist data for all albums monitoring
             artist_data = {
@@ -578,7 +602,7 @@ class LidarrClient:
                 'monitored': True,  # Monitor the artist
                 'albumFolder': True,
                 'addOptions': {
-                    'monitor': 'none',  # Don't monitor any existing albums automatically
+                    'monitor': 'all',  # Monitor all albums
                     'searchForMissingAlbums': search_for_missing
                 }
             }
@@ -593,13 +617,17 @@ class LidarrClient:
             
             if response.status_code in [200, 201]:
                 mb_info = f" (MusicBrainz: {musicbrainz_data['name']})" if musicbrainz_data else ""
-                self.logger.warning(f"Added artist with ALL albums monitoring: {artist_name}{mb_info}")
+                self.logger.warning(f"Added artist with ALL albums monitoring: {artist_name}{mb_info} (Metadata Profile: {metadata_profile_id})")
                 return True
             else:
                 self.logger.warning(f"Failed to add artist {artist_name} to Lidarr: HTTP {response.status_code}")
                 if response.text:
                     self.logger.debug(f"Error response: {response.text[:200]}")
                 return False
+                
+        except Exception as e:
+            self.logger.error(f"Error adding artist {artist_name} to Lidarr: {e}")
+            return False
                 
         except Exception as e:
             self.logger.error(f"Error adding artist {artist_name} to Lidarr: {e}")
@@ -654,7 +682,8 @@ class LidarrClient:
 
     def add_artist_and_search_musicbrainz(self, artist_name: str, 
                                           future_monitoring: bool = True,
-                                          search_for_missing: bool = False) -> bool:
+                                          search_for_missing: bool = False,
+                                          metadata_profile_name: Optional[str] = None) -> bool:
         """Convenience function: Search MusicBrainz and add artist with proper monitoring
         
         This is the recommended function for most use cases. It:
@@ -666,6 +695,7 @@ class LidarrClient:
             artist_name: Name of artist to add
             future_monitoring: If True, only monitor future releases (default: True)
             search_for_missing: Whether to search for existing albums (default: False)
+            metadata_profile_name: Optional name of metadata profile to use
             
         Returns:
             True if successful, False otherwise
@@ -695,13 +725,15 @@ class LidarrClient:
                 return self.add_artist_with_future_monitoring(
                     artist_name, 
                     musicbrainz_data, 
-                    search_for_missing
+                    search_for_missing,
+                    metadata_profile_name
                 )
             else:
                 return self.add_artist_with_all_monitoring(
                     artist_name, 
                     musicbrainz_data, 
-                    search_for_missing
+                    search_for_missing,
+                    metadata_profile_name
                 )
                 
         except Exception as e:
@@ -722,6 +754,27 @@ class LidarrClient:
         except Exception as e:
             self.logger.error(f"Error getting artist by name '{artist_name}': {e}")
             return None
+
+    def get_artist_albums(self, artist_id: int) -> List[Dict[str, Any]]:
+        """Get all albums for a specific artist from Lidarr"""
+        try:
+            headers = self._get_headers()
+            url = f"{self.lidarr_url}/api/v1/album"
+            params = {'artistId': artist_id}
+            
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            
+            if response.status_code == 200:
+                albums = response.json()
+                self.logger.debug(f"Retrieved {len(albums)} albums for artist ID {artist_id}")
+                return albums
+            else:
+                self.logger.error(f"Failed to get albums for artist ID {artist_id}: HTTP {response.status_code}")
+                return []
+                
+        except Exception as e:
+            self.logger.error(f"Error getting albums for artist ID {artist_id}: {e}")
+            return []
 
     def get_tracks_by_artist(self, artist_id: int) -> List[Dict[str, Any]]:
         """Get all tracks for a specific artist from Lidarr"""

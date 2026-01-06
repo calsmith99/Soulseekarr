@@ -492,6 +492,33 @@ class DatabaseManager:
                 logger.error(f"Migration failed: {e}")
                 raise
 
+        if current_version < 9:
+            # Migration: Restore album_art_url and add year to album_tracks to match instructions
+            logger.info("Running migration to sync schema with instructions (v9)...")
+            try:
+                # Restore album_art_url to expiring_albums
+                try:
+                    cursor.execute("ALTER TABLE expiring_albums ADD COLUMN album_art_url TEXT")
+                    logger.info("Restored album_art_url to expiring_albums")
+                except sqlite3.OperationalError as e:
+                    if "duplicate column" not in str(e).lower():
+                        raise
+                
+                # Add year to album_tracks
+                try:
+                    cursor.execute("ALTER TABLE album_tracks ADD COLUMN year INTEGER")
+                    logger.info("Added year column to album_tracks")
+                except sqlite3.OperationalError as e:
+                     if "duplicate column" not in str(e).lower():
+                        raise
+
+                cursor.execute("PRAGMA user_version = 9")
+                conn.commit()
+                logger.info("Successfully synced schema (v9)")
+            except Exception as e:
+                 logger.error(f"Migration v9 failed: {e}")
+                 raise
+
         conn.commit()
         
         # Verify final schema version
@@ -1074,6 +1101,7 @@ class DatabaseManager:
                     'stored_file_count': stored_file_count,  # Original for debugging
                     'actual_file_count': actual_file_count,  # Actual from tracks table
                     'total_size_mb': album_dict['total_size_mb'],
+                    'album_art_url': album_dict.get('album_art_url'),
                     'is_starred': album_dict['is_starred'],
                     'will_expire': days_until_expiry <= 0,
                     'sample_files': []  # Could be enhanced to track specific files

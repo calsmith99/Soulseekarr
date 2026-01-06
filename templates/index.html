@@ -3061,6 +3061,12 @@
                 let coverStyle = '';
                 let iconHtml = '<div class="album-cover-icon">💿</div>';
                 
+                if (album.album_art_url) {
+                    coverClass += ' has-image';
+                    coverStyle = `background-image: url('${this.escapeHtml(album.album_art_url)}');`;
+                    iconHtml = '';
+                }
+                
                 return `
                     <div class="album-card ${expiryClass}" onclick="window.soulSeekarrApp.openTracksModal('${this.escapeHtml(albumKey)}', '${this.escapeHtml(album.artist)}', '${this.escapeHtml(album.album)}')">
                         <div class="${coverClass}" style="${coverStyle}">
