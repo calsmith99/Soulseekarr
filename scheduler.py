@@ -228,14 +228,17 @@ class SchedulerManager:
             logger.error(f"Error updating job stats for job {job_id}: {e}")
     
     def add_job(self, script_id: str, script_name: str, script_path: str,
-                interval_type: str = 'hours', interval_value: int = 1) -> Tuple[bool, str]:
+                interval_type: str = 'hours', interval_value: int = 1,
+                next_run: Optional[datetime] = None) -> Tuple[bool, str]:
         """Add a new scheduled job."""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
                 # Calculate initial next run time
-                next_run = self._calculate_next_run(interval_type, interval_value)
+                # If next_run is not provided, default to running immediately (now)
+                if next_run is None:
+                    next_run = datetime.now()
                 
                 # Insert or update the job
                 cursor.execute("""
@@ -246,7 +249,7 @@ class SchedulerManager:
                 
                 conn.commit()
                 
-                logger.info(f"Added scheduled job: {script_name} (every {interval_value} {interval_type})")
+                logger.info(f"Added scheduled job: {script_name} (every {interval_value} {interval_type}, starting {next_run})")
                 return True, f"Job scheduled to run every {interval_value} {interval_type}"
                 
         except Exception as e:
@@ -365,14 +368,16 @@ class SchedulerManager:
             logger.error(f"Error getting all jobs: {e}")
             return []
     
-    def update_job_schedule(self, script_id: str, interval_type: str, interval_value: int) -> Tuple[bool, str]:
+    def update_job_schedule(self, script_id: str, interval_type: str, interval_value: int,
+                           next_run: Optional[datetime] = None) -> Tuple[bool, str]:
         """Update the schedule for an existing job."""
         try:
             with self.db.get_connection() as conn:
                 cursor = conn.cursor()
                 
-                # Calculate new next run time
-                next_run = self._calculate_next_run(interval_type, interval_value)
+                # Calculate new next run time if not provided
+                if next_run is None:
+                    next_run = self._calculate_next_run(interval_type, interval_value)
                 
                 # Update the job
                 cursor.execute("""

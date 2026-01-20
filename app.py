@@ -12,7 +12,7 @@ import time
 import json
 import re
 import shlex
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from flask import Flask, render_template, jsonify, request, send_from_directory, Response
 from werkzeug.serving import make_server
@@ -2343,6 +2343,8 @@ def get_cron_status(script_id):
             return jsonify({
                 'success': True,
                 'enabled': job_status['enabled'],
+                'interval_type': job_status['interval_type'],
+                'interval_value': job_status['interval_value'],
                 'schedule': f"every {job_status['interval_value']} {job_status['interval_type']}",
                 'next_run': job_status['next_run'],
                 'last_run': job_status['last_run'],
@@ -2354,6 +2356,8 @@ def get_cron_status(script_id):
             return jsonify({
                 'success': True,
                 'enabled': False,
+                'interval_type': 'hours',
+                'interval_value': 1,
                 'schedule': None
             })
     except Exception as e:
@@ -2394,6 +2398,45 @@ def enable_cron_endpoint(script_id):
                 interval_value = 1
         except:
             interval_value = 1
+            
+        # Parse run_at time if provided
+        run_at = data.get('run_at')
+        schedule_day = data.get('schedule_day')  # Day of week for weekly schedules (0=Sunday, 6=Saturday)
+        next_run = None
+        
+        if run_at:
+            try:
+                # Expecting HH:MM format (24-hour)
+                if ':' in run_at:
+                    hour, minute = map(int, run_at.split(':'))
+                    now = datetime.now()
+                    
+                    # Create candidate time for today
+                    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    
+                    # For weekly schedules (7 days), adjust to the correct day of week
+                    if interval_type == 'days' and interval_value == 7 and schedule_day is not None:
+                        # Calculate days until the target day
+                        current_day = now.weekday()  # Monday = 0, Sunday = 6
+                        # Convert our day format (Sunday=0) to Python format (Monday=0)
+                        target_day = (schedule_day + 6) % 7  # Sunday=0 becomes Monday=6, etc.
+                        days_until = (target_day - current_day) % 7
+                        
+                        candidate = candidate + timedelta(days=days_until)
+                        
+                        # If the time has already passed today and it's the target day, move to next week
+                        if days_until == 0 and candidate <= now:
+                            candidate += timedelta(days=7)
+                    else:
+                        # For daily/hourly schedules, if candidate is in the past, schedule for tomorrow
+                        if candidate <= now:
+                            candidate += timedelta(days=1)
+                    
+                    next_run = candidate
+                    logger.info(f"Scheduled start time parsed: {next_run} from input {run_at}, day: {schedule_day}")
+            except Exception as e:
+                logger.warning(f"Invalid run_at format: {run_at}, defaulting to now. Error: {e}")
+                next_run = None
         
         # Get script path
         script_path = f"scripts/{script_id}.py"
@@ -2407,7 +2450,8 @@ def enable_cron_endpoint(script_id):
             script_name=script_config['name'],
             script_path=script_path,
             interval_type=interval_type,
-            interval_value=interval_value
+            interval_value=interval_value,
+            next_run=next_run
         )
         
         if success:
@@ -2461,10 +2505,52 @@ def update_cron_schedule(script_id):
                 return jsonify({'success': False, 'error': 'Invalid interval value'}), 400
         except:
             return jsonify({'success': False, 'error': 'Invalid interval value'}), 400
+            
+        # Parse run_at time if provided
+        run_at = data.get('run_at')
+        schedule_day = data.get('schedule_day')  # Day of week for weekly schedules (0=Sunday, 6=Saturday)
+        next_run = None
+        
+        if run_at:
+            try:
+                # Expecting HH:MM format (24-hour)
+                if ':' in run_at:
+                    hour, minute = map(int, run_at.split(':'))
+                    now = datetime.now()
+                    
+                    # Create candidate time for today
+                    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                    
+                    # For weekly schedules (7 days), adjust to the correct day of week
+                    if interval_type == 'days' and interval_value == 7 and schedule_day is not None:
+                        # Calculate days until the target day
+                        current_day = now.weekday()  # Monday = 0, Sunday = 6
+                        # Convert our day format (Sunday=0) to Python format (Monday=0)
+                        target_day = (schedule_day + 6) % 7  # Sunday=0 becomes Monday=6, etc.
+                        days_until = (target_day - current_day) % 7
+                        
+                        candidate = candidate + timedelta(days=days_until)
+                        
+                        # If the time has already passed today and it's the target day, move to next week
+                        if days_until == 0 and candidate <= now:
+                            candidate += timedelta(days=7)
+                    else:
+                        # For daily/hourly schedules, if candidate is in the past, schedule for tomorrow
+                        if candidate <= now:
+                            candidate += timedelta(days=1)
+                    
+                    next_run = candidate
+            except Exception as e:
+                logger.warning(f"Invalid run_at format: {run_at}, ignoring. Error: {e}")
+                next_run = None
         
         # Use the new scheduler
         scheduler = get_scheduler()
-        success, message = scheduler.update_job_schedule(script_id, interval_type, interval_value)
+        # Pass next_run if we have it
+        if next_run:
+            success, message = scheduler.update_job_schedule(script_id, interval_type, interval_value, next_run=next_run)
+        else:
+            success, message = scheduler.update_job_schedule(script_id, interval_type, interval_value)
         
         if success:
             return jsonify({'success': True, 'message': message})

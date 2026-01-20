@@ -1767,6 +1767,29 @@
                             </select>
                         </div>
                     </div>
+
+                    <div class="form-group" id="day-selection-group" style="display: none;">
+                        <label for="schedule-day">Run On Day:</label>
+                        <div class="schedule-config">
+                            <select id="schedule-day" class="form-control">
+                                <option value="0">Sunday</option>
+                                <option value="1" selected>Monday</option>
+                                <option value="2">Tuesday</option>
+                                <option value="3">Wednesday</option>
+                                <option value="4">Thursday</option>
+                                <option value="5">Friday</option>
+                                <option value="6">Saturday</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="schedule-start-time">Start Time (Optional):</label>
+                        <div class="schedule-config">
+                            <input type="time" id="schedule-start-time" class="form-control">
+                        </div>
+                        <small class="text-muted">Leave empty to run immediately (default)</small>
+                    </div>
                     
                     <div class="form-group">
                         <div id="schedule-info" class="schedule-info">
@@ -2348,10 +2371,14 @@
                         buttonText = 'Due now';
                     }
 
-                    // For daily schedules, show what time it runs
+                    // For daily/multi-day schedules, show what time it runs
                     if (intervalType === 'days') {
                         const runTime = nextRunDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                        scheduleDetails = `Daily at ${runTime}`;
+                        if (intervalValue === 1) {
+                            scheduleDetails = `Daily at ${runTime}`;
+                        } else {
+                            scheduleDetails = `Every ${intervalValue} days at ${runTime}`;
+                        }
                     } else {
                         scheduleDetails = `Every ${intervalValue} ${intervalValue === 1 ? intervalType.slice(0, -1) : intervalType}`;
                     }
@@ -3282,6 +3309,7 @@
                         // Default values for new schedule
                         document.getElementById('interval-value').value = 1;
                         document.getElementById('interval-type').value = 'hours';
+                        document.getElementById('schedule-day').value = 1; // Default to Monday
                         document.getElementById('current-schedule').style.display = 'none';
                         document.getElementById('schedule-save-btn').textContent = 'Enable Schedule';
                         document.getElementById('schedule-disable-btn').style.display = 'none';
@@ -3291,10 +3319,17 @@
                     // Use defaults
                     document.getElementById('interval-value').value = 1;
                     document.getElementById('interval-type').value = 'hours';
+                    document.getElementById('schedule-day').value = 1; // Default to Monday
                     document.getElementById('current-schedule').style.display = 'none';
                     document.getElementById('schedule-save-btn').textContent = 'Enable Schedule';
                     document.getElementById('schedule-disable-btn').style.display = 'none';
                 }
+
+                // Reset start time input and day selection
+                const startTimeInput = document.getElementById('schedule-start-time');
+                if (startTimeInput) startTimeInput.value = '';
+                const dayInput = document.getElementById('schedule-day');
+                if (dayInput) dayInput.value = 1; // Default to Monday
 
                 // Add event listeners for live updates
                 this.setupScheduleFormListeners();
@@ -3308,8 +3343,12 @@
             }
 
             populateScheduleForm(scheduleData) {
-                // Extract interval info from schedule description or use defaults
-                if (scheduleData.schedule && scheduleData.schedule.includes('every ')) {
+                // Extract interval info from the API response
+                if (scheduleData.interval_type && scheduleData.interval_value) {
+                    document.getElementById('interval-value').value = scheduleData.interval_value;
+                    document.getElementById('interval-type').value = scheduleData.interval_type;
+                } else if (scheduleData.schedule && scheduleData.schedule.includes('every ')) {
+                    // Fallback: parse from schedule description
                     const parts = scheduleData.schedule.split('every ')[1].split(' ');
                     if (parts.length >= 2) {
                         document.getElementById('interval-value').value = parseInt(parts[0]) || 1;
@@ -3334,22 +3373,67 @@
             setupScheduleFormListeners() {
                 const intervalValue = document.getElementById('interval-value');
                 const intervalType = document.getElementById('interval-type');
+                const scheduleDay = document.getElementById('schedule-day');
+                const scheduleTime = document.getElementById('schedule-start-time');
 
                 // Remove existing listeners
                 intervalValue.removeEventListener('input', this.updateScheduleDescription.bind(this));
                 intervalType.removeEventListener('change', this.updateScheduleDescription.bind(this));
+                intervalType.removeEventListener('change', this.toggleDaySelection.bind(this));
+                if (scheduleDay) scheduleDay.removeEventListener('change', this.updateScheduleDescription.bind(this));
+                if (scheduleTime) scheduleTime.removeEventListener('change', this.updateScheduleDescription.bind(this));
 
                 // Add new listeners
                 intervalValue.addEventListener('input', this.updateScheduleDescription.bind(this));
                 intervalType.addEventListener('change', this.updateScheduleDescription.bind(this));
+                intervalType.addEventListener('change', this.toggleDaySelection.bind(this));
+                if (scheduleDay) scheduleDay.addEventListener('change', this.updateScheduleDescription.bind(this));
+                if (scheduleTime) scheduleTime.addEventListener('change', this.updateScheduleDescription.bind(this));
+
+                // Initial day selection state
+                this.toggleDaySelection();
             }
 
             updateScheduleDescription() {
-                const value = document.getElementById('interval-value').value;
+                const value = parseInt(document.getElementById('interval-value').value) || 1;
                 const type = document.getElementById('interval-type').value;
+                const scheduleDay = document.getElementById('schedule-day');
+                const scheduleTime = document.getElementById('schedule-start-time');
                 
-                const description = `Script will run every ${value} ${value == 1 ? type.slice(0, -1) : type}`;
+                let description = `Script will run every ${value} ${value === 1 ? type.slice(0, -1) : type}`;
+                
+                // Add day information if interval type is days
+                if (type === 'days' && scheduleDay && scheduleDay.style.display !== 'none') {
+                    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    const selectedDay = parseInt(scheduleDay.value);
+                    if (value === 7) {
+                        description += ` on ${dayNames[selectedDay]}`;
+                    } else if (value === 1) {
+                        description = 'Script will run daily';
+                    }
+                }
+                
+                // Add time information if specified
+                if (scheduleTime && scheduleTime.value) {
+                    description += ` at ${scheduleTime.value}`;
+                } else {
+                    description += ' (starts immediately when enabled)';
+                }
+                
                 document.getElementById('schedule-description').textContent = description;
+            }
+
+            toggleDaySelection() {
+                const intervalType = document.getElementById('interval-type').value;
+                const daySelectionGroup = document.getElementById('day-selection-group');
+                
+                if (intervalType === 'days') {
+                    daySelectionGroup.style.display = 'block';
+                } else {
+                    daySelectionGroup.style.display = 'none';
+                }
+                
+                this.updateScheduleDescription();
             }
 
             async saveSchedule() {
@@ -3358,6 +3442,8 @@
 
                 const intervalValue = parseInt(document.getElementById('interval-value').value);
                 const intervalType = document.getElementById('interval-type').value;
+                const runAt = document.getElementById('schedule-start-time').value;
+                const scheduleDay = document.getElementById('schedule-day').value;
 
                 if (!intervalValue || intervalValue <= 0) {
                     this.showNotification('Please enter a valid interval value', 'error');
@@ -3365,13 +3451,25 @@
                 }
 
                 try {
+                    const requestBody = {
+                        interval_type: intervalType,
+                        interval_value: intervalValue
+                    };
+                    
+                    // Only include run_at if it's specified
+                    if (runAt) {
+                        requestBody.run_at = runAt;
+                    }
+                    
+                    // Include day selection for daily schedules
+                    if (intervalType === 'days' && scheduleDay !== undefined) {
+                        requestBody.schedule_day = parseInt(scheduleDay);
+                    }
+
                     const response = await fetch(`/api/cron/${scriptId}/enable`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            interval_type: intervalType,
-                            interval_value: intervalValue
-                        })
+                        body: JSON.stringify(requestBody)
                     });
 
                     const data = await response.json();
